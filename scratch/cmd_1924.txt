@@ -1,0 +1,1 @@
+"node -e \"\nconst http = require('http');\nhttp.get('http://localhost:3000/images/ascii_fluid_mask.png', (res) => {\n  console.log('HTTP Status for mask:', res.statusCode);\n  console.log('Content-Type:', res.headers['content-type']);\n  console.log('Content-Length:', res.headers['content-length']);\n}).on('error', e => console.error(e.message));\n\""
