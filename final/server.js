@@ -56,6 +56,12 @@ const server = http.createServer((req, res) => {
   }
 
   let filePath = path.join(PUBLIC_DIR, reqUrl);
+  if (reqUrl.startsWith('/wp-content/uploads/')) {
+    const lamalamaFile = path.join(PUBLIC_DIR, 'images', 'lamalama', path.basename(reqUrl));
+    if (fs.existsSync(lamalamaFile)) {
+      filePath = lamalamaFile;
+    }
+  }
   if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
     const idx = path.join(filePath, 'index.html');
     if (fs.existsSync(idx)) filePath = idx;

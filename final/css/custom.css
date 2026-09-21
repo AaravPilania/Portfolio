@@ -451,4 +451,118 @@ input[type="submit"],
 
 .ll-block--canvas-2d {
   image-rendering: pixelated !important;
-}
+}
+
+/* ===================================================
+   SERVICES ("WHAT WE DO") AUTHENTIC LAMA LAMA SECTION
+   =================================================== */
+.ll-section--services {
+  position: relative !important;
+  overflow: hidden !important;
+  background-color: #000000 !important;
+  color: #f9f4eb !important;
+  z-index: 50 !important;
+}
+
+.ll-section--services .services-diffusion-canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  image-rendering: pixelated !important;
+}
+
+.ll-section--services .ll-container {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+.ll-section--services .js-backdrop-video-item,
+.ll-section--services video {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.ll-section--services .ll-text-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-text-reveal.is-revealed {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* Authentic Buttons Inverted Hover Slides */
+.ll-section--services .ll-part--buttons-button {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-backdrop-hover {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text-hover {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-backdrop-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow {
+  transform: translate(3px, -3px) !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow-hover {
+  transform: scale(1) translate(0px, 0px) !important;
+}
+
+/* Lars Contact Card Hover */
+.ll-section--services .ll-block--contact-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-block--contact-card .js-backdrop {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-backdrop {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal-hover {
+  opacity: 1 !important;
+}
+
