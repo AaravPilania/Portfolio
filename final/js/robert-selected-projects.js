@@ -1435,78 +1435,30 @@ void main() {
 
             this.lastMouseX = null;
             this.lastMouseY = null;
-            this.isMouseInViewport = false;
 
             const section = document.getElementById('section-projects');
             const entries = Array.from(document.querySelectorAll('.projects__entry'));
-            let activeHoverRow = null;
+            this.activeProjectRow = null;
+            this.activeProjectIdx = -1;
 
             const updateMousePosition = (cx, cy) => {
                 this.lastMouseX = cx;
                 this.lastMouseY = cy;
-                this.isMouseInViewport = true;
                 this.mouse.target.x = (cx / window.innerWidth) * 2 - 1;
                 this.mouse.target.y = -(cy / window.innerHeight) * 2 + 1;
             };
 
-            this.checkHoverBounds = (clientX, clientY) => {
-                if (clientX === null || clientY === null || !this.isMouseInViewport) return;
+            this.checkScrollProjects = () => {
+                if (!section || !entries.length) return;
 
-                // Quick section visibility check: if section is completely off-screen, clear hover
-                if (section) {
-                    const secRect = section.getBoundingClientRect();
-                    if (secRect.bottom < 0 || secRect.top > window.innerHeight) {
-                        if (activeHoverRow) {
-                            activeHoverRow = null;
-                            entries.forEach(e => {
-                                e.classList.remove('h-mainOpacity--full');
-                                e.classList.remove('is-hovered');
-                            });
-                            gsap.set('html', { '--mainOpacity': 1 });
-                            this.leaveProject("all");
-                        }
-                        return;
-                    }
-                }
+                const secRect = section.getBoundingClientRect();
+                const winH = window.innerHeight;
 
-                let foundRow = null;
-
-                for (let i = 0; i < entries.length; i++) {
-                    const row = entries[i];
-                    const rect = row.getBoundingClientRect();
-
-                    // Vertical check: within row height (with 1px overlap tolerance)
-                    if (clientY >= rect.top - 1 && clientY <= rect.bottom + 1) {
-                        // Horizontal check: row container bounds with margin tolerance (up to 48px into container padding)
-                        // so cursor touching the list in the margin or on the elements activates reliably,
-                        // while cursors far off the table (outside the table container) do not trigger.
-                        const leftLimit = rect.left - 48;
-                        const rightLimit = rect.right + 48;
-
-                        if (clientX >= leftLimit && clientX <= rightLimit) {
-                            foundRow = row;
-                            break;
-                        }
-                    }
-                }
-
-                if (foundRow) {
-                    if (activeHoverRow !== foundRow) {
-                        activeHoverRow = foundRow;
-                        entries.forEach(e => {
-                            e.classList.remove('h-mainOpacity--full');
-                            e.classList.remove('is-hovered');
-                        });
-                        foundRow.classList.add('h-mainOpacity--full');
-                        foundRow.classList.add('is-hovered');
-                        gsap.set('html', { '--mainOpacity': 0.03 });
-                        this.playTick();
-                        const key = foundRow.getAttribute('data-project-key');
-                        if (key) this.enterProject(key);
-                    }
-                } else {
-                    if (activeHoverRow) {
-                        activeHoverRow = null;
+                // When user is above section or scrolled past section:
+                if (secRect.top > winH * 0.75 || secRect.bottom < winH * 0.15) {
+                    if (this.activeProjectRow) {
+                        this.activeProjectRow = null;
+                        this.activeProjectIdx = -1;
                         entries.forEach(e => {
                             e.classList.remove('h-mainOpacity--full');
                             e.classList.remove('is-hovered');
@@ -1514,28 +1466,60 @@ void main() {
                         gsap.set('html', { '--mainOpacity': 1 });
                         this.leaveProject("all");
                     }
+                    return;
+                }
+
+                // Focal line in viewport: ~45% from top
+                const focalY = winH * 0.45;
+
+                // If row 0 is still below focalY (section entering), row 0 activates immediately
+                const r0 = entries[0].getBoundingClientRect();
+                let targetIdx = 0;
+
+                if (r0.top < focalY) {
+                    let closestDist = Infinity;
+                    for (let i = 0; i < entries.length; i++) {
+                        const r = entries[i].getBoundingClientRect();
+                        const rowMid = (r.top + r.bottom) * 0.5;
+                        const dist = Math.abs(rowMid - focalY);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            targetIdx = i;
+                        }
+                    }
+                }
+
+                const targetRow = entries[targetIdx];
+                if (this.activeProjectRow !== targetRow) {
+                    this.activeProjectRow = targetRow;
+                    this.activeProjectIdx = targetIdx;
+
+                    entries.forEach(e => {
+                        e.classList.remove('h-mainOpacity--full');
+                        e.classList.remove('is-hovered');
+                    });
+                    targetRow.classList.add('h-mainOpacity--full');
+                    targetRow.classList.add('is-hovered');
+                    gsap.set('html', { '--mainOpacity': 0.03 });
+                    this.playTick();
+
+                    this.presetProgress = targetIdx % this.noisePresets.length;
+                    const key = targetRow.getAttribute('data-project-key');
+                    if (key) this.enterProject(key);
                 }
             };
 
             const onMouseMove = (e) => {
                 updateMousePosition(e.clientX, e.clientY);
-                this.checkHoverBounds(e.clientX, e.clientY);
-            };
-
-            const onWheel = (e) => {
-                updateMousePosition(e.clientX, e.clientY);
-                this.checkHoverBounds(e.clientX, e.clientY);
             };
 
             const onScroll = () => {
-                if (this.lastMouseX !== null && this.lastMouseY !== null) {
-                    this.checkHoverBounds(this.lastMouseX, this.lastMouseY);
-                }
+                this.checkScrollProjects();
             };
 
             window.addEventListener('mousemove', onMouseMove, { passive: true });
             window.addEventListener('pointermove', onMouseMove, { passive: true });
-            window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+            window.addEventListener('wheel', onScroll, { capture: true, passive: true });
             window.addEventListener('scroll', onScroll, { capture: true, passive: true });
             document.addEventListener('scroll', onScroll, { capture: true, passive: true });
 
@@ -1544,26 +1528,20 @@ void main() {
                 scroller.addEventListener('scroll', onScroll, { passive: true });
             }
 
-            window.addEventListener('mouseleave', () => {
-                this.isMouseInViewport = false;
-                if (activeHoverRow) {
-                    activeHoverRow = null;
-                    entries.forEach(e => {
-                        e.classList.remove('h-mainOpacity--full');
-                        e.classList.remove('is-hovered');
-                    });
-                    gsap.set('html', { '--mainOpacity': 1 });
-                    this.leaveProject("all");
-                }
+            // Click row to launch project
+            entries.forEach(row => {
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('a')) return;
+                    const ctaLink = row.querySelector('.projects__entry-cta a');
+                    if (ctaLink && ctaLink.href) {
+                        window.open(ctaLink.href, '_blank');
+                    }
+                });
             });
 
-            // Direct pointerenter on rows as instantaneous micro-optimization
-            entries.forEach(row => {
-                row.addEventListener('pointerenter', (e) => {
-                    updateMousePosition(e.clientX, e.clientY);
-                    this.checkHoverBounds(e.clientX, e.clientY);
-                }, { passive: true });
-            });
+            // Initial check once rendered
+            setTimeout(() => this.checkScrollProjects(), 100);
         }
 
         enterProject(key) {
@@ -1652,9 +1630,9 @@ void main() {
             const delta = this.clock.getDelta();
             this.timeElapsed += delta;
 
-            // Continual real-time hover check during rapid scroll, momentum scroll & idle cursor states
-            if (this.checkHoverBounds && this.isMouseInViewport && this.lastMouseX !== null && this.lastMouseY !== null) {
-                this.checkHoverBounds(this.lastMouseX, this.lastMouseY);
+            // Continual real-time scroll check during rapid scroll, momentum scroll & smooth scroll
+            if (this.checkScrollProjects) {
+                this.checkScrollProjects();
             }
 
             // Lerp mouse
