@@ -86,6 +86,7 @@ main,
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch !important;
+  z-index: 2 !important;
 }
 
 /* Headings use SuisseBPIntl */
@@ -186,8 +187,7 @@ h6,
 .js-header,
 .js-menu,
 .js-sticky-items,
-.js-sticky-bar,
-.js-sticky-item {
+.js-sticky-bar {
   opacity: 0 !important;
   visibility: hidden !important;
   transition: none !important;
@@ -209,8 +209,7 @@ h6,
 
 .js-header.is-revealed,
 .js-sticky-items.is-revealed,
-.js-sticky-bar.is-revealed,
-.js-sticky-item.is-revealed {
+.js-sticky-bar.is-revealed {
   opacity: 1 !important;
   visibility: visible !important;
   transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
@@ -308,7 +307,10 @@ h6,
   display: block;
 }
 
-/* Clean Default Cursor & Contextual Hints */
+/* ===================================================
+   UNIFIED CONTRAST-ADAPTIVE CURSOR SYSTEM
+   Consistent site-wide: Black on light bg, White on dark bg
+   =================================================== */
 html,
 body {
   cursor: auto !important;
@@ -318,20 +320,62 @@ button,
 a,
 [role="button"],
 input[type="submit"],
-.cursor-pointer {
+.cursor-pointer,
+.projects__entry {
   cursor: pointer !important;
 }
 
-/* Custom Animated Cursor Dot & Ring - Removed circular placeholder per user instruction */
-.ll-cursor-dot,
-.ll-cursor-ring {
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
+.site-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  pointer-events: none;
+  z-index: 100002;
+  mix-blend-mode: difference;
+  transform: translate(-50%, -50%);
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              height 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              background-color 0.2s ease, 
+              border 0.2s ease,
+              opacity 0.2s ease;
+  will-change: transform, left, top;
 }
 
+.site-cursor-dot.is-hovering {
+  width: 22px;
+  height: 22px;
+  background-color: transparent !important;
+  border: 1.5px solid #ffffff;
+}
 
+.site-cursor-dot.is-hidden {
+  opacity: 0 !important;
+}
+
+/* Explicit light/dark mode overrides for solid backgrounds */
+.site-cursor-dot.is-light:not(.is-hovering) {
+  background-color: #000000 !important;
+  mix-blend-mode: normal;
+}
+
+.site-cursor-dot.is-light.is-hovering {
+  border-color: #000000 !important;
+  mix-blend-mode: normal;
+}
+
+.site-cursor-dot.is-dark:not(.is-hovering) {
+  background-color: #ffffff !important;
+  mix-blend-mode: difference;
+}
+
+.site-cursor-dot.is-dark.is-hovering {
+  border-color: #ffffff !important;
+  mix-blend-mode: difference;
+}
 
 /* Contextual Trailing Label Pill Badge */
 .js-cursor-label {
@@ -346,10 +390,10 @@ input[type="submit"],
 }
 
 .js-cursor-label .ll-part--tag-item {
-  background: rgba(18, 18, 18, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(18, 18, 18, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   padding: 3px 8px;
   font-family: 'Sometype', monospace;
@@ -358,6 +402,23 @@ input[type="submit"],
   text-transform: uppercase;
   color: #ffffff;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.js-cursor-label.is-light .ll-part--tag-item {
+  background: rgba(245, 245, 245, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #000000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.js-cursor-label.is-light .ll-part--tag-item span {
+  color: #000000 !important;
+}
+
+.js-cursor-label .ll-part--tag-item span {
+  color: var(--color--lime, #d2ff00);
+  font-weight: 700;
 }
 
 /* Fullscreen Video Modal */
@@ -451,4 +512,149 @@ input[type="submit"],
 
 .ll-block--canvas-2d {
   image-rendering: pixelated !important;
-}
+}
+
+/* ===================================================
+   SERVICES ("WHAT WE DO") AUTHENTIC LAMA LAMA SECTION
+   =================================================== */
+canvas.js-canvas {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+canvas.js-upper-canvas {
+  display: block !important;
+  pointer-events: none !important;
+}
+
+#section-projects {
+  background-color: transparent !important;
+  padding-bottom: 200px !important;
+  margin-bottom: 120px !important;
+}
+
+.ll-section--services {
+  position: relative !important;
+  background-color: transparent !important;
+  color: #f9f4eb !important;
+  z-index: 10 !important;
+  overflow: visible !important;
+  padding-top: 140px !important;
+}
+
+.ll-section--services .ll-container {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.ll-section--services .js-text-reveal,
+.ll-section--services .js-mono-text-reveal,
+.ll-section--services .js-text-container,
+.ll-section--services .ll-text-reveal,
+.ll-section--services .ll-text-reveal *,
+.ll-section--services .js-text-container *,
+.ll-section--services h2,
+.ll-section--services h2 *,
+.ll-section--services .ll-heading-4,
+.ll-section--services .ll-heading-4 *,
+.ll-section--services .ll-display-rg,
+.ll-section--services .ll-part--label,
+.ll-section--services .ll-body-md,
+.ll-section--services .ll-body-rg,
+.ll-section--services .ll-block--contact-card {
+  opacity: 1 !important;
+  visibility: visible !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
+  transform: none !important;
+  color: #f9f4eb !important;
+}
+
+/* Pitchdeck sticky drawer */
+.js-sticky-item {
+  background: rgba(18, 18, 18, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-radius: 6px !important;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.js-sticky-item-pitchdeck button.js-title-toggle {
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 11px !important;
+}
+
+/* Authentic Buttons Inverted Hover Slides */
+.ll-section--services .ll-part--buttons-button {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-backdrop-hover {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text-hover {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-backdrop-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow {
+  transform: translate(3px, -3px) !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow-hover {
+  transform: scale(1) translate(0px, 0px) !important;
+}
+
+/* Lars Contact Card Hover */
+.ll-section--services .ll-block--contact-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-block--contact-card .js-backdrop {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-backdrop {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal-hover {
+  opacity: 1 !important;
+}
+

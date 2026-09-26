@@ -1,94 +1,115 @@
+const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 
-http.get('http://localhost:9222/json', res => {
-  let raw = '';
-  res.on('data', c => raw += c);
-  res.on('end', async () => {
-    const list = JSON.parse(raw);
-    const tab = list.find(t => t.url && t.url.includes('localhost:3000') && !t.url.includes('coded-avatar'));
-    const ws = new WebSocket(tab.webSocketDebuggerUrl);
+async function testScroller() {
+  const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
+    '--headless=new',
+    '--remote-debugging-port=9228',
+    '--disable-gpu',
+    '--no-sandbox',
+    '--window-size=1440,900',
+    'http://localhost:3010/'
+  ]);
 
-    function send(method, params = {}) {
-      return new Promise((resolve, reject) => {
-        const id = Math.floor(Math.random() * 1000000);
-        const timeout = setTimeout(() => {
-          ws.removeEventListener('message', handler);
-          reject(new Error(`Timeout for ${method}`));
-        }, 10000);
+  await new Promise(r => setTimeout(r, 2000));
 
-        const handler = (event) => {
-          const msg = JSON.parse(event.data);
-          if (msg.id === id) {
-            clearTimeout(timeout);
-            ws.removeEventListener('message', handler);
-            resolve(msg.result);
-          }
-        };
-        ws.addEventListener('message', handler);
-        ws.send(JSON.stringify({ id, method, params }));
-      });
-    }
+  http.get('http://localhost:9228/json', (res) => {
+    let raw = '';
+    res.on('data', c => raw += c);
+    res.on('end', async () => {
+      const list = JSON.parse(raw);
+      const tab = list.find(t => t.type === 'page');
+      const ws = new WebSocket(tab.webSocketDebuggerUrl);
 
-    ws.onopen = async () => {
-      console.log('Connected to CDP');
+      ws.onopen = async () => {
+        let id = 0;
+        function send(method, params = {}) {
+          return new Promise(res => {
+            const curId = ++id;
+            const h = (evt) => {
+              const d = JSON.parse(evt.data);
+              if (d.id === curId) { ws.removeEventListener('message', h); res(d.result); }
+            };
+            ws.addEventListener('message', h);
+            ws.send(JSON.stringify({ id: curId, method, params }));
+          });
+        }
 
-      // Scroll to 400px
-      await send('Runtime.evaluate', {
-        expression: `(() => {
-          const s = document.querySelector('.js-scroller');
-          s.scrollTop = 400;
-          s.dispatchEvent(new Event('scroll'));
-          window.dispatchEvent(new Event('scroll'));
-          return s.scrollTop;
-        })()`
-      });
-      await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 5000));
 
-      let shot = await send('Page.captureScreenshot', { format: 'png' });
-      if (shot?.data) {
-        fs.writeFileSync('scratch/scroll_400px.png', Buffer.from(shot.data, 'base64'));
-        console.log('Saved scratch/scroll_400px.png');
-      }
+        const scrollInfo = await send('Runtime.evaluate', {
+          expression: `(() => {
+            const scroller = document.querySelector('.ll-scroller, .js-scroller') || document.querySelector('main');
+            const sec = document.querySelector('.ll-section--services');
+            const projects = document.querySelector('#section-projects');
+            const contact = document.querySelector('.ll-section--services .ll-block--contact-card');
+            const logos = document.querySelector('.ll-section--logos');
 
-      // Scroll to 800px
-      await send('Runtime.evaluate', {
-        expression: `(() => {
-          const s = document.querySelector('.js-scroller');
-          s.scrollTop = 800;
-          s.dispatchEvent(new Event('scroll'));
-          window.dispatchEvent(new Event('scroll'));
-          return s.scrollTop;
-        })()`
-      });
-      await new Promise(r => setTimeout(r, 600));
+            return {
+              hasScroller: !!scroller,
+              scrollerTag: scroller ? scroller.tagName + '.' + scroller.className : null,
+              scrollerHeight: scroller ? scroller.scrollHeight : null,
+              scrollerScrollTop: scroller ? scroller.scrollTop : null,
+              secTop: sec ? sec.offsetTop : null,
+              projectsTop: projects ? projects.offsetTop : null
+            };
+          })()`,
+          returnByValue: true
+        });
 
-      shot = await send('Page.captureScreenshot', { format: 'png' });
-      if (shot?.data) {
-        fs.writeFileSync('scratch/scroll_800px.png', Buffer.from(shot.data, 'base64'));
-        console.log('Saved scratch/scroll_800px.png');
-      }
+        console.log('Scroller info:', JSON.stringify(scrollInfo.result.value, null, 2));
 
-      // Scroll to 1200px
-      await send('Runtime.evaluate', {
-        expression: `(() => {
-          const s = document.querySelector('.js-scroller');
-          s.scrollTop = 1200;
-          s.dispatchEvent(new Event('scroll'));
-          window.dispatchEvent(new Event('scroll'));
-          return s.scrollTop;
-        })()`
-      });
-      await new Promise(r => setTimeout(r, 600));
+        // Now scroll the scroller to the services section!
+        await send('Runtime.evaluate', {
+          expression: `(() => {
+            const scroller = document.querySelector('.ll-scroller, .js-scroller') || document.querySelector('main');
+            const sec = document.querySelector('.ll-section--services');
+            if (scroller && sec) {
+              scroller.scrollTop = sec.offsetTop;
+            }
+          })()`
+        });
 
-      shot = await send('Page.captureScreenshot', { format: 'png' });
-      if (shot?.data) {
-        fs.writeFileSync('scratch/scroll_1200px.png', Buffer.from(shot.data, 'base64'));
-        console.log('Saved scratch/scroll_1200px.png');
-      }
+        await new Promise(r => setTimeout(r, 1500));
 
-      ws.close();
-      process.exit(0);
-    };
+        const shotTop = await send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync('scratch/services_scrolled_top.png', Buffer.from(shotTop.data, 'base64'));
+        console.log('Saved scratch/services_scrolled_top.png');
+
+        // Scroll scroller 400px down
+        await send('Runtime.evaluate', {
+          expression: `(() => {
+            const scroller = document.querySelector('.ll-scroller, .js-scroller') || document.querySelector('main');
+            if (scroller) scroller.scrollTop += 400;
+          })()`
+        });
+
+        await new Promise(r => setTimeout(r, 1200));
+
+        const shotMid = await send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync('scratch/services_scrolled_mid.png', Buffer.from(shotMid.data, 'base64'));
+        console.log('Saved scratch/services_scrolled_mid.png');
+
+        // Scroll scroller 400px more down
+        await send('Runtime.evaluate', {
+          expression: `(() => {
+            const scroller = document.querySelector('.ll-scroller, .js-scroller') || document.querySelector('main');
+            if (scroller) scroller.scrollTop += 400;
+          })()`
+        });
+
+        await new Promise(r => setTimeout(r, 1200));
+
+        const shotBottom = await send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync('scratch/services_scrolled_bottom.png', Buffer.from(shotBottom.data, 'base64'));
+        console.log('Saved scratch/services_scrolled_bottom.png');
+
+        ws.close();
+        edge.kill();
+        process.exit(0);
+      };
+    });
   });
-});
+}
+testScroller();

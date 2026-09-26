@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || process.argv[2] || 3010;
+let PORT = parseInt(process.env.PORT || process.argv[2] || 3010, 10);
 const PUBLIC_DIR = __dirname;
 
 const MIME_TYPES = {
@@ -33,6 +33,59 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json'
 };
 
+// SSE Live Reload Clients
+const clients = new Set();
+
+function broadcastReload() {
+  for (const client of clients) {
+    try {
+      client.write('data: reload\n\n');
+    } catch (e) {
+      clients.delete(client);
+    }
+  }
+}
+
+// Watch for file modifications to trigger live-reload
+let debounceTimer = null;
+try {
+  fs.watch(PUBLIC_DIR, { recursive: true }, (eventType, filename) => {
+    if (!filename) return;
+    const ext = path.extname(filename).toLowerCase();
+    if (['.html', '.css', '.js', '.json'].includes(ext)) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        console.log(`🔄 [LiveReload] Detected change in ${filename}, triggering reload...`);
+        broadcastReload();
+      }, 150);
+    }
+  });
+} catch (err) {
+  console.warn('⚠️ File watcher error:', err.message);
+}
+
+const LIVE_RELOAD_SNIPPET = `
+<!-- Live Server Auto-Reload -->
+<script>
+(function() {
+  function connect() {
+    var es = new EventSource('/live-reload');
+    es.onmessage = function(e) {
+      if (e.data === 'reload') {
+        console.log('[LiveReload] Refreshing page...');
+        location.reload();
+      }
+    };
+    es.onerror = function() {
+      es.close();
+      setTimeout(connect, 2000);
+    };
+  }
+  if (window.EventSource) connect();
+})();
+</script>
+`;
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -48,11 +101,25 @@ const server = http.createServer((req, res) => {
   let reqUrl = req.url.split('?')[0];
   try { reqUrl = decodeURIComponent(reqUrl); } catch (e) {}
 
-  if (reqUrl === '/' || reqUrl === '') {
-    const indexPath = path.join(PUBLIC_DIR, 'index.html');
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    fs.createReadStream(indexPath).pipe(res);
+  // Live Reload SSE Endpoint
+  if (reqUrl === '/live-reload') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.write(': connected\n\n');
+    clients.add(res);
+
+    req.on('close', () => {
+      clients.delete(res);
+    });
     return;
+  }
+
+  if (reqUrl === '/' || reqUrl === '') {
+    reqUrl = '/index.html';
   }
 
   let filePath = path.join(PUBLIC_DIR, reqUrl);
@@ -71,6 +138,30 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
     const stat = fs.statSync(filePath);
+
+    // Inject Live Reload script into HTML responses
+    if (ext === '.html') {
+      fs.readFile(filePath, 'utf8', (err, html) => {
+        if (err) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Error loading HTML: ' + err.message);
+          return;
+        }
+        let output = html;
+        if (output.includes('</body>')) {
+          output = output.replace('</body>', LIVE_RELOAD_SNIPPET + '</body>');
+        } else {
+          output += LIVE_RELOAD_SNIPPET;
+        }
+        const buf = Buffer.from(output, 'utf8');
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Length': buf.length
+        });
+        res.end(buf);
+      });
+      return;
+    }
 
     const range = req.headers.range;
     if (range && (ext === '.mp4' || ext === '.webm' || ext === '.mp3')) {
@@ -97,7 +188,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Also check in public/ or root if needed
+  // Fallback to public/ or root if needed
   const fallbackPath = path.join(__dirname, '..', 'public', reqUrl);
   if (fs.existsSync(fallbackPath) && !fs.statSync(fallbackPath).isDirectory()) {
     const ext = path.extname(fallbackPath).toLowerCase();
@@ -115,6 +206,23 @@ const server = http.createServer((req, res) => {
   res.end('Not Found: ' + reqUrl);
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Final server running at: http://localhost:${PORT}`);
+function startServer(port) {
+  server.listen(port, () => {
+    console.log(`\n=================================================`);
+    console.log(`🚀 Live Server running at: http://localhost:${port}`);
+    console.log(`⚡ Live Reload active: changes will auto-refresh`);
+    console.log(`=================================================\n`);
+  });
+}
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`⚠️ Port ${PORT} is in use, trying port ${PORT + 1}...`);
+    PORT++;
+    startServer(PORT);
+  } else {
+    console.error('Server error:', err);
+  }
 });
+
+startServer(PORT);

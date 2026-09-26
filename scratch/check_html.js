@@ -1,51 +1,16 @@
-const WebSocket = globalThis.WebSocket;
-
-function createCdpClient(url) {
-  const ws = new WebSocket(url);
-  const pending = new Map();
-  let idCounter = 1;
-  ws.addEventListener('message', (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.id && pending.has(msg.id)) {
-        const { resolve, reject } = pending.get(msg.id);
-        pending.delete(msg.id);
-        if (msg.error) reject(msg.error);
-        else resolve(msg.result);
-      }
-    } catch(e) {}
-  });
-  const ready = new Promise(resolve => ws.addEventListener('open', resolve));
-  return {
-    async call(method, params = {}) {
-      await ready;
-      return new Promise((resolve, reject) => {
-        const id = idCounter++;
-        pending.set(id, { resolve, reject });
-        ws.send(JSON.stringify({ id, method, params }));
-      });
-    },
-    close() { ws.close(); }
-  };
+const fs = require('fs');
+const content = fs.readFileSync('final/index.html', 'utf8');
+console.log('Length:', content.length);
+const scripts = [];
+const regex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+let m;
+while ((m = regex.exec(content)) !== null) {
+  const tag = m[0];
+  const srcMatch = tag.match(/src=["']([^"']+)["']/i);
+  if (srcMatch) {
+    scripts.push({ src: srcMatch[1], type: tag.includes('type=') ? tag.match(/type=["']([^"']+)["']/i)[1] : 'normal' });
+  } else {
+    scripts.push({ inlineLength: m[1].length, snippet: m[1].slice(0, 100).replace(/\n/g, ' ') });
+  }
 }
-
-async function check() {
-  const client = createCdpClient('ws://localhost:9222/devtools/page/1FF2F2665BF710AB7DF09AE8518AD37C');
-  await client.call('Runtime.enable');
-
-  const res = await client.call('Runtime.evaluate', {
-    expression: `(() => {
-      const container = document.querySelector('.js-page-transition-counter-container');
-      const curtain = document.querySelector('.js-page-transition');
-      return {
-        containerHTML: container ? container.outerHTML : null,
-        curtainHTML: curtain ? curtain.outerHTML : null
-      };
-    })()`,
-    returnByValue: true
-  });
-  console.log('HTML Structure:', res.result.value);
-  client.close();
-}
-
-check().catch(console.error);
+console.log('Found scripts:', JSON.stringify(scripts, null, 2));

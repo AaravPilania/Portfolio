@@ -1,4 +1,7 @@
 const fs = require('fs');
-const s = fs.readFileSync('index.html', 'utf8');
-const idx = s.indexOf('ll-section--case_highlighted');
-console.log(s.substring(idx - 250, idx + 450));
+const html = fs.readFileSync('final/index.html', 'utf8');
+const sections = [...html.matchAll(/<section[^>]*class=["']([^"']*)["'][^>]*>/gi)].map(m => m[1]);
+console.log('All sections:', sections);
+
+const divs = [...html.matchAll(/<div[^>]*class=["']([^"']*(?:scroller|scroll-content|heroTrack)[^"']*)["'][^>]*>/gi)].map(m => m[1]);
+console.log('Scroll containers/tracks:', divs);

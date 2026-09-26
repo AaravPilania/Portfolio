@@ -451,4 +451,242 @@ input[type="submit"],
 
 .ll-block--canvas-2d {
   image-rendering: pixelated !important;
-}
+}
+
+/* ===================================================
+   SERVICES ("WHAT WE DO") AUTHENTIC LAMA LAMA SECTION
+   =================================================== */
+canvas.js-canvas,
+#lamaCanvas {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.services-diffusion-canvas {
+  position: absolute !important;
+  left: 0 !important;
+  width: 100% !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  display: block !important;
+}
+
+.ll-section--services {
+  position: relative !important;
+  background-color: #0b0b0b !important;
+  color: #f9f4eb !important;
+  z-index: 52 !important;
+  overflow: visible !important;
+}
+
+.ll-section--services .ll-container {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.ll-section--services .js-backdrop-video-item,
+.ll-section--services video {
+  position: fixed !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 1440px !important;
+  height: 1920px !important;
+  opacity: 0.001 !important;
+  pointer-events: none !important;
+  visibility: visible !important;
+}
+
+.ll-section--services h2,
+.ll-section--services .ll-display-rg,
+.ll-section--services .ll-heading-4,
+.ll-section--services .ll-add-button,
+.ll-section--services .ll-part--buttons-button,
+.ll-section--services .ll-part--label,
+.ll-section--services .ll-body-md,
+.ll-section--services .ll-body-rg,
+.ll-section--services .ll-block--contact-card,
+.ll-section--services .js-text-container,
+.ll-section--services .js-text {
+  visibility: visible !important;
+  color: #f9f4eb !important;
+}
+
+.ll-section--services .ll-text-reveal,
+.ll-section--services .ll-text-reveal *,
+.ll-section--services .js-text-container,
+.ll-section--services .js-text-container *,
+.ll-section--services h2,
+.ll-section--services h2 *,
+.ll-section--services .ll-heading-4,
+.ll-section--services .ll-heading-4 * {
+  opacity: 1 !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+
+.js-fallback-image {
+  display: none !important;
+}
+
+/* Pitchdeck sticky drawer matching user screenshot (Image 3) */
+.js-sticky-item {
+  opacity: 1 !important;
+  visibility: visible !important;
+  background: rgba(18, 18, 18, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-radius: 6px !important;
+}
+.js-sticky-item-pitchdeck button.js-title-toggle {
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 11px !important;
+}
+
+/* ===================================================
+   LOGOS ("HAPPY CLIENTS") AUTHENTIC SECTION (IMAGE 1)
+   =================================================== */
+.ll-section--logos {
+  position: relative !important;
+  background-color: transparent !important;
+  color: #f9f4eb !important;
+  z-index: 50 !important;
+  overflow: visible !important;
+  padding-top: 1.5rem !important;
+  padding-bottom: 5rem !important;
+}
+
+.ll-section--logos .ll-container {
+  position: relative !important;
+  z-index: 60 !important;
+}
+
+.ll-section--logos .js-mono-text-reveal {
+  position: relative !important;
+  display: inline-block !important;
+}
+
+.ll-section--logos .js-mono-text-reveal .js-animation-target {
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 0.8125rem !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(249, 244, 235, 0.72) !important;
+  opacity: 1 !important;
+  display: block !important;
+  position: relative !important;
+}
+
+.ll-section--logos .js-mono-text-reveal .js-animation-target:empty::before {
+  content: "[ HAPPY CLIENTS ]";
+}
+
+.ll-section--logos .js-line {
+  display: none !important;
+}
+
+@keyframes logoMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ll-block--logo-marquee {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3.5rem !important;
+  width: max-content !important;
+  animation: logoMarquee 26s linear infinite !important;
+}
+
+.ll-block--logo-marquee:hover {
+  animation-play-state: paused !important;
+}
+
+.ll-logo-item {
+  height: 36px !important;
+  width: auto !important;
+  max-width: 140px !important;
+  filter: brightness(0.85) contrast(1.1) !important;
+  transition: filter 0.2s ease, opacity 0.2s ease !important;
+  opacity: 0.75 !important;
+}
+
+.ll-logo-item:hover {
+  filter: brightness(1) contrast(1) !important;
+  opacity: 1 !important;
+}
+
+/* Authentic Buttons Inverted Hover Slides */
+.ll-section--services .ll-part--buttons-button {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-backdrop-hover {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-text-hover {
+  transition: opacity 0.25s ease;
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button .js-arrow-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-backdrop-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-text-hover {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow {
+  transform: translate(3px, -3px) !important;
+}
+
+.ll-section--services .ll-part--buttons-button:hover .js-arrow-hover {
+  transform: scale(1) translate(0px, 0px) !important;
+}
+
+/* Lars Contact Card Hover */
+.ll-section--services .ll-block--contact-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ll-section--services .ll-block--contact-card .js-backdrop {
+  transition: opacity 0.3s ease;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-backdrop {
+  opacity: 1 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal {
+  opacity: 0 !important;
+}
+
+.ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal-hover {
+  opacity: 1 !important;
+}
+

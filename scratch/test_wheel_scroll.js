@@ -1,68 +1,79 @@
 const http = require('http');
+const { spawn } = require('child_process');
 const fs = require('fs');
 
-http.get('http://localhost:9222/json', (res) => {
-  let d = ''; res.on('data', c => d += c);
-  res.on('end', () => {
-    const tabs = JSON.parse(d);
-    const tabLocal = tabs.find(t => t.url.includes('localhost:3000') && t.webSocketDebuggerUrl);
-    if (!tabLocal) return console.log('missing tab');
+async function main() {
+  const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
+    '--headless=new',
+    '--remote-debugging-port=9260',
+    'http://localhost:3010/'
+  ]);
 
-    const ws = new WebSocket(tabLocal.webSocketDebuggerUrl);
-    ws.onopen = () => {
-      // First ensure scrollTop is 0
-      ws.send(JSON.stringify({
-        id: 1,
-        method: 'Runtime.evaluate',
-        params: {
-          expression: `(() => {
-            const scroller = document.querySelector('.ll-scroller');
-            scroller.scrollTop = 0;
-            return scroller.scrollTop;
-          })()`,
-          returnByValue: true
-        }
-      }));
-    };
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.id === 1) {
-        console.log('Reset scrollTop to 0');
-        // Dispatch Input.dispatchMouseEvent with mouseWheel
-        ws.send(JSON.stringify({
-          id: 2,
-          method: 'Input.dispatchMouseEvent',
-          params: {
-            type: 'mouseWheel',
-            x: 500,
-            y: 500,
-            deltaX: 0,
-            deltaY: 300
-          }
-        }));
-      } else if (msg.id === 2) {
-        console.log('Dispatched mouseWheel event. Checking scrollTop after 200ms...');
-        setTimeout(() => {
-          ws.send(JSON.stringify({
-            id: 3,
-            method: 'Runtime.evaluate',
-            params: {
-              expression: `(() => {
-                const scroller = document.querySelector('.ll-scroller');
-                return {
-                  scrollTop: scroller.scrollTop,
-                  windowScrollY: window.scrollY
-                };
-              })()`,
-              returnByValue: true
+  await new Promise(r => setTimeout(r, 2000));
+
+  http.get('http://localhost:9260/json', (res) => {
+    let d = '';
+    res.on('data', c => d += c);
+    res.on('end', () => {
+      const tab = JSON.parse(d).find(t => t.type === 'page');
+      const ws = new WebSocket(tab.webSocketDebuggerUrl);
+      let id = 0;
+      function send(method, params = {}) {
+        return new Promise((resolve) => {
+          const curId = ++id;
+          const handler = (evt) => {
+            const data = JSON.parse(evt.data);
+            if (data.id === curId) {
+              ws.removeEventListener('message', handler);
+              resolve(data.result);
             }
-          }));
-        }, 300);
-      } else if (msg.id === 3) {
-        console.log('Scroll result from wheel event:', msg.result?.result?.value);
-        ws.close();
-        process.exit(0);
+          };
+          ws.addEventListener('message', handler);
+          ws.send(JSON.stringify({ id: curId, method, params }));
+        });
       }
-    };
+
+      ws.onopen = async () => {
+        await send('Page.enable');
+        await send('Runtime.enable');
+
+        console.log('Waiting 3s for page load...');
+        await new Promise(r => setTimeout(r, 3000));
+
+        // Dispatch mouse wheel events to simulate user scrolling down
+        console.log('Simulating mouse wheel down...');
+        for (let i = 0; i < 15; i++) {
+          await send('Input.dispatchMouseEvent', {
+            type: 'mouseWheel',
+            x: 720,
+            y: 450,
+            deltaX: 0,
+            deltaY: 500
+          });
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const shot = await send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync('scratch/after_wheel_scroll.png', Buffer.from(shot.data, 'base64'));
+        console.log('Saved scratch/after_wheel_scroll.png');
+
+        const scrollInfo = await send('Runtime.evaluate', {
+          expression: `JSON.stringify({
+            windowScrollY: window.scrollY,
+            scrollerScrollTop: document.querySelector('.ll-scroller')?.scrollTop,
+            bodyScrollTop: document.body.scrollTop
+          })`
+        });
+        console.log('Scroll info after wheel:\n', scrollInfo.result?.value);
+
+        ws.close();
+        edge.kill();
+        process.exit(0);
+      };
+    });
   });
-});
+}
+
+main().catch(console.error);

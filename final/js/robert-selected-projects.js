@@ -1350,7 +1350,11 @@ void main() {
                 if (m.geometry) m.geometry.dispose();
             });
             this.videos.forEach(v => {
-                try { v.pause(); } catch(e) {}
+                try {
+                    v.pause();
+                    v.removeAttribute('src');
+                    v.load();
+                } catch(e) {}
             });
             this.tl1.kill();
             this.tl2.kill();
@@ -1365,6 +1369,8 @@ void main() {
                 this.canvas.id = 'canvas';
                 document.body.prepend(this.canvas);
             }
+            this.canvas.style.display = 'none';
+            this.canvas.style.opacity = '0';
 
             preloadAllProjectAssets();
 
@@ -1448,13 +1454,38 @@ void main() {
                 this.mouse.target.y = -(cy / window.innerHeight) * 2 + 1;
             };
 
-            this.lastStepTime = 0;
-            this.isSteppingScroll = false;
+            this.isSectionInView = false;
+            let leaveDebounceTimer = null;
 
-            this.activateProject = (targetIdx, smoothScroll = false) => {
+            this.deactivateAllProjects = () => {
+                if (this.activeProjectIdx === -1 && !this.activeProjectRow) return;
+                this.activeProjectRow = null;
+                this.activeProjectIdx = -1;
+
+                entries.forEach((e) => {
+                    e.classList.remove('h-mainOpacity--full');
+                    e.classList.remove('is-hovered');
+                });
+
+                if (typeof gsap !== 'undefined') {
+                    gsap.to('html', { '--mainOpacity': 1, duration: 0.25, ease: 'power1.out' });
+                    if (this.renderer && this.renderer.domElement) {
+                        gsap.to(this.renderer.domElement, { opacity: 0, duration: 0.25, ease: 'power1.out' });
+                    }
+                } else {
+                    document.documentElement.style.setProperty('--mainOpacity', '1');
+                    if (this.renderer && this.renderer.domElement) {
+                        this.renderer.domElement.style.opacity = '0';
+                    }
+                }
+
+                this.leaveProject("all");
+            };
+
+            this.activateProject = (targetIdx) => {
                 if (targetIdx < 0 || targetIdx >= entries.length) return;
                 const targetRow = entries[targetIdx];
-                if (this.activeProjectIdx === targetIdx && this.activeProjectRow === targetRow && !smoothScroll) return;
+                if (this.activeProjectIdx === targetIdx && this.activeProjectRow === targetRow) return;
 
                 this.activeProjectRow = targetRow;
                 this.activeProjectIdx = targetIdx;
@@ -1469,200 +1500,51 @@ void main() {
                     }
                 });
 
-                gsap.set('html', { '--mainOpacity': 0.03 });
+                if (typeof gsap !== 'undefined') {
+                    gsap.to('html', { '--mainOpacity': 0.03, duration: 0.25 });
+                    if (this.renderer && this.renderer.domElement) {
+                        gsap.to(this.renderer.domElement, { opacity: 1, duration: 0.25 });
+                    }
+                } else {
+                    document.documentElement.style.setProperty('--mainOpacity', '0.03');
+                    if (this.renderer && this.renderer.domElement) {
+                        this.renderer.domElement.style.opacity = '1';
+                    }
+                }
+
                 this.playTick();
 
                 this.presetProgress = targetIdx % this.noisePresets.length;
                 const key = targetRow.getAttribute('data-project-key');
                 if (key) this.enterProject(key);
-
-                if (smoothScroll) {
-                    const winH = window.innerHeight;
-                    const focalY = winH * 0.45;
-                    const scrollerEl = document.querySelector('.js-scroller') || window;
-                    const curScroll = scrollerEl.scrollTop !== undefined ? scrollerEl.scrollTop : window.scrollY;
-                    const rowRect = targetRow.getBoundingClientRect();
-                    const rowMid = (rowRect.top + rowRect.bottom) * 0.5;
-                    const delta = rowMid - focalY;
-                    const targetScroll = Math.max(0, curScroll + delta);
-
-                    this.isSteppingScroll = true;
-                    if (scrollerEl.scrollTop !== undefined) {
-                        gsap.to(scrollerEl, {
-                            scrollTop: targetScroll,
-                            duration: 0.35,
-                            ease: 'power2.out',
-                            overwrite: 'auto',
-                            onComplete: () => {
-                                this.isSteppingScroll = false;
-                            }
-                        });
-                    } else {
-                        gsap.to(window, {
-                            scrollTo: targetScroll,
-                            duration: 0.35,
-                            ease: 'power2.out',
-                            overwrite: 'auto',
-                            onComplete: () => {
-                                this.isSteppingScroll = false;
-                            }
-                        });
-                    }
-                }
             };
 
-            this.checkScrollProjects = () => {
+            this.checkSectionBounds = () => {
                 if (!section || !entries.length) return;
-                if (this.isSteppingScroll) return;
 
                 const secRect = section.getBoundingClientRect();
                 const winH = window.innerHeight;
 
-                // When user is above section or scrolled past section:
-                if (secRect.top > winH * 0.75 || secRect.bottom < winH * 0.15) {
-                    if (this.renderer && this.renderer.domElement) {
-                        this.renderer.domElement.style.opacity = '0';
-                    }
-                    if (this.activeProjectRow) {
-                        this.activeProjectRow = null;
-                        this.activeProjectIdx = -1;
-                        entries.forEach(e => {
-                            e.classList.remove('h-mainOpacity--full');
-                            e.classList.remove('is-hovered');
-                        });
-                        gsap.set('html', { '--mainOpacity': 1 });
-                        this.leaveProject("all");
+                // Section is strictly in view if top < winH and bottom > 20 (before What We Do starts)
+                const inView = secRect.top < winH && secRect.bottom > 20;
+
+                if (!inView) {
+                    if (this.isSectionInView) {
+                        this.isSectionInView = false;
+                        if (this.canvas) {
+                            this.canvas.style.display = 'none';
+                            this.canvas.style.opacity = '0';
+                        }
+                        this.deactivateAllProjects();
                     }
                     return;
                 }
 
-                if (this.renderer && this.renderer.domElement) {
-                    this.renderer.domElement.style.opacity = '1';
-                }
-
-                // Focal line in viewport: ~45% from top
-                const focalY = winH * 0.45;
-
-                // If row 0 is still below focalY (section entering), row 0 activates immediately
-                const r0 = entries[0].getBoundingClientRect();
-                let targetIdx = 0;
-
-                if (r0.top < focalY) {
-                    let closestDist = Infinity;
-                    for (let i = 0; i < entries.length; i++) {
-                        const r = entries[i].getBoundingClientRect();
-                        const rowMid = (r.top + r.bottom) * 0.5;
-                        const dist = Math.abs(rowMid - focalY);
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            targetIdx = i;
-                        }
+                if (!this.isSectionInView) {
+                    this.isSectionInView = true;
+                    if (this.canvas) {
+                        this.canvas.style.display = 'block';
                     }
-                }
-
-                if (this.activeProjectIdx !== targetIdx) {
-                    this.activateProject(targetIdx, false);
-                }
-            };
-
-            const onWheelStepped = (e) => {
-                if (!section || !entries.length) return;
-                const secRect = section.getBoundingClientRect();
-                const winH = window.innerHeight;
-
-                // Section stepped zone: when projects section is in active focal view
-                const isInProjectFocus = secRect.top <= winH * 0.55 && secRect.bottom >= winH * 0.42;
-                if (!isInProjectFocus) return;
-
-                const delta = e.deltaY;
-                if (Math.abs(delta) < 6) return;
-
-                const now = performance.now();
-                const isDown = delta > 0;
-                const isUp = delta < 0;
-
-                if (isDown) {
-                    if (this.activeProjectIdx < entries.length - 1) {
-                        e.preventDefault();
-                        if (now - this.lastStepTime < 240) {
-                            return; // Cooldown absorbs momentum burst
-                        }
-                        this.lastStepTime = now;
-                        const nextIdx = this.activeProjectIdx < 0 ? 0 : this.activeProjectIdx + 1;
-                        this.activateProject(nextIdx, true);
-                    }
-                    // At row 15 scrolling down: let default scroll continue down into What We Do section
-                } else if (isUp) {
-                    if (this.activeProjectIdx > 0) {
-                        e.preventDefault();
-                        if (now - this.lastStepTime < 240) {
-                            return; // Cooldown absorbs momentum burst
-                        }
-                        this.lastStepTime = now;
-                        const prevIdx = this.activeProjectIdx - 1;
-                        this.activateProject(prevIdx, true);
-                    }
-                    // At row 0 scrolling up: let default scroll continue up into Slide 2
-                }
-            };
-
-            const onKeyDown = (e) => {
-                if (!section || !entries.length) return;
-                const secRect = section.getBoundingClientRect();
-                const winH = window.innerHeight;
-                const isInProjectFocus = secRect.top <= winH * 0.55 && secRect.bottom >= winH * 0.42;
-                if (!isInProjectFocus) return;
-
-                if (e.key === 'ArrowDown' || e.key === 'PageDown') {
-                    if (this.activeProjectIdx < entries.length - 1) {
-                        e.preventDefault();
-                        const nextIdx = this.activeProjectIdx < 0 ? 0 : this.activeProjectIdx + 1;
-                        this.activateProject(nextIdx, true);
-                    }
-                } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-                    if (this.activeProjectIdx > 0) {
-                        e.preventDefault();
-                        const prevIdx = this.activeProjectIdx - 1;
-                        this.activateProject(prevIdx, true);
-                    }
-                }
-            };
-
-            let touchStartY = 0;
-            const onTouchStart = (e) => {
-                if (e.touches && e.touches[0]) {
-                    touchStartY = e.touches[0].clientY;
-                }
-            };
-            const onTouchMove = (e) => {
-                if (!touchStartY || !e.touches || !e.touches[0]) return;
-                const secRect = section.getBoundingClientRect();
-                const winH = window.innerHeight;
-                const isInProjectFocus = secRect.top <= winH * 0.55 && secRect.bottom >= winH * 0.42;
-                if (!isInProjectFocus) return;
-
-                const curY = e.touches[0].clientY;
-                const deltaY = touchStartY - curY; // positive = swipe up = scroll down
-                if (Math.abs(deltaY) < 35) return;
-
-                const now = performance.now();
-                if (now - this.lastStepTime < 260) {
-                    if (e.cancelable) e.preventDefault();
-                    return;
-                }
-
-                if (deltaY > 0 && this.activeProjectIdx < entries.length - 1) {
-                    if (e.cancelable) e.preventDefault();
-                    this.lastStepTime = now;
-                    touchStartY = curY;
-                    const nextIdx = this.activeProjectIdx < 0 ? 0 : this.activeProjectIdx + 1;
-                    this.activateProject(nextIdx, true);
-                } else if (deltaY < 0 && this.activeProjectIdx > 0) {
-                    if (e.cancelable) e.preventDefault();
-                    this.lastStepTime = now;
-                    touchStartY = curY;
-                    const prevIdx = this.activeProjectIdx - 1;
-                    this.activateProject(prevIdx, true);
                 }
             };
 
@@ -1671,27 +1553,51 @@ void main() {
             };
 
             const onScroll = () => {
-                this.checkScrollProjects();
+                this.checkSectionBounds();
             };
 
             window.addEventListener('mousemove', onMouseMove, { passive: true });
             window.addEventListener('pointermove', onMouseMove, { passive: true });
-            window.addEventListener('wheel', onWheelStepped, { capture: true, passive: false });
-            window.addEventListener('keydown', onKeyDown, { passive: false });
-            window.addEventListener('touchstart', onTouchStart, { passive: true });
-            window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
             window.addEventListener('scroll', onScroll, { capture: true, passive: true });
             document.addEventListener('scroll', onScroll, { capture: true, passive: true });
 
             const scroller = document.querySelector('.js-scroller');
             if (scroller) {
                 scroller.addEventListener('scroll', onScroll, { passive: true });
-                scroller.addEventListener('wheel', onWheelStepped, { capture: true, passive: false });
             }
 
-            // Click row to launch project
-            entries.forEach(row => {
+            const onHoverRow = (idx) => {
+                if (leaveDebounceTimer) {
+                    clearTimeout(leaveDebounceTimer);
+                    leaveDebounceTimer = null;
+                }
+                this.checkSectionBounds();
+                if (!this.isSectionInView) return;
+
+                if (this.canvas) {
+                    this.canvas.style.display = 'block';
+                    this.canvas.style.opacity = '1';
+                }
+                this.activateProject(idx);
+            };
+
+            const onLeaveRow = () => {
+                if (leaveDebounceTimer) clearTimeout(leaveDebounceTimer);
+                leaveDebounceTimer = setTimeout(() => {
+                    this.deactivateAllProjects();
+                }, 120);
+            };
+
+            // Pure Hover & Appear interactions for project rows
+            entries.forEach((row, idx) => {
                 row.style.cursor = 'pointer';
+
+                row.addEventListener('mouseenter', () => onHoverRow(idx));
+                row.addEventListener('pointerenter', () => onHoverRow(idx));
+                row.addEventListener('mouseleave', onLeaveRow);
+                row.addEventListener('pointerleave', onLeaveRow);
+
+                // Click row to launch project
                 row.addEventListener('click', (e) => {
                     if (e.target.closest('a')) return;
                     const ctaLink = row.querySelector('.projects__entry-cta a');
@@ -1701,8 +1607,12 @@ void main() {
                 });
             });
 
+            // Container mouseleave to cleanly dissolve out if moving cursor away
+            section.addEventListener('mouseleave', onLeaveRow);
+            section.addEventListener('pointerleave', onLeaveRow);
+
             // Initial check once rendered
-            setTimeout(() => this.checkScrollProjects(), 100);
+            setTimeout(() => this.checkSectionBounds(), 100);
         }
 
         enterProject(key) {
@@ -1791,9 +1701,14 @@ void main() {
             const delta = this.clock.getDelta();
             this.timeElapsed += delta;
 
-            // Continual real-time scroll check during rapid scroll, momentum scroll & smooth scroll
-            if (this.checkScrollProjects) {
-                this.checkScrollProjects();
+            // Check section bounds
+            if (this.checkSectionBounds) {
+                this.checkSectionBounds();
+            }
+
+            // Skip rendering when section is out of view and queue is empty
+            if (!this.isSectionInView && this.queueMap.size === 0) {
+                return;
             }
 
             // Lerp mouse
