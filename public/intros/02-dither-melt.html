@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intro 02 — Dither Melt</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="intro-core.css">
+</head>
+<body>
+    <script id="introFrag" type="x-shader/x-fragment">
+        uniform float uReveal;
+
+        float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+        float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+        float bayer8(vec2 a) { return bayer4(0.5 * a) * 0.25 + bayer2(a); }
+
+        void main() {
+            vec2 px = screenPx();
+            apGrid(px);
+            vec3 rgb = gMark;
+            float alpha = 1.0;
+
+            if (uReveal > 0.0) {
+                float d = length(px) / length(uRes * 0.5);
+                float front = uReveal - d - fbm(px * 0.006 + 3.1) * 0.45;
+                float k = clamp(front / 0.4, 0.0, 1.0);
+                float warm = clamp((front + 0.25) / 0.25, 0.0, 1.0);
+                rgb = mix(rgb, SIGNAL * gMarkA, warm);
+
+                // 3px ordered-dither cells: the black thins out like an 8-bit fade
+                float b = bayer8(floor(gl_FragCoord.xy / (3.0 * uDpr)));
+                if (b < k) {
+                    rgb = vec3(0.0);
+                    alpha = 0.0;
+                } else if (k > 0.0 && b < k + 0.12) {
+                    rgb = SIGNAL;
+                }
+            }
+
+            rgb += grain() * alpha * (1.0 - gMarkA);
+            gl_FragColor = vec4(clamp(rgb, 0.0, alpha), alpha);
+        }
+    </script>
+    <script src="ap-intro-core.js"></script>
+    <script>
+        APIntro({
+            id: '02-dither-melt',
+            grid: true,
+            frame(s) {
+                const g = APIntro.grid(s);
+                const r = APIntro.clamp01(g.since / 1.7);
+                if (r >= 1) return { done: true };
+                g.u.uReveal = APIntro.ease.inOutSine(r) * 1.9;
+                return { u: g.u, hero: 'scale(' + (1.06 - 0.06 * APIntro.ease.outExpo(r)) + ')' };
+            }
+        });
+    </script>
+</body>
+</html>

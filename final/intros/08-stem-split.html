@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intro 08 — Stem Split</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="intro-core.css">
+</head>
+<body>
+    <script id="introFrag" type="x-shader/x-fragment">
+        uniform float uCrack;
+        uniform float uOpen;
+
+        void main() {
+            vec2 px = screenPx();
+            float upp = 644.0 / uBigH;
+            float aa = upp / uDpr;
+            float stemX = 9.0 / upp;   // merged stem centre (410.5) relative to the mark centre (401.5)
+
+            // The screen parts along the shared stem: A rides the left panel, P the right
+            float shift = uOpen * uRes.x * 0.62;
+            bool leftSide = px.x < stemX;
+            vec2 src = px + vec2(leftSide ? shift : -shift, 0.0);
+            bool gap = leftSide ? src.x >= stemX : src.x < stemX;
+
+            vec3 rgb = vec3(0.0);
+            float alpha = 1.0;
+            if (gap) {
+                float haze = pow(1.0 - uOpen, 4.0) * 0.38;
+                rgb = SIGNAL * haze;
+                alpha = haze;
+            } else {
+                vec2 u = toAP(src, uBigH);
+                float cov = clamp(0.5 - sdAP(u) / aa, 0.0, 1.0);
+                float filled = clamp((u.y - 644.0 * (1.0 - uFill)) / aa + 0.5, 0.0, 1.0);
+                rgb = mix(SILHOUETTE, PAPER, filled) * cov;
+                float dEdge = abs(src.x - stemX);
+                if (uOpen > 0.0) {
+                    rgb += SIGNAL * exp(-dEdge / 60.0) * 0.28 * (1.0 - uOpen);
+                    rgb = mix(rgb, SIGNAL, clamp(1.5 - dEdge * uDpr, 0.0, 1.0));
+                }
+                rgb += grain() * (1.0 - cov);
+            }
+
+            if (uCrack > 0.0 && uOpen <= 0.0) {
+                float dx = abs(px.x - stemX);
+                float within = clamp((uCrack * (uRes.y * 0.5 + 4.0) - abs(px.y)) * uDpr + 0.5, 0.0, 1.0);
+                rgb = mix(rgb, SIGNAL, clamp(1.2 - dx * uDpr, 0.0, 1.0) * within);
+                rgb += SIGNAL * exp(-dx / 9.0) * 0.45 * within * uCrack;
+            }
+
+            gl_FragColor = vec4(clamp(rgb, 0.0, alpha), alpha);
+        }
+    </script>
+    <script src="ap-intro-core.js"></script>
+    <script>
+        APIntro({
+            id: '08-stem-split',
+            frame(s) {
+                const E = APIntro.ease, c = APIntro.clamp01;
+                if (s.since < 0) return { u: { uCrack: 0, uOpen: 0 }, hero: 'scale(1.08)' };
+                const crack = E.outCubic(c((s.since - 0.3) / 0.35));
+                const o = c((s.since - 0.75) / 1.2);
+                if (o >= 1) return { done: true };
+                return {
+                    u: { uCrack: crack, uOpen: E.inOutQuart(o) },
+                    hero: 'scale(' + (1.08 - 0.08 * E.outCubic(o)) + ')'
+                };
+            }
+        });
+    </script>
+</body>
+</html>

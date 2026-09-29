@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intro 04 — Split Flap</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="intro-core.css">
+</head>
+<body>
+    <script id="introFrag" type="x-shader/x-fragment">
+        uniform float uReveal;
+
+        void main() {
+            vec2 px = screenPx();
+            apGrid(px);
+            vec3 rgb = gMark;
+            float alpha = 1.0;
+
+            if (uReveal > 0.0) {
+                vec2 cs = rot(uRot) * (gIdx * uPitch) * uScale;
+                float o = (cs.x / uRes.x + 0.5) * 0.6 + (cs.y / uRes.y + 0.5) * 0.4 + gH * 0.08;
+                float th = clamp((uReveal - o) / 0.45, 0.0, 1.0) * 1.5 * PI;
+
+                // Each tile is a departures-board card: white AP face → yellow back → gone
+                if (th > 0.0) {
+                    float c = cos(th);
+                    float hgt = max(abs(c), 0.0001);
+                    vec2 hs = uPitch * 0.5;
+                    float yn = gLocal.y / (hgt * hs.y);
+                    float squeeze = 1.0 - 0.22 * abs(sin(th)) * (0.5 - 0.5 * yn * sign(c));
+                    vec2 cl = vec2(gLocal.x / squeeze, gLocal.y / hgt);
+
+                    if (th >= 1.5 * PI || abs(cl.y) > hs.y - 1.0 || abs(cl.x) > hs.x - 1.0) {
+                        rgb = vec3(0.0);
+                        alpha = 0.0;
+                    } else {
+                        float upp = 644.0 / uMarkH;
+                        float cov = clamp(0.5 - sdAP(cl * upp + AP_VB * 0.5) / (upp / uDpr), 0.0, 1.0);
+                        float shade = 0.3 + 0.7 * hgt;
+                        rgb = (c > 0.0 ? mix(INK, PAPER, cov) : mix(SIGNAL, INK, cov)) * shade;
+                        rgb *= mix(0.25, 1.0, clamp(abs(gLocal.y) * uDpr, 0.0, 1.0));
+                    }
+                }
+            }
+
+            rgb += grain() * alpha * (1.0 - gMarkA);
+            gl_FragColor = vec4(clamp(rgb, 0.0, alpha), alpha);
+        }
+    </script>
+    <script src="ap-intro-core.js"></script>
+    <script>
+        APIntro({
+            id: '04-split-flap',
+            grid: true,
+            frame(s) {
+                const g = APIntro.grid(s);
+                const r = APIntro.clamp01(g.since / 1.7);
+                if (r >= 1) return { done: true };
+                g.u.uReveal = r * 1.6;
+                return { u: g.u, hero: 'scale(' + (1.06 - 0.06 * APIntro.ease.outExpo(r)) + ')' };
+            }
+        });
+    </script>
+</body>
+</html>
