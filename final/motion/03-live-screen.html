@@ -54,6 +54,7 @@
 
             // Both marquee lines, base + outline clone, driven from one clock per line so they never drift
             function lineCtl(cls, dir) {
+                S.win.__marqueeDriven = true;
                 const groups = [...marquee.querySelectorAll(cls + ' .marquee-group'), ...outline.querySelectorAll(cls + ' .marquee-group')];
                 const anims = groups.map((g) => g.getAnimations()[0]).filter(Boolean);
                 if (!anims.length) return null;

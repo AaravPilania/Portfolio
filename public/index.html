@@ -14,7 +14,7 @@
     <meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Covered+By+Your+Grace&family=IBM+Plex+Mono:wght@400;500&family=Just+Another+Hand&family=Nanum+Pen+Script&family=Reenie+Beanie&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         img:is([sizes="auto" i], [sizes^="auto," i]) {
             contain-intrinsic-size: 3000px 1500px
@@ -870,6 +870,22 @@
         /* Dark / desaturated monochrome look in Slide 2 when shrunk */
         .hero-shrink-card.is-shrunk #heroPortraitCanvas {
             filter: grayscale(100%) contrast(1.15) brightness(0.65);
+        }
+
+        /* Sized to the shrunk card in JS; only transform/opacity change while scrolling */
+        .hero-shrink-reflection {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: 50% 0;
+            z-index: 9;
+            object-fit: cover;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            filter: grayscale(100%) contrast(1.1) brightness(0.6) blur(7px);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.16) 40%, transparent 78%);
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.16) 40%, transparent 78%);
         }
 
         /* Dark Gradient & Vignette on the card */
@@ -3007,69 +3023,8 @@
                     <!-- HOLLOW OUTLINE PASS-THROUGH: JS clones #heroMarquee in here; clipped to the card rect above it -->
                     <div class="hero-marquee-outline-clip" id="heroMarqueeOutlineClip" aria-hidden="true"></div>
 
-                    <!-- SLIDE 2: HANDWRITTEN BACKGROUND DOODLES (positioned by layoutSlide2Doodles against the shrunk card + marquee lines) -->
-                    <div class="slide2-handwritten-doodles" id="slide2HandwrittenDoodles" aria-hidden="true">
-                        <!-- ∞ iterate: top-left diagonal (card corner → viewport corner), 3/4 out, slightly below -->
-                        <div class="doodle-text doodle-white" data-doodle="infinity" data-rot="2" style="text-align: center; line-height: 1;">
-                            <span class="doodle-yellow" style="font-size: 26px;">∞</span>
-                            <div style="font-size: 13px; letter-spacing: 0.12em; opacity: 0.6; margin-top: -2px;">iterate</div>
-                        </div>
-
-                        <!-- works on my machine: left of the card, level with its top edge -->
-                        <div class="doodle-text doodle-white" data-doodle="works" data-rot="-2.5" style="line-height: 1.15; font-size: clamp(17px, 1.3vw, 24px);">
-                            works<br>
-                            on my<br>
-                            machine <span class="doodle-yellow" style="font-weight: 700; font-size: 1.15em;">✓</span>
-                        </div>
-
-                        <!-- [ 0xAF ] ↘ 1010: just left of the centre of the area right of the card, above line 1 -->
-                        <div class="doodle-text doodle-yellow" data-doodle="hex" data-rot="2" style="text-align: right; line-height: 1.15;">
-                            <div>[ 0xAF ]</div>
-                            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 2px;">
-                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-                                    <path d="M 3 3 L 14 14 M 6 14 L 14 14 L 14 6" />
-                                </svg>
-                                <span class="doodle-white" style="font-family: monospace, sans-serif; font-size: clamp(14px, 1.1vw, 19px); letter-spacing: 0.1em;">1010</span>
-                            </div>
-                        </div>
-
-                        <!-- { brain.exe v2 }: 3/4 of the way from card right edge to viewport edge, just above line 1 -->
-                        <div class="doodle-text doodle-white" data-doodle="brain" data-rot="1.5" style="font-size: clamp(18px, 1.35vw, 24px);">
-                            <span>{ brain.</span><span style="position: relative; display: inline-block; color: rgba(240,240,235,0.45);"><span style="text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 2px;">exe</span></span><span class="doodle-yellow" style="margin-left: 5px; font-weight: 600;">v2</span><span> }</span>
-                        </div>
-
-                        <!-- v1.0 → v∞: mirrors [ 0xAF ] below line 2, slightly offset -->
-                        <div class="doodle-text doodle-white" data-doodle="version" data-rot="-3" style="display: flex; align-items: center; gap: 6px;">
-                            <span style="text-decoration: line-through; text-decoration-color: #f0f0eb; text-decoration-thickness: 1.5px; opacity: 0.45; font-size: clamp(16px, 1.15vw, 21px);">v1.0</span>
-                            <span class="doodle-yellow" style="font-size: clamp(19px, 1.4vw, 25px); font-weight: 600;">v∞</span>
-                        </div>
-
-                        <!-- ○ → ○ ↘ ???: bottom-right corner, ??? sits where the ↘ tip (38, 21) points -->
-                        <div class="doodle-text doodle-white" data-doodle="bubble" data-rot="1.5" style="display: flex; align-items: flex-start;">
-                            <svg width="42" height="32" viewBox="0 0 42 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink: 0;">
-                                <circle cx="8" cy="10" r="5" stroke="#FFED29"/>
-                                <path d="M 14 10 L 24 10 M 21 7 L 24 10 L 21 13" stroke="#f0f0eb"/>
-                                <circle cx="30" cy="10" r="5"/>
-                                <path d="M 33 14 L 38 21 M 34 21 L 38 21 L 38 17" stroke="#f0f0eb"/>
-                            </svg>
-                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600; margin: 17px 0 0 1px;">???</span>
-                        </div>
-
-                        <!-- ████ ↳ nope: centred between the card's left edge and its centre line, below the card -->
-                        <div class="doodle-text doodle-white" data-doodle="nope" data-rot="-2.5" style="font-size: clamp(15px, 1.1vw, 20px); line-height: 1.1;">
-                            <span style="letter-spacing: 0.05em; color: rgba(240,240,235,0.4); text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 3px;">████████</span>
-                            <div style="margin-left: 12px; margin-top: 1px; color: #FFED29; font-size: 14px;">↳ nope</div>
-                        </div>
-
-                        <!-- wait... ⟶: near the viewport's left edge, slightly above nope, tilted up toward the card -->
-                        <div class="doodle-text doodle-white" data-doodle="wait" data-rot="-9" style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: clamp(19px, 1.4vw, 26px);">wait...</span>
-                            <svg width="95" height="20" viewBox="0 0 95 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                                <path d="M 2 10 C 25 14, 55 6, 85 11 C 88 11.5, 91 12, 93 12" stroke-dasharray="80 15"/>
-                                <path d="M 87 7 L 93 12 L 88 16" />
-                            </svg>
-                        </div>
-                    </div>
+                    <!-- SLIDE 2: HAZY FLOOR REFLECTION OF THE SHRUNK SCREEN (redrawn flipped from the card canvas) -->
+                    <canvas class="hero-shrink-reflection" id="heroShrinkReflection" width="420" height="236" aria-hidden="true"></canvas>
 
                     <!-- SLIDE 1: SHRINKING HERO CARD (LIGHT BLUE BACKGROUND IN SLIDE 1 -> SHRINKS INTO DARK GREY SLIDE 2) -->
                     <div class="hero-shrink-card" id="heroShrinkCard">
@@ -3863,6 +3818,13 @@
 
             // 1. Sync Living Hand-Drawn Avatar Frame onto Card Canvas
             const cardCanvas = document.getElementById('heroPortraitCanvas');
+            const reflectionCanvas = document.getElementById('heroShrinkReflection');
+            const reflectionCtx = reflectionCanvas && reflectionCanvas.getContext('2d');
+            const reflectionShade = reflectionCtx && reflectionCtx.createLinearGradient(0, 0, 0, reflectionCanvas.height);
+            if (reflectionShade) {
+                reflectionShade.addColorStop(0, 'rgba(18, 19, 22, 0.5)');
+                reflectionShade.addColorStop(1, 'rgba(24, 25, 30, 0.1)');
+            }
             if (cardCanvas) {
                 const cardCtx = cardCanvas.getContext('2d');
                 function syncPortrait() {
@@ -3871,6 +3833,14 @@
                         if (offscreen) {
                             cardCtx.clearRect(0, 0, cardCanvas.width, cardCanvas.height);
                             cardCtx.drawImage(offscreen, 0, 0, cardCanvas.width, cardCanvas.height);
+                            if (reflectionCtx && reflectionCanvas.style.visibility === 'visible') {
+                                const rw = reflectionCanvas.width, rh = reflectionCanvas.height;
+                                reflectionCtx.setTransform(1, 0, 0, -1, 0, rh);
+                                reflectionCtx.drawImage(cardCanvas, 0, 0, rw, rh);
+                                reflectionCtx.setTransform(1, 0, 0, 1, 0, 0);
+                                reflectionCtx.fillStyle = reflectionShade;
+                                reflectionCtx.fillRect(0, 0, rw, rh);
+                            }
                         }
                     }
                     requestAnimationFrame(syncPortrait);
@@ -4016,20 +3986,30 @@
                 outlineClip.appendChild(marqueeOutline);
             }
 
-            // Both layers run the same CSS keyframes; lock the clone's clocks to the base so glyphs overlap exactly
-            function syncOutlineMarquee() {
-                if (!marqueeOutline) return;
-                const baseGroups = marqueeBg.querySelectorAll('.marquee-group');
-                const cloneGroups = marqueeOutline.querySelectorAll('.marquee-group');
-                baseGroups.forEach((group, i) => {
-                    const a = group.getAnimations()[0];
-                    const b = cloneGroups[i] && cloneGroups[i].getAnimations()[0];
-                    if (a && b && a.currentTime !== null) b.currentTime = a.currentTime;
+            // One clock per line drives the base and the outline clone every frame, so the glyphs
+            // inside the shrunk screen are always the exact glyphs of the line passing behind it
+            const marqueeLines = [];
+            const marqueeClockStart = performance.now();
+            function collectMarqueeLines() {
+                marqueeLines.length = 0;
+                ['.track-line-1', '.track-line-2'].forEach((sel) => {
+                    const anims = [...marqueeBg.querySelectorAll(sel + ' .marquee-group'), ...marqueeOutline.querySelectorAll(sel + ' .marquee-group')]
+                        .map((g) => g.getAnimations()[0])
+                        .filter(Boolean);
+                    if (!anims.length) return;
+                    anims.forEach((a) => a.pause());
+                    marqueeLines.push({ anims, duration: anims[0].effect.getTiming().duration });
                 });
             }
-            requestAnimationFrame(syncOutlineMarquee);
-            window.addEventListener('intro-complete', syncOutlineMarquee);
-            document.addEventListener('visibilitychange', syncOutlineMarquee);
+            function syncOutlineMarquee() {
+                if (!marqueeOutline || window.__marqueeDriven) return;
+                if (!marqueeLines.length || marqueeLines.some((l) => l.anims.some((a) => a.playState !== 'paused'))) collectMarqueeLines();
+                const t = performance.now() - marqueeClockStart;
+                marqueeLines.forEach((line) => {
+                    const ct = t % line.duration;
+                    line.anims.forEach((a) => { a.currentTime = ct; });
+                });
+            }
 
             const leftHalf = document.getElementById('spectaclesLeftHalf');
             const rightHalf = document.getElementById('spectaclesRightHalf');
@@ -4052,84 +4032,12 @@
                 const remBase = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
                 targetW = Math.min(35.375 * remBase, winW * 0.92);
                 targetH = Math.min(22.875 * remBase, winH * 0.62);
+                if (reflectionCanvas) {
+                    reflectionCanvas.style.width = targetW + 'px';
+                    reflectionCanvas.style.height = targetH + 'px';
+                }
             }
             updateViewportCache();
-
-            // Slide 1 ink copy lives inside the card, sized to the viewport and centred on it, so it
-            // shares the exact screen coordinates of the slide 2 set while the card is full-bleed
-            const slide2DoodleLayer = document.getElementById('slide2HandwrittenDoodles');
-            let slide1DoodleLayer = null;
-            if (slide2DoodleLayer && card) {
-                slide1DoodleLayer = slide2DoodleLayer.cloneNode(true);
-                slide1DoodleLayer.id = 'slide1InkDoodles';
-                slide1DoodleLayer.className = 'slide2-handwritten-doodles slide1-ink-doodles';
-                card.insertBefore(slide1DoodleLayer, card.firstChild);
-            }
-
-            const slide2Doodles = {};
-            document.querySelectorAll('#slide2HandwrittenDoodles [data-doodle], #slide1InkDoodles [data-doodle]').forEach((el) => {
-                (slide2Doodles[el.dataset.doodle] = slide2Doodles[el.dataset.doodle] || []).push(el);
-            });
-
-            // Anchors every slide-2 doodle to the card's final (shrunk) rect and the two marquee lines.
-            // ax/ay = anchor point inside the doodle box (0 = left/top, 0.5 = centre, 1 = right/bottom).
-            function layoutSlide2Doodles() {
-                const line1 = marqueeBg && marqueeBg.querySelector('.track-line-1');
-                const line2 = marqueeBg && marqueeBg.querySelector('.track-line-2');
-                if (!line1 || !line2 || !slide2Doodles.infinity) return;
-
-                const cx = winW / 2;
-                const cy = winH / 2;
-                const cardL = cx - targetW / 2;
-                const cardR = cx + targetW / 2;
-                const cardT = cy - targetH / 2;
-                const cardB = cy + targetH / 2;
-
-                const marqueeTop = cy - marqueeBg.offsetHeight / 2;
-                const line1Top = marqueeTop + line1.offsetTop;
-                const line2Bottom = marqueeTop + line2.offsetTop + line2.offsetHeight;
-
-                const edge = Math.max(16, winW * 0.02);
-                const rightSpan = winW - cardR;
-                const breath = Math.max(18, winH * 0.028);
-
-                function place(key, x, y, ax, ay) {
-                    const els = slide2Doodles[key];
-                    if (!els) return;
-                    const w = els[0].offsetWidth;
-                    const h = els[0].offsetHeight;
-                    const left = Math.max(edge, Math.min(winW - edge - w, x - w * ax));
-                    const top = Math.max(edge, Math.min(winH - edge - h, y - h * ay));
-                    els.forEach((el) => {
-                        el.style.left = left + 'px';
-                        el.style.top = top + 'px';
-                        el.style.transform = 'rotate(' + (parseFloat(el.dataset.rot) || 0) + 'deg)';
-                    });
-                }
-
-                place('infinity', cardL * 0.25, cardT * 0.25 + breath * 2.6, 0.5, 0.5);
-
-                place('works', cardL - Math.max(28, winW * 0.03), cardT - breath * 0.6, 1, 0);
-
-                place('hex', cardR + rightSpan * 0.36, line1Top * 0.4, 0.5, 0.5);
-
-                place('brain', cardR + rightSpan * 0.75, line1Top - breath, 0.5, 1);
-
-                const versionY = line2Bottom + line1Top * 0.5 + breath * 0.4;
-                place('version', cardR + Math.max(36, rightSpan * 0.1), versionY, 0.5, 0.5);
-
-                const belowVersion = winH - versionY;
-                const clockAxisY = versionY + belowVersion * 0.36;
-                place('bubble', winW - Math.max(24, winW * 0.05), versionY + belowVersion * 0.66, 1, 0.5);
-
-                const waitAnchorTop = cardB + breath * 1.6;
-                place('nope', cardL + targetW * 0.17, clockAxisY, 0.5, 0.5);
-                place('wait', Math.max(24, winW * 0.035), waitAnchorTop - breath * 0.3, 0, 0.5);
-            }
-            layoutSlide2Doodles();
-            if (document.fonts && document.fonts.ready) {
-                document.fonts.ready.then(layoutSlide2Doodles);
-            }
 
             function updateSlideMotion(force) {
                 if (!card) return;
@@ -4182,6 +4090,14 @@
                     outlineClip.style.clipPath = 'inset(' + ((winH - curH) / 2) + 'px ' + ((winW - curW) / 2) + 'px)';
                 }
 
+                if (reflectionCanvas) {
+                    const reflectAlpha = Math.max(0, Math.min(1, (shrinkP - 0.6) / 0.4));
+                    const gap = Math.max(10, targetH * 0.035);
+                    reflectionCanvas.style.transform = 'translate3d(' + (-targetW / 2) + 'px, ' + (curH / 2 + gap) + 'px, 0) scale(' + (curW / targetW) + ', ' + (curH / targetH) + ')';
+                    reflectionCanvas.style.opacity = reflectAlpha;
+                    reflectionCanvas.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
+                }
+
                 if (shrinkP > 0.4) {
                     card.classList.add('is-shrunk');
                 } else {
@@ -4190,10 +4106,6 @@
 
                 if (cardGradient) {
                     cardGradient.style.opacity = Math.min(0.85, shrinkP * 1.1);
-                }
-
-                if (slide1DoodleLayer) {
-                    slide1DoodleLayer.style.opacity = Math.max(0, 1 - (shrinkP * 3.0));
                 }
 
                 if (textOverlay) {
@@ -4212,15 +4124,6 @@
                     }
                 }
 
-                const doodles = document.getElementById('slide2HandwrittenDoodles');
-                if (doodles) {
-                    if (shrinkP > 0.25) {
-                        doodles.classList.add('is-active');
-                    } else {
-                        doodles.classList.remove('is-active');
-                    }
-                }
-
             }
 
             if (scrollerEl) {
@@ -4229,13 +4132,13 @@
             window.addEventListener('scroll', () => updateSlideMotion(false), { passive: true });
             window.addEventListener('resize', () => {
                 updateViewportCache();
-                layoutSlide2Doodles();
                 syncOutlineMarquee();
                 updateSlideMotion(true);
             }, { passive: true });
 
             function motionLoop(now) {
                 updateSlideMotion(false);
+                syncOutlineMarquee();
                 updateSpecsLineBoil(now || performance.now());
                 requestAnimationFrame(motionLoop);
             }
@@ -4643,7 +4546,6 @@
                 const targets = [
                     { sel: 'a, button, [role="button"], .js-menu, .js-sticky-items, .js-menu-toggle-button', tag: 'OPEN' },
                     { sel: '#heroPortraitCanvas', tag: 'SCROLL' },
-                    { sel: '.doodle-text, .doodle-mouse-wrapper', tag: 'SKETCH' },
                     { sel: '.s.is-impact-home, .text-impact-bio', tag: 'ABOUT' },
                     { sel: '.projects__entry, [data-project-key]', tag: 'VIEW' },
                     { sel: '.projects__entry-cta a, .projects__entry-ctaMobile', tag: 'LAUNCH' },

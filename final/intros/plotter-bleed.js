@@ -78,24 +78,26 @@ window.AP_PLOTTER_BLEED = {
 
         void main() {
             vec2 px = screenPx();
-            float d = length(px) / length(uRes * 0.5);
-            vec2 q = px * 0.0032;
-            float warp = fbm(q * 1.7 + 4.0);
-            float f = d * 0.9 + (fbm(q + warp * 1.6) - 0.5) * 0.7;
-            float R = mix(-0.35, 1.3, uReveal);
-
-            // Tiles caught in the wet edge get dragged outward and pick up the yellow
-            float wet = uReveal > 0.0 ? exp(-pow((f - R) * 7.0, 2.0)) : 0.0;
-            vec2 dir = px / (length(px) + 1.0);
-            vec3 rgb = tile(px - dir * wet * 20.0);
-            rgb = mix(rgb, SIGNAL * tA, wet);
-
+            float wet = 0.0;
             float hole = 0.0;
             float rim = 0.0;
+
+            // The ink field is only needed once the reveal starts; skipping it keeps the build light
             if (uReveal > 0.0) {
+                float d = length(px) / length(uRes * 0.5);
+                vec2 q = px * 0.0032;
+                float warp = fbm(q * 1.7 + 4.0);
+                float f = d * 0.9 + (fbm(q + warp * 1.6) - 0.5) * 0.7;
+                float R = mix(-0.35, 1.3, uReveal);
+                wet = exp(-pow((f - R) * 7.0, 2.0));
                 hole = clamp((R - f) / 0.0035 + 0.5, 0.0, 1.0);
                 rim = clamp((R + 0.014 - f) / 0.0035 + 0.5, 0.0, 1.0) - hole;
             }
+
+            // Tiles caught in the wet edge get dragged outward and pick up the yellow
+            vec2 dir = px / (length(px) + 1.0);
+            vec3 rgb = tile(px - dir * wet * 20.0);
+            rgb = mix(rgb, SIGNAL * tA, wet);
             float ink = 1.0 - hole - rim;
             rgb = rgb * ink + SIGNAL * rim;
             float alpha = 1.0 - hole;

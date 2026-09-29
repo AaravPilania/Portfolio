@@ -257,7 +257,7 @@
 
         let vw = 0, vh = 0, dpr = 1, bigH = 0, startScale = 1;
         function resize() {
-            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            dpr = Math.min(window.devicePixelRatio || 1, 1.5);
             vw = window.innerWidth;
             vh = window.innerHeight;
             canvas.width = Math.round(vw * dpr);
@@ -270,11 +270,11 @@
         window.addEventListener('resize', resize);
         resize();
 
-        let t0 = 0, last = 0, fill = 0, fullAt = -1, rafId = 0;
+        let clock = 0, last = 0, fill = 0, fullAt = -1, rafId = 0;
 
         function start() {
-            t0 = performance.now();
-            last = t0;
+            clock = 0;
+            last = performance.now();
             fill = 0;
             fullAt = -1;
             canvas.classList.remove('is-done');
@@ -285,9 +285,11 @@
         }
 
         function loop(now) {
-            const dt = (now - last) / 1000;
+            // Main-thread stalls while the page loads pause the timeline instead of skipping it ahead
+            const dt = Math.min(Math.max(0, now - last) / 1000, 1 / 20);
             last = now;
-            const elapsed = (now - t0) / 1000;
+            clock += dt;
+            const elapsed = clock;
 
             // Fill tracks time, parks at 92% until the hero behind is ready, then completes
             const target = Math.min(elapsed / FILL_MIN, heroReady ? 1 : 0.92);

@@ -10,7 +10,7 @@
     const ART_W = 1672, ART_H = 941;
     const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
-    // Loads the real site, skips its intro, hides the current doodles and hands two empty layers
+    // Loads the real site, skips its intro and hands two empty layers
     // (slide 1 paper, slide 2 margins) plus live geometry to a prototype
     function MotionProto(opts) {
         const i = Math.max(0, PROTOS.findIndex((p) => p[0] === opts.id));
@@ -36,7 +36,7 @@
             try {
                 if (w && typeof w.__setIntroManual === 'function' && typeof w.__renderIntroAt === 'function' &&
                     w.document.readyState !== 'loading' && w.__heroAvatarEngine &&
-                    w.document.getElementById('slide1InkDoodles')) {
+                    w.document.getElementById('heroMarqueeOutlineClip').firstChild) {
                     w.__setIntroManual();
                     w.__renderIntroAt(99);
                     w.document.body.classList.add('is-loaded');
@@ -52,7 +52,6 @@
         function setup(win, doc) {
             const style = doc.createElement('style');
             style.textContent =
-                '#slide2HandwrittenDoodles > *, #slide1InkDoodles > * { visibility: hidden !important; }' +
                 '.mp-layer { position: absolute; pointer-events: none; overflow: hidden; }' +
                 '.mp-s1 { left: 50%; top: 50%; width: 100vw; height: 100vh; transform: translate(-50%, -50%); z-index: 2; }' +
                 '.mp-s2 { inset: 0; width: 100%; height: 100%; z-index: 1; opacity: 0; transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1); }' +
@@ -61,8 +60,6 @@
             doc.head.appendChild(style);
 
             const card = doc.getElementById('heroShrinkCard');
-            const d1 = doc.getElementById('slide1InkDoodles');
-            const d2 = doc.getElementById('slide2HandwrittenDoodles');
             const marquee = doc.getElementById('heroMarquee');
             const line1 = marquee && marquee.querySelector('.track-line-1');
             const line2 = marquee && marquee.querySelector('.track-line-2');
@@ -73,7 +70,7 @@
             card.insertBefore(s1, card.firstChild);
             const s2 = doc.createElement('div');
             s2.className = 'mp-layer mp-s2';
-            d2.parentNode.insertBefore(s2, d2.nextSibling);
+            card.parentNode.insertBefore(s2, card);
 
             const mouse = { x: -9999, y: -9999, vx: 0, vy: 0, speed: 0, moved: 0, down: [] };
             let lastMove = 0;
@@ -131,8 +128,8 @@
                 S.lines = { l1Top: a.top, l1Bottom: a.bottom, l2Top: b.top, l2Bottom: b.bottom };
                 S.s1Rect = s1.getBoundingClientRect();
                 S.s2Rect = s2.getBoundingClientRect();
-                S.s1Alpha = d1 ? parseFloat(d1.style.opacity || '1') : 1;
-                S.s2Active = d2.classList.contains('is-active');
+                S.s1Alpha = Math.max(0, 1 - S.shrinkP * 3);
+                S.s2Active = S.shrinkP > 0.25;
                 const st = scroller ? scroller.scrollTop : 0;
                 S.scrollV = S.dt > 0 ? (st - S.scrollTop) / S.dt : 0;
                 S.scrollTop = st;
