@@ -1577,6 +1577,13 @@
     })();
     </script>
 
+    <!-- INTRO LOADER: Plotter Bleed (takes over from the AP dive above, which stays as a fallback without WebGL) -->
+    <script src="intros/ap-intro-core.js"></script>
+    <script src="intros/plotter-bleed.js"></script>
+    <script>
+        APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED));
+    </script>
+
     
 
 

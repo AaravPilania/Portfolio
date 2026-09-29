@@ -160,30 +160,42 @@
         const prev = INTROS[(i - 1 + INTROS.length) % INTROS.length];
         const next = INTROS[(i + 1) % INTROS.length];
 
-        document.body.insertAdjacentHTML('afterbegin',
-            '<iframe id="heroFrame" src="/index.html" title="Portfolio"></iframe>' +
-            '<canvas id="apIntro" aria-hidden="true"></canvas>' +
-            '<nav class="intro-dock" id="introDock" aria-label="Intro loaders">' +
-                '<button type="button" data-replay><span>↺</span> Replay</button>' +
-                '<a href="' + prev[0] + '.html" aria-label="Previous intro">←</a>' +
-                '<b><span>' + INTROS[i][0].slice(0, 2) + '</span> ' + INTROS[i][1] + '</b>' +
-                '<a href="' + next[0] + '.html" aria-label="Next intro">→</a>' +
-                '<a href="index.html">All</a>' +
-            '</nav>');
-
-        const frame = document.getElementById('heroFrame');
-        const canvas = document.getElementById('apIntro');
-        const dock = document.getElementById('introDock');
+        // inPage: runs inside the site itself (no iframe, no preview dock) as the real loader
+        const inPage = !!opts.inPage;
+        // Framed copies of the site (the loader previews) are driven by their parent page
+        if (inPage && window.self !== window.top) return;
+        let frame = null, canvas, dock = null;
+        if (inPage) {
+            canvas = document.createElement('canvas');
+            canvas.id = 'apIntro';
+            canvas.setAttribute('aria-hidden', 'true');
+            canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:1000000;background:#000;';
+            document.body.appendChild(canvas);
+        } else {
+            document.body.insertAdjacentHTML('afterbegin',
+                '<iframe id="heroFrame" src="/index.html" title="Portfolio"></iframe>' +
+                '<canvas id="apIntro" aria-hidden="true"></canvas>' +
+                '<nav class="intro-dock" id="introDock" aria-label="Intro loaders">' +
+                    '<button type="button" data-replay><span>↺</span> Replay</button>' +
+                    '<a href="' + prev[0] + '.html" aria-label="Previous intro">←</a>' +
+                    '<b><span>' + INTROS[i][0].slice(0, 2) + '</span> ' + INTROS[i][1] + '</b>' +
+                    '<a href="' + next[0] + '.html" aria-label="Next intro">→</a>' +
+                    '<a href="index.html">All</a>' +
+                '</nav>');
+            frame = document.getElementById('heroFrame');
+            canvas = document.getElementById('apIntro');
+            dock = document.getElementById('introDock');
+        }
 
         let heroReady = false;
 
         // The real site runs behind the loader; skip its own intro so the hero sits there, finished
-        function claimHero() {
-            const iw = frame.contentWindow;
+        function claimHero(force) {
+            const iw = inPage ? window : frame.contentWindow;
             if (!iw || heroReady) return;
             try {
                 if (typeof iw.__setIntroManual === 'function' && typeof iw.__renderIntroAt === 'function' &&
-                    iw.document.readyState !== 'loading' && iw.__heroAvatarEngine) {
+                    (force || (iw.document.readyState !== 'loading' && iw.__heroAvatarEngine))) {
                     iw.__setIntroManual();
                     iw.__renderIntroAt(99);
                     iw.document.body.classList.add('is-loaded');
@@ -192,16 +204,23 @@
                     return;
                 }
             } catch (e) { /* cross-origin guard */ }
-            setTimeout(claimHero, 60);
+            if (!force) setTimeout(claimHero, 60);
         }
-        claimHero();
-        setTimeout(() => { heroReady = true; }, 8000);
-
         const gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
         if (!gl) {
-            canvas.classList.add('is-done');
+            // In the site, the page's own intro keeps running as the fallback
+            if (inPage) canvas.remove();
+            else canvas.style.display = 'none';
             return;
         }
+
+        if (inPage) {
+            const preloader = document.getElementById('preloader');
+            if (preloader) preloader.style.display = 'none';
+            if (typeof window.__setIntroManual === 'function') window.__setIntroManual();
+        }
+        claimHero();
+        setTimeout(() => { claimHero(true); heroReady = true; }, 8000);
 
         function compile(type, src) {
             const s = gl.createShader(type);
@@ -214,7 +233,7 @@
         const prog = gl.createProgram();
         gl.attachShader(prog, compile(gl.VERTEX_SHADER, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }'));
         gl.attachShader(prog, compile(gl.FRAGMENT_SHADER,
-            PRELUDE + (opts.grid ? GRID : '') + document.getElementById('introFrag').textContent));
+            PRELUDE + (opts.grid ? GRID : '') + (opts.frag || document.getElementById('introFrag').textContent)));
         gl.linkProgram(prog);
         if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(prog));
         gl.useProgram(prog);
@@ -259,7 +278,8 @@
             fill = 0;
             fullAt = -1;
             canvas.classList.remove('is-done');
-            dock.classList.remove('is-visible');
+            canvas.style.display = '';
+            if (dock) dock.classList.remove('is-visible');
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(loop);
         }
@@ -286,11 +306,12 @@
 
             if (out.done) {
                 canvas.classList.add('is-done');
-                frame.style.transform = '';
-                dock.classList.add('is-visible');
+                canvas.style.display = 'none';
+                if (frame) frame.style.transform = '';
+                if (dock) dock.classList.add('is-visible');
                 return false;
             }
-            frame.style.transform = out.hero || '';
+            if (frame) frame.style.transform = out.hero || '';
 
             setU('uRes', [vw, vh]);
             setU('uDpr', dpr);
@@ -305,15 +326,17 @@
             gl.clearColor(0, 0, 0, 0);
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
+            if (inPage && canvas.style.backgroundColor) canvas.style.backgroundColor = '';
             return true;
         }
 
-        dock.querySelector('[data-replay]').addEventListener('click', start);
+        if (dock) dock.querySelector('[data-replay]').addEventListener('click', start);
 
         // Frame-stepping hook for previews: renders the timeline at `t` seconds with an on-time fill
         window.__apIntroRenderAt = function (t) {
             cancelAnimationFrame(rafId);
             canvas.classList.remove('is-done');
+            canvas.style.display = '';
             fill = clamp01(t / FILL_MIN);
             fullAt = fill >= 1 ? FILL_MIN : -1;
             return render(t);
