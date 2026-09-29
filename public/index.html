@@ -781,6 +781,24 @@
             color: #ffffff !important;
         }
 
+        .hero-marquee-outline-clip {
+            position: absolute;
+            inset: 0;
+            z-index: 15;
+            pointer-events: none;
+            clip-path: inset(50% 50% 50% 50%);
+        }
+
+        .hero-marquee-outline-clip .marquee-track.track-line-1 span {
+            color: transparent !important;
+            -webkit-text-stroke: 1.4px #FFED29;
+        }
+
+        .hero-marquee-outline-clip .marquee-track.track-line-2 span {
+            color: transparent !important;
+            -webkit-text-stroke: 1.4px #ffffff;
+        }
+
         .marquee-bullet {
             padding: 0 clamp(0.8rem, 1.4vw, 1.8rem);
             opacity: 0.85;
@@ -1358,6 +1376,16 @@
       window.addEventListener("resize", resize);
       resize();
 
+      // Same path as the navbar .ap-nav-mark (viewBox 803 × 644), drawn at the height of the old intro 'A' (4.3 units)
+      const AP_VB_W = 803;
+      const AP_VB_H = 644;
+      const AP_PATH = new Path2D("M 0 644 L 98 644 L 99 359 L 352 359 L 353 644 L 468 644 L 469 440 L 706 440 L 706 341 L 803 339 L 803 95 L 711 94 L 711 0 L 411 0 L 410 95 L 352 94 L 352 0 L 100 0 L 99 95 L 0 95 Z M 468 95 L 662 94 L 663 141 L 712 143 L 712 292 L 663 293 L 662 341 L 469 341 Z M 99 95 L 352 94 L 353 253 L 100 254 Z");
+      const AP_SCALE = 4.3 / AP_VB_H;
+      // Dive target: centre of the solid right-hand stem (x 712–803, y 95–339), in centred mark units
+      const AP_TARGET_X = (757.5 - AP_VB_W * 0.5) * AP_SCALE;
+      const AP_TARGET_Y = (217 - AP_VB_H * 0.5) * AP_SCALE;
+      const AP_TARGET_W = 91 * AP_SCALE;
+
       function easeExpoInOut(x) {
         return x === 0 ? 0 : x === 1 ? 1 : x < 0.5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2;
       }
@@ -1371,9 +1399,9 @@
       }
 
       // Majestic Slower Intro Durations:
-      const DURATION_FILL = 2.0;        // 2.0s: 0 to 100% steady fill & rolling digits
-      const DURATION_FLICK = 1.0;       // 1.0s: fluid mathematical flicking into letter
-      const DURATION_HOLD = 0.4;        // 0.4s: hold formed letter so viewer savors it
+      const DURATION_FILL = 2.0;        // 2.0s: AP mark fills bottom → top & rolling digits
+      const DURATION_FLICK = 0.35;      // 0.35s: settle beat once the mark is full
+      const DURATION_HOLD = 0.4;        // 0.4s: hold the filled mark so viewer savors it
       const DURATION_ZOOM = 1.35;       // 1.35s: rotate, translate, and exponential zoom-through into screen
 
       let startTime = null;
@@ -1495,8 +1523,7 @@
         const r = window.innerHeight + 2;
         const n = pixelWidth;
         const a = loadBarRatio;
-        const l = lineTransformRatio;
-        const c = Math.sqrt(t * t + r * r) / n;
+        const c = (Math.sqrt(t * t + r * r) * 1.15) / (n * AP_TARGET_W);
         const u = ctx;
 
         u.save();
@@ -1512,72 +1539,36 @@
 
         u.translate(t * 0.5, r * 0.5);
         u.rotate(f * 1.0); // Exact authentic Lusion rotation
-        u.translate(n * f * c, -n * 0.5 * f * c); // Exact authentic Lusion translation
+        u.translate(-n * f * c * AP_TARGET_X, -n * f * c * AP_TARGET_Y);
         u.scale(p, p); // Exponential scale towards camera
 
-        if (l === 0) {
-          // Stage 1: Horizontal Bar
+        u.save();
+        u.scale(AP_SCALE, AP_SCALE);
+        u.translate(-AP_VB_W * 0.5, -AP_VB_H * 0.5);
+
+        if (f === 0) {
+          // Stage 1: AP mark silhouette filling bottom → top
           u.fillStyle = "#222222";
-          u.fillRect(-2.5, -0.5, 5, 1);
-          u.fillStyle = "#ffffff";
-          u.fillRect(-2.5, -0.5, 5 * a, 1);
+          u.fill(AP_PATH, "evenodd");
+          if (a > 0) {
+            u.save();
+            u.clip(AP_PATH, "evenodd");
+            u.fillStyle = "#ffffff";
+            u.fillRect(-1, AP_VB_H * (1 - a), AP_VB_W + 2, AP_VB_H * a + 1);
+            u.restore();
+          }
         } else {
-          // Stage 2: Authentic Kinematic Flicking into 'A'
-          const targetDeg = 67;
-          const angleLeft = Math.PI - (Math.PI - (180 - targetDeg) * Math.PI / 180) * l;
-          const angleRight = (targetDeg * Math.PI / 180) * l;
-          const apexY = -1.85 * l;
-          const legLen = 2.5 + 1.15 * l;
-          const stroke = 1;
-          const crossP = Math.max(0, (l - 0.2) / 0.8);
-          const crossY = apexY + 2.35 * l;
-          const crossHalfW = 0.88 * crossP;
-          const crossH = 0.85 * crossP;
-          const topCapW = 0.65 * l;
-          const topCapH = 0.7 * l;
-          const centerY = 0.17 * l;
-
-          u.save();
-          u.translate(0, centerY);
-          u.beginPath();
-
-          // Left leg
-          const cosL = Math.cos(angleLeft), sinL = Math.sin(angleLeft);
-          u.moveTo(0 * cosL - (-stroke * 0.5) * sinL, apexY + 0 * sinL + (-stroke * 0.5) * cosL);
-          u.lineTo(legLen * cosL - (-stroke * 0.5) * sinL, apexY + legLen * sinL + (-stroke * 0.5) * cosL);
-          u.lineTo(legLen * cosL - (stroke * 0.5) * sinL, apexY + legLen * sinL + (stroke * 0.5) * cosL);
-          u.lineTo(0 * cosL - (stroke * 0.5) * sinL, apexY + 0 * sinL + (stroke * 0.5) * cosL);
-          u.closePath();
-
-          // Right leg
-          const cosR = Math.cos(angleRight), sinR = Math.sin(angleRight);
-          u.moveTo(0 * cosR - (-stroke * 0.5) * sinR, apexY + 0 * sinR + (-stroke * 0.5) * cosR);
-          u.lineTo(legLen * cosR - (-stroke * 0.5) * sinR, apexY + legLen * sinR + (-stroke * 0.5) * cosR);
-          u.lineTo(legLen * cosR - (stroke * 0.5) * sinR, apexY + legLen * sinR + (stroke * 0.5) * cosR);
-          u.lineTo(0 * cosR - (stroke * 0.5) * sinR, apexY + 0 * sinR + (stroke * 0.5) * cosR);
-          u.closePath();
-
-          if (topCapW > 0.01) {
-            u.rect(-topCapW, apexY - stroke * 0.5, topCapW * 2, topCapH);
-          }
-          if (crossP > 0.01) {
-            u.rect(-crossHalfW, crossY - crossH * 0.5, crossHalfW * 2, crossH);
-          }
-
-          // CRITICAL: globalCompositeOperation = "xor" cuts a transparent hole through
-          // the opaque black background, revealing the underlying website from INSIDE the character!
+          // Stage 2: xor cuts the mark out of the black mask so the site shows through it,
+          // while the white fill fades as the camera dives into the target stem
           u.fillStyle = "#ffffff";
           u.globalCompositeOperation = "xor";
-          u.fill();
-
-          // Fade out remaining white mask as zoom completes
+          u.fill(AP_PATH, "evenodd");
           u.globalCompositeOperation = "source-over";
           u.globalAlpha = Math.max(0, 1 - f);
-          u.fill();
-
-          u.restore();
+          u.fill(AP_PATH, "evenodd");
         }
 
+        u.restore();
         u.restore();
       }
 
@@ -3005,6 +2996,9 @@
                         </div>
                     </div>
 
+                    <!-- HOLLOW OUTLINE PASS-THROUGH: JS clones #heroMarquee in here; clipped to the card rect above it -->
+                    <div class="hero-marquee-outline-clip" id="heroMarqueeOutlineClip" aria-hidden="true"></div>
+
                     <!-- SLIDE 2: HANDWRITTEN BACKGROUND DOODLES (positioned by layoutSlide2Doodles against the shrunk card + marquee lines) -->
                     <div class="slide2-handwritten-doodles" id="slide2HandwrittenDoodles" aria-hidden="true">
                         <!-- ∞ iterate: top-left diagonal (card corner → viewport corner), 3/4 out, slightly below -->
@@ -3042,31 +3036,15 @@
                             <span class="doodle-yellow" style="font-size: clamp(19px, 1.4vw, 25px); font-weight: 600;">v∞</span>
                         </div>
 
-                        <!-- 03:47 AM → still coding: below v∞, slightly left, just above the bubble diagram -->
-                        <div class="doodle-text doodle-white" data-doodle="clock" data-rot="-1" style="display: flex; align-items: center; gap: 9px;">
-                            <div style="position: relative; padding: 4px 10px;">
-                                <span style="font-size: clamp(19px, 1.4vw, 25px); letter-spacing: 0.08em;">03:47 AM</span>
-                                <svg class="doodle-svg doodle-yellow" style="position: absolute; inset: -4px -6px; width: calc(100% + 12px); height: calc(100% + 8px);" viewBox="0 0 100 40" fill="none" stroke="#FFED29" stroke-width="1.6" stroke-linecap="round" preserveAspectRatio="none">
-                                    <path d="M 12 20 C 10 7, 85 4, 92 18 C 96 28, 70 36, 25 35 C 6 34, 8 16, 30 10" />
-                                </svg>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-                                    <path d="M 2 8 C 8 4, 14 5, 20 8 M 16 4 L 20 8 L 15 11" stroke="#FFED29"/>
-                                </svg>
-                                <span class="doodle-yellow" style="font-size: clamp(14px, 1.05vw, 18px); opacity: 0.9;">still coding</span>
-                            </div>
-                        </div>
-
-                        <!-- ○ → ○ ↘ ???: bottom-right corner -->
-                        <div class="doodle-text doodle-white" data-doodle="bubble" data-rot="1.5" style="display: flex; align-items: center; gap: 8px;">
-                            <svg width="42" height="32" viewBox="0 0 42 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <!-- ○ → ○ ↘ ???: bottom-right corner, ??? sits where the ↘ tip (38, 21) points -->
+                        <div class="doodle-text doodle-white" data-doodle="bubble" data-rot="1.5" style="display: flex; align-items: flex-start;">
+                            <svg width="42" height="32" viewBox="0 0 42 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink: 0;">
                                 <circle cx="8" cy="10" r="5" stroke="#FFED29"/>
                                 <path d="M 14 10 L 24 10 M 21 7 L 24 10 L 21 13" stroke="#f0f0eb"/>
                                 <circle cx="30" cy="10" r="5"/>
                                 <path d="M 33 14 L 38 21 M 34 21 L 38 21 L 38 17" stroke="#f0f0eb"/>
                             </svg>
-                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600;">???</span>
+                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600; margin: 17px 0 0 1px;">???</span>
                         </div>
 
                         <!-- ████ ↳ nope: centred between the card's left edge and its centre line, below the card -->
@@ -4021,6 +3999,30 @@
             const marqueeBg = document.getElementById('heroMarquee');
             const scrollerEl = document.querySelector('.js-scroller');
 
+            const outlineClip = document.getElementById('heroMarqueeOutlineClip');
+            let marqueeOutline = null;
+            if (outlineClip && marqueeBg) {
+                marqueeOutline = marqueeBg.cloneNode(true);
+                marqueeOutline.removeAttribute('id');
+                marqueeOutline.setAttribute('aria-hidden', 'true');
+                outlineClip.appendChild(marqueeOutline);
+            }
+
+            // Both layers run the same CSS keyframes; lock the clone's clocks to the base so glyphs overlap exactly
+            function syncOutlineMarquee() {
+                if (!marqueeOutline) return;
+                const baseGroups = marqueeBg.querySelectorAll('.marquee-group');
+                const cloneGroups = marqueeOutline.querySelectorAll('.marquee-group');
+                baseGroups.forEach((group, i) => {
+                    const a = group.getAnimations()[0];
+                    const b = cloneGroups[i] && cloneGroups[i].getAnimations()[0];
+                    if (a && b && a.currentTime !== null) b.currentTime = a.currentTime;
+                });
+            }
+            requestAnimationFrame(syncOutlineMarquee);
+            window.addEventListener('intro-complete', syncOutlineMarquee);
+            document.addEventListener('visibilitychange', syncOutlineMarquee);
+
             const leftHalf = document.getElementById('spectaclesLeftHalf');
             const rightHalf = document.getElementById('spectaclesRightHalf');
             const spectaclesOverlay = document.getElementById('heroSpectaclesOverlay');
@@ -4084,26 +4086,24 @@
                     el.style.transform = 'rotate(' + (parseFloat(el.dataset.rot) || 0) + 'deg)';
                 }
 
-                place('infinity', cardL * 0.25, cardT * 0.25 + breath, 0.5, 0.5);
+                place('infinity', cardL * 0.25, cardT * 0.25 + breath * 2.6, 0.5, 0.5);
 
-                place('works', cardL - Math.max(28, winW * 0.03), cardT, 1, 0);
+                place('works', cardL - Math.max(28, winW * 0.03), cardT - breath * 0.6, 1, 0);
 
-                const hexX = cardR + rightSpan * 0.44;
-                const hexY = line1Top * 0.5;
-                place('hex', hexX, hexY, 0.5, 0.5);
+                place('hex', cardR + rightSpan * 0.36, line1Top * 0.4, 0.5, 0.5);
 
                 place('brain', cardR + rightSpan * 0.75, line1Top - breath, 0.5, 1);
 
-                const versionY = line2Bottom + (line1Top - hexY) + breath * 0.4;
-                place('version', hexX + rightSpan * 0.04, versionY, 0.5, 0.5);
+                const versionY = line2Bottom + line1Top * 0.5 + breath * 0.4;
+                place('version', cardR + Math.max(36, rightSpan * 0.1), versionY, 0.5, 0.5);
 
                 const belowVersion = winH - versionY;
-                place('clock', hexX - rightSpan * 0.08, versionY + belowVersion * 0.36, 0.5, 0.5);
+                const clockAxisY = versionY + belowVersion * 0.36;
                 place('bubble', winW - Math.max(24, winW * 0.05), versionY + belowVersion * 0.66, 1, 0.5);
 
-                const nopeTop = cardB + breath * 1.6;
-                place('nope', cardL + targetW * 0.25, nopeTop, 0.5, 0);
-                place('wait', Math.max(24, winW * 0.035), nopeTop - breath * 0.3, 0, 0.5);
+                const waitAnchorTop = cardB + breath * 1.6;
+                place('nope', cardL + targetW * 0.17, clockAxisY, 0.5, 0.5);
+                place('wait', Math.max(24, winW * 0.035), waitAnchorTop - breath * 0.3, 0, 0.5);
             }
             layoutSlide2Doodles();
             if (document.fonts && document.fonts.ready) {
@@ -4157,6 +4157,10 @@
                 card.style.width = curW + 'px';
                 card.style.height = curH + 'px';
 
+                if (outlineClip) {
+                    outlineClip.style.clipPath = 'inset(' + ((winH - curH) / 2) + 'px ' + ((winW - curW) / 2) + 'px)';
+                }
+
                 if (shrinkP > 0.4) {
                     card.classList.add('is-shrunk');
                 } else {
@@ -4176,8 +4180,10 @@
                 if (marqueeBg) {
                     if (shrinkP > 0.25) {
                         marqueeBg.classList.add('is-active');
+                        if (marqueeOutline) marqueeOutline.classList.add('is-active');
                     } else {
                         marqueeBg.classList.remove('is-active');
+                        if (marqueeOutline) marqueeOutline.classList.remove('is-active');
                     }
                 }
 
@@ -4199,6 +4205,7 @@
             window.addEventListener('resize', () => {
                 updateViewportCache();
                 layoutSlide2Doodles();
+                syncOutlineMarquee();
                 updateSlideMotion(true);
             }, { passive: true });
 
