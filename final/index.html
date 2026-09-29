@@ -1279,12 +1279,12 @@
 
         #preloader-percent-digits {
             position: absolute;
-            bottom: clamp(24px, 4vh, 50px);
+            bottom: calc(clamp(24px, 4vh, 50px) - 0.125em);
             left: clamp(24px, 4vw, 64px);
             display: flex;
             font-size: clamp(6.5em, 8.5vw, 15em);
-            height: 0.75em;
-            line-height: 0.75em;
+            height: 1em;
+            line-height: 1em;
             color: #ffffff;
             font-family: 'IBM Plex Mono', 'Sometype Mono', monospace;
             font-weight: 400;
@@ -1297,14 +1297,13 @@
             position: relative;
             width: 1ch;
             text-align: center;
-            line-height: 0.75em;
-            transform: translateY(-0.05em);
+            line-height: 1em;
             will-change: transform;
         }
 
         .preloader-percent-digit-num {
-            height: 0.75em;
-            line-height: 0.75em;
+            height: 1em;
+            line-height: 1em;
             display: block;
         }
 
@@ -1408,6 +1407,21 @@
       let lastTime = null;
       let menuRevealed = false;
 
+      // Fired once the mark is full: header, navbar & sticky items fade in (0.6s) while the screen is
+      // still fully masked, so they are already present the moment the site opens up through the stem
+      function revealPageChrome() {
+        if (menuRevealed) return;
+        menuRevealed = true;
+        if (typeof window.ensurePageElementsRevealed === "function") {
+          window.ensurePageElementsRevealed();
+          return;
+        }
+        [".js-header", ".js-menu", ".js-sticky-items"].forEach(function(sel) {
+          const el = document.querySelector(sel);
+          if (el) el.classList.add("is-revealed");
+        });
+      }
+
       function loop(now) {
         if (!startTime) {
           startTime = now;
@@ -1430,14 +1444,7 @@
         const rawZoom = saturate((elapsed - zoomStart) / DURATION_ZOOM);
         const contentShowRatio = rawZoom;
 
-        // Reveal header and sticky elements gracefully as zoom concludes
-        if (contentShowRatio >= 0.85 && !menuRevealed) {
-          menuRevealed = true;
-          const menu = document.querySelector(".js-menu");
-          if (menu) menu.classList.add("is-revealed");
-          const sticky = document.querySelector(".js-sticky-items");
-          if (sticky) sticky.classList.add("is-revealed");
-        }
+        if (loadBarRatio >= 1) revealPageChrome();
 
         // Update bottom-left rolling digits
         updateDigits(loadBarRatio, contentShowRatio, dt);
@@ -1470,13 +1477,7 @@
         const rawZoom = saturate((elapsed - zoomStart) / DURATION_ZOOM);
         const contentShowRatio = rawZoom;
 
-        if (contentShowRatio >= 0.85 && !menuRevealed) {
-          menuRevealed = true;
-          const menu = document.querySelector(".js-menu");
-          if (menu) menu.classList.add("is-revealed");
-          const sticky = document.querySelector(".js-sticky-items");
-          if (sticky) sticky.classList.add("is-revealed");
-        }
+        if (loadBarRatio >= 1) revealPageChrome();
 
         updateDigits(loadBarRatio, contentShowRatio, 10.0);
         renderOverlay(loadBarRatio, lineTransformRatio, contentShowRatio);
@@ -1510,7 +1511,7 @@
 
           // Digits slide off at exit
           const exitOffset = easeExpoInOut(saturate(showRatio * 1.3 - (0.2 * a) / (numDigits - 1)));
-          digitEl.style.transform = "translateY(" + -(g - exitOffset) * 50 + "%) translateY(-0.05em)";
+          digitEl.style.transform = "translate3d(0, " + -(g - exitOffset) * 50 + "%, 0)";
         }
 
         if (showRatio > 0.8 && preloaderDom) {
@@ -4047,9 +4048,20 @@
             }
             updateViewportCache();
 
+            // Slide 1 ink copy lives inside the card, sized to the viewport and centred on it, so it
+            // shares the exact screen coordinates of the slide 2 set while the card is full-bleed
+            const slide2DoodleLayer = document.getElementById('slide2HandwrittenDoodles');
+            let slide1DoodleLayer = null;
+            if (slide2DoodleLayer && card) {
+                slide1DoodleLayer = slide2DoodleLayer.cloneNode(true);
+                slide1DoodleLayer.id = 'slide1InkDoodles';
+                slide1DoodleLayer.className = 'slide2-handwritten-doodles slide1-ink-doodles';
+                card.insertBefore(slide1DoodleLayer, card.firstChild);
+            }
+
             const slide2Doodles = {};
-            document.querySelectorAll('#slide2HandwrittenDoodles [data-doodle]').forEach((el) => {
-                slide2Doodles[el.dataset.doodle] = el;
+            document.querySelectorAll('#slide2HandwrittenDoodles [data-doodle], #slide1InkDoodles [data-doodle]').forEach((el) => {
+                (slide2Doodles[el.dataset.doodle] = slide2Doodles[el.dataset.doodle] || []).push(el);
             });
 
             // Anchors every slide-2 doodle to the card's final (shrunk) rect and the two marquee lines.
@@ -4075,15 +4087,17 @@
                 const breath = Math.max(18, winH * 0.028);
 
                 function place(key, x, y, ax, ay) {
-                    const el = slide2Doodles[key];
-                    if (!el) return;
-                    const w = el.offsetWidth;
-                    const h = el.offsetHeight;
+                    const els = slide2Doodles[key];
+                    if (!els) return;
+                    const w = els[0].offsetWidth;
+                    const h = els[0].offsetHeight;
                     const left = Math.max(edge, Math.min(winW - edge - w, x - w * ax));
                     const top = Math.max(edge, Math.min(winH - edge - h, y - h * ay));
-                    el.style.left = left + 'px';
-                    el.style.top = top + 'px';
-                    el.style.transform = 'rotate(' + (parseFloat(el.dataset.rot) || 0) + 'deg)';
+                    els.forEach((el) => {
+                        el.style.left = left + 'px';
+                        el.style.top = top + 'px';
+                        el.style.transform = 'rotate(' + (parseFloat(el.dataset.rot) || 0) + 'deg)';
+                    });
                 }
 
                 place('infinity', cardL * 0.25, cardT * 0.25 + breath * 2.6, 0.5, 0.5);
@@ -4169,6 +4183,10 @@
 
                 if (cardGradient) {
                     cardGradient.style.opacity = Math.min(0.85, shrinkP * 1.1);
+                }
+
+                if (slide1DoodleLayer) {
+                    slide1DoodleLayer.style.opacity = Math.max(0, 1 - (shrinkP * 3.0));
                 }
 
                 if (textOverlay) {

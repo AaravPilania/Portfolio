@@ -680,6 +680,46 @@ canvas.js-upper-canvas.is-hidden {
   text-shadow: none !important;
 }
 
+/* Slide 1 ink copy: drawn over the portrait canvas (which paints its own opaque graph paper) */
+.hero-shrink-card .slide1-ink-doodles {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 100vw;
+  height: 100vh;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  opacity: 1;
+  transition: none;
+}
+
+.slide1-ink-doodles .doodle-white {
+  color: rgba(18, 19, 22, 0.62) !important;
+  text-shadow: none;
+}
+
+.slide1-ink-doodles .doodle-yellow,
+.slide1-ink-doodles [style*="color: #FFED29"] {
+  color: #121316 !important;
+  text-shadow: none;
+}
+
+.slide1-ink-doodles [style*="rgba(240,240,235"] {
+  color: rgba(18, 19, 22, 0.4) !important;
+}
+
+.slide1-ink-doodles [style*="text-decoration-color"] {
+  text-decoration-color: #121316 !important;
+}
+
+.slide1-ink-doodles [stroke="#FFED29"] {
+  stroke: #121316;
+}
+
+.slide1-ink-doodles [stroke="#f0f0eb"] {
+  stroke: rgba(18, 19, 22, 0.62);
+}
+
 @keyframes doodleBlink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
