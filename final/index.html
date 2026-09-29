@@ -3005,65 +3005,45 @@
                         </div>
                     </div>
 
-                    <!-- SLIDE 2: SUBTLE HANDWRITTEN BACKGROUND DOODLES (WORDS, DEV NOTATIONS, AND FIGURINES) -->
+                    <!-- SLIDE 2: HANDWRITTEN BACKGROUND DOODLES (positioned by layoutSlide2Doodles against the shrunk card + marquee lines) -->
                     <div class="slide2-handwritten-doodles" id="slide2HandwrittenDoodles" aria-hidden="true">
-                        <!-- BIG ABSTRACT ELEMENT A: Giant faint hand-drawn curly brace { extending vertically -->
-                        <svg class="doodle-svg doodle-white" style="top: 3.5%; left: 1.5%; width: 42px; height: 180px; opacity: 0.16;" viewBox="0 0 40 180" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                            <path d="M 32 4 C 18 12, 16 35, 17 65 C 17 80, 4 88, 4 90 C 4 92, 17 100, 17 115 C 16 145, 18 168, 32 176" />
-                        </svg>
-
-                        <!-- BIG ABSTRACT ELEMENT C: Behind/near portrait subtle technical diagram circle/arc -->
-                        <svg class="doodle-svg doodle-white" style="top: 33%; left: 28%; width: 140px; height: 140px; opacity: 0.13;" viewBox="0 0 140 140" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
-                            <path d="M 22 70 A 48 48 0 1 1 118 70 A 48 48 0 0 1 70 118" stroke-dasharray="14 9 4 7 24 16"/>
-                            <path d="M 70 14 L 70 32 M 126 70 L 108 70" stroke-dasharray="4 4"/>
-                            <circle cx="70" cy="70" r="3" fill="currentColor"/>
-                        </svg>
-
-                        <!-- BIG ABSTRACT ELEMENT B: Thin looping doodle line in lower-right -->
-                        <svg class="doodle-svg doodle-yellow" style="bottom: 14%; right: 13%; width: 96px; height: 64px; opacity: 0.22;" viewBox="0 0 96 64" fill="none" stroke="#FFED29" stroke-width="1.5" stroke-linecap="round">
-                            <path d="M 6 48 C 26 53, 48 44, 58 26 C 68 8, 50 5, 44 19 C 38 33, 62 55, 80 44 C 87 40, 90 29, 93 18" />
-                        </svg>
-
-                        <!-- LEFT SIDE 1: Top-left "// thinking..." with tiny arrow pointing toward portrait -->
-                        <div class="doodle-text doodle-white" style="top: 6.5%; left: 4.5%; transform: rotate(-2.5deg); display: flex; align-items: center; gap: 7px;">
-                            <span style="font-size: clamp(19px, 1.4vw, 26px); font-style: italic;">// thinking...</span>
-                            <svg width="34" height="18" viewBox="0 0 34 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-                                <path d="M 2 7 C 12 6, 22 10, 30 13 M 24 7 L 31 13 L 25 17" stroke="#FFED29"/>
-                            </svg>
+                        <!-- ∞ iterate: top-left diagonal (card corner → viewport corner), 3/4 out, slightly below -->
+                        <div class="doodle-text doodle-white" data-doodle="infinity" data-rot="2" style="text-align: center; line-height: 1;">
+                            <span class="doodle-yellow" style="font-size: 26px;">∞</span>
+                            <div style="font-size: 13px; letter-spacing: 0.12em; opacity: 0.6; margin-top: -2px;">iterate</div>
                         </div>
 
-                        <!-- LEFT SIDE 2: Under it "idea ↓ build ↓ break ↓ fix" handwritten & slightly tilted -->
-                        <div class="doodle-text doodle-white" style="top: 13%; left: 5.5%; transform: rotate(-1.5deg); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: clamp(16px, 1.2vw, 22px); line-height: 1.1;">
-                            <span>idea</span>
-                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
-                            <span>build</span>
-                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
-                            <span class="doodle-yellow" style="font-weight: 600;">break</span>
-                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
-                            <span>fix</span>
-                        </div>
-
-                        <!-- LEFT SIDE 3: Mid-left tiny abstract thought bubble ○ → ○ ↘ ○ with ??? beside it -->
-                        <div class="doodle-text doodle-white" style="top: 31%; left: 4%; transform: rotate(1.5deg); display: flex; align-items: center; gap: 8px;">
-                            <svg width="48" height="32" viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                                <circle cx="8" cy="10" r="5" stroke="#FFED29"/>
-                                <path d="M 14 10 L 24 10 M 21 7 L 24 10 L 21 13" stroke="#f0f0eb"/>
-                                <circle cx="30" cy="10" r="5"/>
-                                <path d="M 33 14 L 38 21 M 34 21 L 38 21 L 38 17" stroke="#f0f0eb"/>
-                                <circle cx="41" cy="25" r="4" stroke="#FFED29"/>
-                            </svg>
-                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600;">???</span>
-                        </div>
-
-                        <!-- LEFT SIDE 4: Below that "works on my machine ✓" -->
-                        <div class="doodle-text doodle-white" style="top: 60%; left: 4.5%; transform: rotate(-2.5deg); line-height: 1.15; font-size: clamp(17px, 1.3vw, 24px);">
+                        <!-- works on my machine: left of the card, level with its top edge -->
+                        <div class="doodle-text doodle-white" data-doodle="works" data-rot="-2.5" style="line-height: 1.15; font-size: clamp(17px, 1.3vw, 24px);">
                             works<br>
                             on my<br>
                             machine <span class="doodle-yellow" style="font-weight: 700; font-size: 1.15em;">✓</span>
                         </div>
 
-                        <!-- LEFT SIDE 5: Lower-left scribbled circle around 03:47 AM with tiny arrow saying still coding -->
-                        <div class="doodle-text doodle-white" style="top: 76%; left: 4.5%; transform: rotate(-1deg); display: flex; align-items: center; gap: 9px;">
+                        <!-- [ 0xAF ] ↘ 1010: just left of the centre of the area right of the card, above line 1 -->
+                        <div class="doodle-text doodle-yellow" data-doodle="hex" data-rot="2" style="text-align: right; line-height: 1.15;">
+                            <div>[ 0xAF ]</div>
+                            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 2px;">
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                                    <path d="M 3 3 L 14 14 M 6 14 L 14 14 L 14 6" />
+                                </svg>
+                                <span class="doodle-white" style="font-family: monospace, sans-serif; font-size: clamp(14px, 1.1vw, 19px); letter-spacing: 0.1em;">1010</span>
+                            </div>
+                        </div>
+
+                        <!-- { brain.exe v2 }: 3/4 of the way from card right edge to viewport edge, just above line 1 -->
+                        <div class="doodle-text doodle-white" data-doodle="brain" data-rot="1.5" style="font-size: clamp(18px, 1.35vw, 24px);">
+                            <span>{ brain.</span><span style="position: relative; display: inline-block; color: rgba(240,240,235,0.45);"><span style="text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 2px;">exe</span></span><span class="doodle-yellow" style="margin-left: 5px; font-weight: 600;">v2</span><span> }</span>
+                        </div>
+
+                        <!-- v1.0 → v∞: mirrors [ 0xAF ] below line 2, slightly offset -->
+                        <div class="doodle-text doodle-white" data-doodle="version" data-rot="-3" style="display: flex; align-items: center; gap: 6px;">
+                            <span style="text-decoration: line-through; text-decoration-color: #f0f0eb; text-decoration-thickness: 1.5px; opacity: 0.45; font-size: clamp(16px, 1.15vw, 21px);">v1.0</span>
+                            <span class="doodle-yellow" style="font-size: clamp(19px, 1.4vw, 25px); font-weight: 600;">v∞</span>
+                        </div>
+
+                        <!-- 03:47 AM → still coding: below v∞, slightly left, just above the bubble diagram -->
+                        <div class="doodle-text doodle-white" data-doodle="clock" data-rot="-1" style="display: flex; align-items: center; gap: 9px;">
                             <div style="position: relative; padding: 4px 10px;">
                                 <span style="font-size: clamp(19px, 1.4vw, 25px); letter-spacing: 0.08em;">03:47 AM</span>
                                 <svg class="doodle-svg doodle-yellow" style="position: absolute; inset: -4px -6px; width: calc(100% + 12px); height: calc(100% + 8px);" viewBox="0 0 100 40" fill="none" stroke="#FFED29" stroke-width="1.6" stroke-linecap="round" preserveAspectRatio="none">
@@ -3078,130 +3058,29 @@
                             </div>
                         </div>
 
-                        <!-- LEFT SIDE 6: Near the bottom "{ brain.exe }" with .exe crossed out and replaced by v2 -->
-                        <div class="doodle-text doodle-white" style="top: 88%; left: 5%; transform: rotate(1.5deg); font-size: clamp(18px, 1.35vw, 24px);">
-                            <span>{ brain.</span><span style="position: relative; display: inline-block; color: rgba(240,240,235,0.45);"><span style="text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 2px;">exe</span></span><span class="doodle-yellow" style="margin-left: 5px; font-weight: 600;">v2</span><span> }</span>
-                        </div>
-
-                        <!-- RIGHT SIDE 7: Top-right "[ 0xAF ]" with 0xAF ↘ 1010 -->
-                        <div class="doodle-text doodle-yellow" style="top: 7%; right: 6%; transform: rotate(2deg); text-align: right; line-height: 1.15;">
-                            <div>[ 0xAF ]</div>
-                            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 2px;">
-                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-                                    <path d="M 3 3 L 14 14 M 6 14 L 14 14 L 14 6" />
-                                </svg>
-                                <span class="doodle-white" style="font-family: monospace, sans-serif; font-size: clamp(14px, 1.1vw, 19px); letter-spacing: 0.1em;">1010</span>
-                            </div>
-                        </div>
-
-                        <!-- RIGHT SIDE 8: Under it handwritten "wait..." with a long arrow leading nowhere -->
-                        <div class="doodle-text doodle-white" style="top: 18.5%; right: 6.5%; transform: rotate(-2deg); display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: clamp(19px, 1.4vw, 26px);">wait...</span>
-                            <svg width="95" height="20" viewBox="0 0 95 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                                <path d="M 2 10 C 25 14, 55 6, 85 11 C 88 11.5, 91 12, 93 12" stroke-dasharray="80 15"/>
-                                <path d="M 87 7 L 93 12 L 88 16" />
+                        <!-- ○ → ○ ↘ ???: bottom-right corner -->
+                        <div class="doodle-text doodle-white" data-doodle="bubble" data-rot="1.5" style="display: flex; align-items: center; gap: 8px;">
+                            <svg width="42" height="32" viewBox="0 0 42 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <circle cx="8" cy="10" r="5" stroke="#FFED29"/>
+                                <path d="M 14 10 L 24 10 M 21 7 L 24 10 L 21 13" stroke="#f0f0eb"/>
+                                <circle cx="30" cy="10" r="5"/>
+                                <path d="M 33 14 L 38 21 M 34 21 L 38 21 L 38 17" stroke="#f0f0eb"/>
                             </svg>
+                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600;">???</span>
                         </div>
 
-                        <!-- RIGHT SIDE 9: Mid-right "BUILD ↓ BREAK ↓ REPEAT" with circle around REPEAT -->
-                        <div class="doodle-text doodle-white" style="top: 30%; right: 5%; transform: rotate(1.5deg); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: clamp(16px, 1.2vw, 22px); line-height: 1.1;">
-                            <span>BUILD</span>
-                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 14px;">↓</span>
-                            <span class="doodle-yellow">BREAK</span>
-                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 14px;">↓</span>
-                            <div style="position: relative; padding: 2px 8px; margin-top: 1px;">
-                                <span class="doodle-yellow" style="font-weight: 600;">REPEAT</span>
-                                <svg class="doodle-svg" style="position: absolute; inset: -4px -5px; width: calc(100% + 10px); height: calc(100% + 8px);" viewBox="0 0 75 32" fill="none" stroke="#FFED29" stroke-width="1.6" stroke-linecap="round" preserveAspectRatio="none">
-                                    <path d="M 10 16 C 8 5, 62 4, 68 14 C 74 24, 48 30, 16 29 C 4 28, 6 12, 22 7" />
-                                </svg>
-                            </div>
-                        </div>
-
-                        <!-- RIGHT SIDE 10: Beside z-index: "z-index: 999999" with "why." and arrow pointing at 999999 -->
-                        <div class="doodle-text" style="top: 61%; right: 5.5%; transform: rotate(-1.5deg); display: flex; align-items: center; gap: 10px;">
-                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.3vw, 24px);">z-index: 999999</span>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <svg width="26" height="16" viewBox="0 0 26 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                                    <path d="M 24 8 C 16 7, 9 9, 2 8 M 8 4 L 2 8 L 8 12" stroke="#FFED29"/>
-                                </svg>
-                                <span class="doodle-white" style="font-size: clamp(17px, 1.25vw, 23px); font-style: italic;">why.</span>
-                            </div>
-                        </div>
-
-                        <!-- RIGHT SIDE 11: Lower-right abstract geometric scribble with hidden UI / API / DB labels -->
-                        <div class="doodle-text doodle-white" style="top: 72%; right: 5.5%; transform: rotate(1deg);">
-                            <div style="position: relative; width: 120px; height: 75px;">
-                                <svg width="120" height="75" viewBox="0 0 120 75" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="6" y1="38" x2="114" y2="38" stroke="rgba(240,240,235,0.4)" stroke-dasharray="3 3"/>
-                                    <path d="M 60 12 L 95 38 L 60 64 L 25 38 Z" stroke="#FFED29" stroke-width="1.5"/>
-                                    <line x1="25" y1="38" x2="95" y2="38" stroke="rgba(240,240,235,0.5)"/>
-                                    <circle cx="60" cy="12" r="4.5" fill="#121316" stroke="#f0f0eb" stroke-width="1.5"/>
-                                    <circle cx="95" cy="38" r="4.5" fill="#121316" stroke="#FFED29" stroke-width="1.5"/>
-                                    <circle cx="60" cy="64" r="4.5" fill="#121316" stroke="#f0f0eb" stroke-width="1.5"/>
-                                    <circle cx="25" cy="38" r="4.5" fill="#121316" stroke="#FFED29" stroke-width="1.5"/>
-                                </svg>
-                                <span style="position: absolute; top: 0; left: 68px; font-size: 11px; font-family: monospace; color: rgba(240,240,235,0.5);">UI</span>
-                                <span style="position: absolute; top: 32px; left: 104px; font-size: 11px; font-family: monospace; color: #FFED29;">API</span>
-                                <span style="position: absolute; bottom: 0; left: 68px; font-size: 11px; font-family: monospace; color: rgba(240,240,235,0.5);">DB</span>
-                                <span style="position: absolute; top: 32px; left: 2px; font-size: 11px; font-family: monospace; color: #FFED29;">WS</span>
-                            </div>
-                        </div>
-
-                        <!-- RIGHT SIDE 12: Near bottom "// keep going" very faint -->
-                        <span class="doodle-text doodle-white" style="bottom: 7%; right: 7%; transform: rotate(-1.5deg); opacity: 0.32; font-size: clamp(17px, 1.2vw, 23px); letter-spacing: 0.08em;">// keep going</span>
-
-                        <!-- AROUND BIG TYPE 13: Tiny { } floating subtly -->
-                        <span class="doodle-text doodle-white" style="top: 10%; left: 34%; font-size: 21px; opacity: 0.35;">{ }</span>
-
-                        <!-- AROUND BIG TYPE 14: Long hand-drawn arrow partially disappearing behind portrait -->
-                        <div class="doodle-text doodle-white" style="top: 22%; left: 18%; opacity: 0.42;">
-                            <svg width="140" height="20" viewBox="0 0 140 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                                <path d="M 4 10 C 40 8, 90 12, 136 10 M 128 5 L 136 10 L 128 15" stroke="#f0f0eb" />
-                            </svg>
-                        </div>
-
-                        <!-- AROUND BIG TYPE 15: x → y → ? -->
-                        <span class="doodle-text doodle-white" style="top: 12.5%; right: 27%; transform: rotate(2deg); font-size: clamp(16px, 1.2vw, 22px); opacity: 0.65;">x <span class="doodle-yellow">→</span> y <span class="doodle-yellow">→</span> ?</span>
-
-                        <!-- AROUND BIG TYPE 16: Tiny crossed-out block ██████ ↳ nope -->
-                        <div class="doodle-text doodle-white" style="top: 69%; left: 23%; transform: rotate(-2.5deg); font-size: clamp(15px, 1.1vw, 20px); line-height: 1.1;">
+                        <!-- ████ ↳ nope: centred between the card's left edge and its centre line, below the card -->
+                        <div class="doodle-text doodle-white" data-doodle="nope" data-rot="-2.5" style="font-size: clamp(15px, 1.1vw, 20px); line-height: 1.1;">
                             <span style="letter-spacing: 0.05em; color: rgba(240,240,235,0.4); text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 3px;">████████</span>
                             <div style="margin-left: 12px; margin-top: 1px; color: #FFED29; font-size: 14px;">↳ nope</div>
                         </div>
 
-                        <!-- AROUND BIG TYPE 17: ∞ with tiny "iterate" underneath -->
-                        <div class="doodle-text doodle-white" style="bottom: 12%; right: 30%; transform: rotate(2deg); text-align: center; line-height: 1;">
-                            <span class="doodle-yellow" style="font-size: 26px;">∞</span>
-                            <div style="font-size: 13px; letter-spacing: 0.12em; opacity: 0.6; margin-top: -2px;">iterate</div>
-                        </div>
-
-                        <!-- AROUND BIG TYPE 18: Three floating marks + × ○ -->
-                        <span class="doodle-cross" style="top: 25%; left: 21%; font-size: 15px;">+</span>
-                        <span class="doodle-cross" style="bottom: 26%; right: 23%; font-size: 14px;">×</span>
-                        <span class="doodle-cross" style="top: 26%; right: 20%; font-size: 13px;">○</span>
-
-                        <!-- AROUND BIG TYPE 19: Tiny handwritten "v1.0" then crossed out "v∞" -->
-                        <div class="doodle-text doodle-white" style="bottom: 14%; left: 20%; transform: rotate(-3deg); display: flex; align-items: center; gap: 6px;">
-                            <span style="text-decoration: line-through; text-decoration-color: #f0f0eb; text-decoration-thickness: 1.5px; opacity: 0.45; font-size: clamp(16px, 1.15vw, 21px);">v1.0</span>
-                            <span class="doodle-yellow" style="font-size: clamp(19px, 1.4vw, 25px); font-weight: 600;">v∞</span>
-                        </div>
-
-                        <!-- AROUND BIG TYPE 20: Tiny cursor _ or ▌ sitting after handwritten text like actively writing -->
-                        <div class="doodle-text doodle-white" style="top: 25%; left: 13%; transform: rotate(1deg); font-size: clamp(15px, 1.1vw, 20px); opacity: 0.7;">
-                            <span>draft_final_v2</span><span class="doodle-yellow doodle-blink" style="display: inline-block; margin-left: 2px; font-weight: 700;">▌</span>
-                        </div>
-
-                        <!-- Bottom-Center: mouse doodle with s c r o l l (inspired by reference image) -->
-                        <div class="doodle-mouse-wrapper" style="bottom: 4%; left: 50%; transform: translateX(-50%);">
-                            <span class="doodle-white">s</span>
-                            <span class="doodle-white">c</span>
-                            <span class="doodle-yellow">r</span>
-                            <span class="doodle-white">o</span>
-                            <span class="doodle-white">l</span>
-                            <span class="doodle-yellow">l</span>
-                            <svg class="doodle-mouse-svg doodle-white" viewBox="0 0 20 30" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-                                <rect x="3" y="2" width="14" height="24" rx="7"/>
-                                <line x1="10" y1="6" x2="10" y2="12" stroke="#FFED29" stroke-width="1.6"/>
+                        <!-- wait... ⟶: near the viewport's left edge, slightly above nope, tilted up toward the card -->
+                        <div class="doodle-text doodle-white" data-doodle="wait" data-rot="-9" style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: clamp(19px, 1.4vw, 26px);">wait...</span>
+                            <svg width="95" height="20" viewBox="0 0 95 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <path d="M 2 10 C 25 14, 55 6, 85 11 C 88 11.5, 91 12, 93 12" stroke-dasharray="80 15"/>
+                                <path d="M 87 7 L 93 12 L 88 16" />
                             </svg>
                         </div>
                     </div>
@@ -4166,6 +4045,71 @@
             }
             updateViewportCache();
 
+            const slide2Doodles = {};
+            document.querySelectorAll('#slide2HandwrittenDoodles [data-doodle]').forEach((el) => {
+                slide2Doodles[el.dataset.doodle] = el;
+            });
+
+            // Anchors every slide-2 doodle to the card's final (shrunk) rect and the two marquee lines.
+            // ax/ay = anchor point inside the doodle box (0 = left/top, 0.5 = centre, 1 = right/bottom).
+            function layoutSlide2Doodles() {
+                const line1 = marqueeBg && marqueeBg.querySelector('.track-line-1');
+                const line2 = marqueeBg && marqueeBg.querySelector('.track-line-2');
+                if (!line1 || !line2 || !slide2Doodles.infinity) return;
+
+                const cx = winW / 2;
+                const cy = winH / 2;
+                const cardL = cx - targetW / 2;
+                const cardR = cx + targetW / 2;
+                const cardT = cy - targetH / 2;
+                const cardB = cy + targetH / 2;
+
+                const marqueeTop = cy - marqueeBg.offsetHeight / 2;
+                const line1Top = marqueeTop + line1.offsetTop;
+                const line2Bottom = marqueeTop + line2.offsetTop + line2.offsetHeight;
+
+                const edge = Math.max(16, winW * 0.02);
+                const rightSpan = winW - cardR;
+                const breath = Math.max(18, winH * 0.028);
+
+                function place(key, x, y, ax, ay) {
+                    const el = slide2Doodles[key];
+                    if (!el) return;
+                    const w = el.offsetWidth;
+                    const h = el.offsetHeight;
+                    const left = Math.max(edge, Math.min(winW - edge - w, x - w * ax));
+                    const top = Math.max(edge, Math.min(winH - edge - h, y - h * ay));
+                    el.style.left = left + 'px';
+                    el.style.top = top + 'px';
+                    el.style.transform = 'rotate(' + (parseFloat(el.dataset.rot) || 0) + 'deg)';
+                }
+
+                place('infinity', cardL * 0.25, cardT * 0.25 + breath, 0.5, 0.5);
+
+                place('works', cardL - Math.max(28, winW * 0.03), cardT, 1, 0);
+
+                const hexX = cardR + rightSpan * 0.44;
+                const hexY = line1Top * 0.5;
+                place('hex', hexX, hexY, 0.5, 0.5);
+
+                place('brain', cardR + rightSpan * 0.75, line1Top - breath, 0.5, 1);
+
+                const versionY = line2Bottom + (line1Top - hexY) + breath * 0.4;
+                place('version', hexX + rightSpan * 0.04, versionY, 0.5, 0.5);
+
+                const belowVersion = winH - versionY;
+                place('clock', hexX - rightSpan * 0.08, versionY + belowVersion * 0.36, 0.5, 0.5);
+                place('bubble', winW - Math.max(24, winW * 0.05), versionY + belowVersion * 0.66, 1, 0.5);
+
+                const nopeTop = cardB + breath * 1.6;
+                place('nope', cardL + targetW * 0.25, nopeTop, 0.5, 0);
+                place('wait', Math.max(24, winW * 0.035), nopeTop - breath * 0.3, 0, 0.5);
+            }
+            layoutSlide2Doodles();
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(layoutSlide2Doodles);
+            }
+
             function updateSlideMotion(force) {
                 if (!card) return;
 
@@ -4254,6 +4198,7 @@
             window.addEventListener('scroll', () => updateSlideMotion(false), { passive: true });
             window.addEventListener('resize', () => {
                 updateViewportCache();
+                layoutSlide2Doodles();
                 updateSlideMotion(true);
             }, { passive: true });
 
