@@ -4,6 +4,7 @@
     const PROTOS = [
         ['01-plotter-callouts', 'Plotter Callouts'],
         ['02-callouts-ap-drift', 'Callouts + AP Drift'],
+        ['03-live-screen', 'Live Screen'],
     ];
 
     const ART_W = 1672, ART_H = 941;
