@@ -86,6 +86,7 @@ main,
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch !important;
+  z-index: 2 !important;
 }
 
 /* Headings use SuisseBPIntl */
@@ -186,8 +187,7 @@ h6,
 .js-header,
 .js-menu,
 .js-sticky-items,
-.js-sticky-bar,
-.js-sticky-item {
+.js-sticky-bar {
   opacity: 0 !important;
   visibility: hidden !important;
   transition: none !important;
@@ -209,8 +209,7 @@ h6,
 
 .js-header.is-revealed,
 .js-sticky-items.is-revealed,
-.js-sticky-bar.is-revealed,
-.js-sticky-item.is-revealed {
+.js-sticky-bar.is-revealed {
   opacity: 1 !important;
   visibility: visible !important;
   transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
@@ -308,56 +307,42 @@ h6,
   display: block;
 }
 
-/* Clean Default Cursor & Contextual Hints */
+/* ===================================================
+   NATIVE SYSTEM CURSOR ONLY — no custom cursor / labels
+   =================================================== */
 html,
-body {
+body,
+button,
+a,
+canvas,
+[role="button"],
+input[type="submit"],
+.cursor-pointer,
+.projects__entry,
+.hero-shrink-card,
+.s.is-impact-home,
+.js-scroller,
+* {
   cursor: auto !important;
 }
 
-button,
 a,
+button,
 [role="button"],
-input[type="submit"],
-.cursor-pointer {
+.cursor-pointer,
+.projects__entry,
+input[type="submit"] {
   cursor: pointer !important;
 }
 
-/* Custom Animated Cursor Dot & Ring - Removed circular placeholder per user instruction */
+.site-cursor-dot,
+.js-cursor-label,
 .ll-cursor-dot,
 .ll-cursor-ring {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-}
-
-
-
-/* Contextual Trailing Label Pill Badge */
-.js-cursor-label {
-  position: fixed;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  z-index: 100000;
-  will-change: transform;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.js-cursor-label .ll-part--tag-item {
-  background: rgba(18, 18, 18, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-family: 'Sometype', monospace;
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #ffffff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* Fullscreen Video Modal */
@@ -456,27 +441,34 @@ input[type="submit"],
 /* ===================================================
    SERVICES ("WHAT WE DO") AUTHENTIC LAMA LAMA SECTION
    =================================================== */
-canvas.js-canvas,
-#lamaCanvas {
-  display: none !important;
+canvas.js-canvas {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+canvas.js-upper-canvas {
+  display: block !important;
   pointer-events: none !important;
 }
 
-.services-diffusion-canvas {
-  position: absolute !important;
-  left: 0 !important;
-  width: 100% !important;
-  pointer-events: none !important;
-  z-index: 1 !important;
-  display: block !important;
+#section-projects {
+  background-color: transparent !important;
+  padding-bottom: 200px !important;
+  margin-bottom: 120px !important;
 }
 
 .ll-section--services {
   position: relative !important;
-  background-color: #0b0b0b !important;
+  background-color: transparent !important;
   color: #f9f4eb !important;
-  z-index: 52 !important;
+  z-index: 10 !important;
   overflow: visible !important;
+  padding-top: 140px !important;
 }
 
 .ll-section--services .ll-container {
@@ -484,144 +476,44 @@ canvas.js-canvas,
   z-index: 10 !important;
 }
 
-.ll-section--services .js-backdrop-video-item,
-.ll-section--services video {
-  position: fixed !important;
-  top: -9999px !important;
-  left: -9999px !important;
-  width: 1440px !important;
-  height: 1920px !important;
-  opacity: 0.001 !important;
-  pointer-events: none !important;
-  visibility: visible !important;
-}
-
-.ll-section--services h2,
-.ll-section--services .ll-display-rg,
-.ll-section--services .ll-heading-4,
-.ll-section--services .ll-add-button,
-.ll-section--services .ll-part--buttons-button,
-.ll-section--services .ll-part--label,
-.ll-section--services .ll-body-md,
-.ll-section--services .ll-body-rg,
-.ll-section--services .ll-block--contact-card,
+.ll-section--services .js-text-reveal,
+.ll-section--services .js-mono-text-reveal,
 .ll-section--services .js-text-container,
-.ll-section--services .js-text {
-  visibility: visible !important;
-  color: #f9f4eb !important;
-}
-
 .ll-section--services .ll-text-reveal,
 .ll-section--services .ll-text-reveal *,
-.ll-section--services .js-text-container,
 .ll-section--services .js-text-container *,
 .ll-section--services h2,
 .ll-section--services h2 *,
 .ll-section--services .ll-heading-4,
-.ll-section--services .ll-heading-4 * {
+.ll-section--services .ll-heading-4 *,
+.ll-section--services .ll-display-rg,
+.ll-section--services .ll-part--label,
+.ll-section--services .ll-body-md,
+.ll-section--services .ll-body-rg,
+.ll-section--services .ll-block--contact-card {
   opacity: 1 !important;
+  visibility: visible !important;
   clip-path: none !important;
   -webkit-clip-path: none !important;
   transform: none !important;
-  visibility: visible !important;
+  color: #f9f4eb !important;
 }
 
-.js-fallback-image {
-  display: none !important;
-}
-
-/* Pitchdeck sticky drawer matching user screenshot (Image 3) */
+/* Pitchdeck sticky drawer */
 .js-sticky-item {
-  opacity: 1 !important;
-  visibility: visible !important;
   background: rgba(18, 18, 18, 0.85) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border-radius: 6px !important;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
+
 .js-sticky-item-pitchdeck button.js-title-toggle {
   text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
   font-family: var(--font-mono, monospace) !important;
   font-size: 11px !important;
-}
-
-/* ===================================================
-   LOGOS ("HAPPY CLIENTS") AUTHENTIC SECTION (IMAGE 1)
-   =================================================== */
-.ll-section--logos {
-  position: relative !important;
-  background-color: transparent !important;
-  color: #f9f4eb !important;
-  z-index: 50 !important;
-  overflow: visible !important;
-  padding-top: 1.5rem !important;
-  padding-bottom: 5rem !important;
-}
-
-.ll-section--logos .ll-container {
-  position: relative !important;
-  z-index: 60 !important;
-}
-
-.ll-section--logos .js-mono-text-reveal {
-  position: relative !important;
-  display: inline-block !important;
-}
-
-.ll-section--logos .js-mono-text-reveal .js-animation-target {
-  font-family: var(--font-mono, monospace) !important;
-  font-size: 0.8125rem !important;
-  letter-spacing: 0.12em !important;
-  text-transform: uppercase !important;
-  color: rgba(249, 244, 235, 0.72) !important;
-  opacity: 1 !important;
-  display: block !important;
-  position: relative !important;
-}
-
-.ll-section--logos .js-mono-text-reveal .js-animation-target:empty::before {
-  content: "[ HAPPY CLIENTS ]";
-}
-
-.ll-section--logos .js-line {
-  display: none !important;
-}
-
-@keyframes logoMarquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.ll-block--logo-marquee {
-  display: flex !important;
-  align-items: center !important;
-  gap: 3.5rem !important;
-  width: max-content !important;
-  animation: logoMarquee 26s linear infinite !important;
-}
-
-.ll-block--logo-marquee:hover {
-  animation-play-state: paused !important;
-}
-
-.ll-logo-item {
-  height: 36px !important;
-  width: auto !important;
-  max-width: 140px !important;
-  filter: brightness(0.85) contrast(1.1) !important;
-  transition: filter 0.2s ease, opacity 0.2s ease !important;
-  opacity: 0.75 !important;
-}
-
-.ll-logo-item:hover {
-  filter: brightness(1) contrast(1) !important;
-  opacity: 1 !important;
 }
 
 /* Authentic Buttons Inverted Hover Slides */
@@ -689,4 +581,4 @@ canvas.js-canvas,
 .ll-section--services .ll-block--contact-card:hover .js-contact-card-reveal-hover {
   opacity: 1 !important;
 }
-
+

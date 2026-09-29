@@ -12,6 +12,9 @@
 
 
     <meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Covered+By+Your+Grace&family=IBM+Plex+Mono:wght@400;500&family=Just+Another+Hand&family=Nanum+Pen+Script&family=Reenie+Beanie&display=swap" rel="stylesheet">
     <style>
         img:is([sizes="auto" i], [sizes^="auto," i]) {
             contain-intrinsic-size: 3000px 1500px
@@ -673,8 +676,14 @@
             width: 100%;
         }
 
-        /* Ensure center AP header is clearly visible and clickable */
+        /* Ensure center AP header is hidden during intro, revealed with hero */
         .ll-header .js-menu {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .ll-header .js-menu.is-revealed {
             opacity: 1 !important;
             pointer-events: auto !important;
         }
@@ -1139,11 +1148,17 @@
             color: #e8e6df;
         }
 
-        /* Ensure Get in contact pill is always visible and interactive */
+        /* Ensure Get in contact pill is hidden during intro, revealed with hero */
         .js-sticky-items {
+            opacity: 0;
+            pointer-events: none;
+            display: flex;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .js-sticky-items.is-revealed {
             opacity: 1 !important;
             pointer-events: auto !important;
-            display: flex !important;
         }
 
         /* =======================================================
@@ -1220,26 +1235,60 @@
 
 
     <style>
-        /* Lama Lama (3020) intro loader — enabled */
-        .ll-loader {
+        /* =========================================================
+           AUTHENTIC LUSION CINEMATIC INTRO & LETTER ZOOM-THROUGH
+           ========================================================= */
+        #transition-overlay {
             position: fixed;
             inset: 0;
             width: 100vw;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-            background-color: #000;
-            color: #FFF;
-            font-size: calc(10 / 16 * 1rem);
-            font-family: 'Sometype', monospace;
-            text-transform: uppercase;
-            letter-spacing: -0.02em;
-            font-weight: 500;
-            line-height: 1.8;
+            height: 100vh;
+            z-index: 999998 !important;
+            pointer-events: auto;
+            display: block;
         }
 
+        #preloader {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 999999 !important;
+            pointer-events: none;
+            background-color: transparent;
+            transition: opacity 0.3s ease;
+        }
 
+        #preloader-percent-digits {
+            position: absolute;
+            bottom: clamp(24px, 4vh, 50px);
+            left: clamp(24px, 4vw, 64px);
+            display: flex;
+            font-size: clamp(6.5em, 8.5vw, 15em);
+            height: 0.75em;
+            line-height: 0.75em;
+            color: #ffffff;
+            font-family: 'IBM Plex Mono', 'Sometype Mono', monospace;
+            font-weight: 400;
+            overflow: hidden;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .preloader-percent-digit {
+            position: relative;
+            width: 1ch;
+            text-align: center;
+            line-height: 0.75em;
+            transform: translateY(-0.05em);
+            will-change: transform;
+        }
+
+        .preloader-percent-digit-num {
+            height: 0.75em;
+            line-height: 0.75em;
+            display: block;
+        }
 
         /* Nav: keep icon-grid alive for app morphs, show AP mark on top */
         .ll-header a.block.w-9 .js-header-icon-grid {
@@ -1253,15 +1302,288 @@
             width: 100%;
             height: 100%;
             display: block;
+            color: currentColor;
         }
     </style>
 
+    <!-- INTRO OVERLAY CANVAS (Black mask + XOR cutout zoom) -->
+    <canvas id="transition-overlay"></canvas>
 
-    <div class="js-loader ll-loader">
-        <div class="ll-container-container">
-            <span class="js-progress ll-counter">0</span>%
+    <!-- PRELOADER BOTTOM-LEFT ROLLING COUNTER -->
+    <div id="preloader">
+        <div id="preloader-percent-digits">
+            <div class="preloader-percent-digit" id="digit-hundreds">
+                <div class="preloader-percent-digit-num">0</div>
+                <div class="preloader-percent-digit-num">1</div>
+            </div>
+            <div class="preloader-percent-digit" id="digit-tens">
+                <div class="preloader-percent-digit-num">0</div>
+                <div class="preloader-percent-digit-num">0</div>
+            </div>
+            <div class="preloader-percent-digit" id="digit-ones">
+                <div class="preloader-percent-digit-num">0</div>
+                <div class="preloader-percent-digit-num">0</div>
+            </div>
         </div>
     </div>
+
+    <script>
+    (function() {
+      const canvas = document.getElementById("transition-overlay");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const preloaderDom = document.getElementById("preloader");
+      const digitsContainer = document.getElementById("preloader-percent-digits");
+      const digits = document.querySelectorAll(".preloader-percent-digit");
+
+      for (let i = 0; i < digits.length; i++) {
+        const d = digits[i];
+        d._domNums = d.querySelectorAll(".preloader-percent-digit-num");
+        d._easedVal = 0;
+      }
+
+      let dpr = window.devicePixelRatio || 1;
+      let pixelWidth = 0;
+
+      function resize() {
+        dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth + 2;
+        const h = window.innerHeight + 2;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+        pixelWidth = Math.floor(Math.min(42, window.innerWidth / 30));
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      function easeExpoInOut(x) {
+        return x === 0 ? 0 : x === 1 ? 1 : x < 0.5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2;
+      }
+
+      function saturate(x) {
+        return Math.max(0, Math.min(1, x));
+      }
+
+      function mix(a, b, t) {
+        return a + (b - a) * t;
+      }
+
+      // Majestic Slower Intro Durations:
+      const DURATION_FILL = 2.0;        // 2.0s: 0 to 100% steady fill & rolling digits
+      const DURATION_FLICK = 1.0;       // 1.0s: fluid mathematical flicking into letter
+      const DURATION_HOLD = 0.4;        // 0.4s: hold formed letter so viewer savors it
+      const DURATION_ZOOM = 1.35;       // 1.35s: rotate, translate, and exponential zoom-through into screen
+
+      let startTime = null;
+      let lastTime = null;
+      let menuRevealed = false;
+
+      function loop(now) {
+        if (!startTime) {
+          startTime = now;
+          lastTime = now;
+        }
+        const dt = Math.min((now - lastTime) / 1000, 1 / 20);
+        lastTime = now;
+        const elapsed = (now - startTime) / 1000;
+
+        // 1. Load Bar Ratio (0 -> 1)
+        const loadBarRatio = saturate(elapsed / DURATION_FILL);
+
+        // 2. Kinematic Flicking Ratio (0 -> 1)
+        const flickStart = DURATION_FILL;
+        const rawFlick = saturate((elapsed - flickStart) / DURATION_FLICK);
+        const lineTransformRatio = easeExpoInOut(rawFlick);
+
+        // 3. Content Show Ratio / Zoom-Through Ratio (0 -> 1)
+        const zoomStart = DURATION_FILL + DURATION_FLICK + DURATION_HOLD;
+        const rawZoom = saturate((elapsed - zoomStart) / DURATION_ZOOM);
+        const contentShowRatio = rawZoom;
+
+        // Reveal header and sticky elements gracefully as zoom concludes
+        if (contentShowRatio >= 0.85 && !menuRevealed) {
+          menuRevealed = true;
+          const menu = document.querySelector(".js-menu");
+          if (menu) menu.classList.add("is-revealed");
+          const sticky = document.querySelector(".js-sticky-items");
+          if (sticky) sticky.classList.add("is-revealed");
+        }
+
+        // Update bottom-left rolling digits
+        updateDigits(loadBarRatio, contentShowRatio, dt);
+
+        // Render Canvas
+        renderOverlay(loadBarRatio, lineTransformRatio, contentShowRatio);
+
+        if (!window.__introManual && contentShowRatio < 1) {
+          window.__introRafId = requestAnimationFrame(loop);
+        } else if (contentShowRatio >= 1) {
+          // Intro complete: hide overlay and preloader
+          canvas.style.display = "none";
+          if (preloaderDom) preloaderDom.style.display = "none";
+          document.body.classList.add("is-loaded");
+          window.dispatchEvent(new CustomEvent("intro-complete"));
+        }
+      }
+
+      window.__setIntroManual = function() {
+        window.__introManual = true;
+        if (window.__introRafId) cancelAnimationFrame(window.__introRafId);
+      };
+
+      window.__renderIntroAt = function(elapsed) {
+        const loadBarRatio = saturate(elapsed / DURATION_FILL);
+        const flickStart = DURATION_FILL;
+        const rawFlick = saturate((elapsed - flickStart) / DURATION_FLICK);
+        const lineTransformRatio = easeExpoInOut(rawFlick);
+        const zoomStart = DURATION_FILL + DURATION_FLICK + DURATION_HOLD;
+        const rawZoom = saturate((elapsed - zoomStart) / DURATION_ZOOM);
+        const contentShowRatio = rawZoom;
+
+        if (contentShowRatio >= 0.85 && !menuRevealed) {
+          menuRevealed = true;
+          const menu = document.querySelector(".js-menu");
+          if (menu) menu.classList.add("is-revealed");
+          const sticky = document.querySelector(".js-sticky-items");
+          if (sticky) sticky.classList.add("is-revealed");
+        }
+
+        updateDigits(loadBarRatio, contentShowRatio, 10.0);
+        renderOverlay(loadBarRatio, lineTransformRatio, contentShowRatio);
+
+        if (contentShowRatio >= 1) {
+          canvas.style.display = "none";
+          if (preloaderDom) preloaderDom.style.display = "none";
+        } else {
+          canvas.style.display = "block";
+          if (preloaderDom) preloaderDom.style.display = "block";
+        }
+      };
+
+      function updateDigits(loadRatio, showRatio, dt) {
+        if (!digitsContainer) return;
+        const numDigits = digits.length;
+        for (let a = 0; a < numDigits; a++) {
+          const digitEl = digits[a];
+          if (!digitEl || !digitEl._domNums) continue;
+          const targetVal = Math.floor((loadRatio * 100) / Math.pow(10, numDigits - a - 1));
+          digitEl._easedVal = mix(digitEl._easedVal, targetVal, 1 - Math.exp(-9 * dt));
+          if (Math.abs(targetVal - digitEl._easedVal) < 0.01) {
+            digitEl._easedVal = targetVal;
+          }
+          const u = digitEl._easedVal % 10;
+          const f = Math.floor(u);
+          const p = Math.ceil(u) % 10;
+          const g = u - f;
+          digitEl._domNums[0].innerHTML = f;
+          digitEl._domNums[1].innerHTML = p;
+
+          // Digits slide off at exit
+          const exitOffset = easeExpoInOut(saturate(showRatio * 1.3 - (0.2 * a) / (numDigits - 1)));
+          digitEl.style.transform = "translateY(" + -(g - exitOffset) * 50 + "%) translateY(-0.05em)";
+        }
+
+        if (showRatio > 0.8 && preloaderDom) {
+          preloaderDom.style.opacity = Math.max(0, 1 - (showRatio - 0.8) / 0.2);
+        }
+      }
+
+      function renderOverlay(loadBarRatio, lineTransformRatio, contentShowRatio) {
+        const t = window.innerWidth + 2;
+        const r = window.innerHeight + 2;
+        const n = pixelWidth;
+        const a = loadBarRatio;
+        const l = lineTransformRatio;
+        const c = Math.sqrt(t * t + r * r) / n;
+        const u = ctx;
+
+        u.save();
+        u.scale(dpr, dpr);
+
+        // 1. Black Screen Background
+        u.fillStyle = "#000000";
+        u.fillRect(0, 0, t, r);
+
+        // 2. Camera Zoom & Rotation Transform
+        const f = easeExpoInOut(contentShowRatio);
+        const p = (1 + f * c) * n;
+
+        u.translate(t * 0.5, r * 0.5);
+        u.rotate(f * 1.0); // Exact authentic Lusion rotation
+        u.translate(n * f * c, -n * 0.5 * f * c); // Exact authentic Lusion translation
+        u.scale(p, p); // Exponential scale towards camera
+
+        if (l === 0) {
+          // Stage 1: Horizontal Bar
+          u.fillStyle = "#222222";
+          u.fillRect(-2.5, -0.5, 5, 1);
+          u.fillStyle = "#ffffff";
+          u.fillRect(-2.5, -0.5, 5 * a, 1);
+        } else {
+          // Stage 2: Authentic Kinematic Flicking into 'A'
+          const targetDeg = 67;
+          const angleLeft = Math.PI - (Math.PI - (180 - targetDeg) * Math.PI / 180) * l;
+          const angleRight = (targetDeg * Math.PI / 180) * l;
+          const apexY = -1.85 * l;
+          const legLen = 2.5 + 1.15 * l;
+          const stroke = 1;
+          const crossP = Math.max(0, (l - 0.2) / 0.8);
+          const crossY = apexY + 2.35 * l;
+          const crossHalfW = 0.88 * crossP;
+          const crossH = 0.85 * crossP;
+          const topCapW = 0.65 * l;
+          const topCapH = 0.7 * l;
+          const centerY = 0.17 * l;
+
+          u.save();
+          u.translate(0, centerY);
+          u.beginPath();
+
+          // Left leg
+          const cosL = Math.cos(angleLeft), sinL = Math.sin(angleLeft);
+          u.moveTo(0 * cosL - (-stroke * 0.5) * sinL, apexY + 0 * sinL + (-stroke * 0.5) * cosL);
+          u.lineTo(legLen * cosL - (-stroke * 0.5) * sinL, apexY + legLen * sinL + (-stroke * 0.5) * cosL);
+          u.lineTo(legLen * cosL - (stroke * 0.5) * sinL, apexY + legLen * sinL + (stroke * 0.5) * cosL);
+          u.lineTo(0 * cosL - (stroke * 0.5) * sinL, apexY + 0 * sinL + (stroke * 0.5) * cosL);
+          u.closePath();
+
+          // Right leg
+          const cosR = Math.cos(angleRight), sinR = Math.sin(angleRight);
+          u.moveTo(0 * cosR - (-stroke * 0.5) * sinR, apexY + 0 * sinR + (-stroke * 0.5) * cosR);
+          u.lineTo(legLen * cosR - (-stroke * 0.5) * sinR, apexY + legLen * sinR + (-stroke * 0.5) * cosR);
+          u.lineTo(legLen * cosR - (stroke * 0.5) * sinR, apexY + legLen * sinR + (stroke * 0.5) * cosR);
+          u.lineTo(0 * cosR - (stroke * 0.5) * sinR, apexY + 0 * sinR + (stroke * 0.5) * cosR);
+          u.closePath();
+
+          if (topCapW > 0.01) {
+            u.rect(-topCapW, apexY - stroke * 0.5, topCapW * 2, topCapH);
+          }
+          if (crossP > 0.01) {
+            u.rect(-crossHalfW, crossY - crossH * 0.5, crossHalfW * 2, crossH);
+          }
+
+          // CRITICAL: globalCompositeOperation = "xor" cuts a transparent hole through
+          // the opaque black background, revealing the underlying website from INSIDE the character!
+          u.fillStyle = "#ffffff";
+          u.globalCompositeOperation = "xor";
+          u.fill();
+
+          // Fade out remaining white mask as zoom completes
+          u.globalCompositeOperation = "source-over";
+          u.globalAlpha = Math.max(0, 1 - f);
+          u.fill();
+
+          u.restore();
+        }
+
+        u.restore();
+      }
+
+      requestAnimationFrame(loop);
+    })();
+    </script>
 
     
 
@@ -2683,6 +3005,207 @@
                         </div>
                     </div>
 
+                    <!-- SLIDE 2: SUBTLE HANDWRITTEN BACKGROUND DOODLES (WORDS, DEV NOTATIONS, AND FIGURINES) -->
+                    <div class="slide2-handwritten-doodles" id="slide2HandwrittenDoodles" aria-hidden="true">
+                        <!-- BIG ABSTRACT ELEMENT A: Giant faint hand-drawn curly brace { extending vertically -->
+                        <svg class="doodle-svg doodle-white" style="top: 3.5%; left: 1.5%; width: 42px; height: 180px; opacity: 0.16;" viewBox="0 0 40 180" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                            <path d="M 32 4 C 18 12, 16 35, 17 65 C 17 80, 4 88, 4 90 C 4 92, 17 100, 17 115 C 16 145, 18 168, 32 176" />
+                        </svg>
+
+                        <!-- BIG ABSTRACT ELEMENT C: Behind/near portrait subtle technical diagram circle/arc -->
+                        <svg class="doodle-svg doodle-white" style="top: 33%; left: 28%; width: 140px; height: 140px; opacity: 0.13;" viewBox="0 0 140 140" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+                            <path d="M 22 70 A 48 48 0 1 1 118 70 A 48 48 0 0 1 70 118" stroke-dasharray="14 9 4 7 24 16"/>
+                            <path d="M 70 14 L 70 32 M 126 70 L 108 70" stroke-dasharray="4 4"/>
+                            <circle cx="70" cy="70" r="3" fill="currentColor"/>
+                        </svg>
+
+                        <!-- BIG ABSTRACT ELEMENT B: Thin looping doodle line in lower-right -->
+                        <svg class="doodle-svg doodle-yellow" style="bottom: 14%; right: 13%; width: 96px; height: 64px; opacity: 0.22;" viewBox="0 0 96 64" fill="none" stroke="#FFED29" stroke-width="1.5" stroke-linecap="round">
+                            <path d="M 6 48 C 26 53, 48 44, 58 26 C 68 8, 50 5, 44 19 C 38 33, 62 55, 80 44 C 87 40, 90 29, 93 18" />
+                        </svg>
+
+                        <!-- LEFT SIDE 1: Top-left "// thinking..." with tiny arrow pointing toward portrait -->
+                        <div class="doodle-text doodle-white" style="top: 6.5%; left: 4.5%; transform: rotate(-2.5deg); display: flex; align-items: center; gap: 7px;">
+                            <span style="font-size: clamp(19px, 1.4vw, 26px); font-style: italic;">// thinking...</span>
+                            <svg width="34" height="18" viewBox="0 0 34 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                                <path d="M 2 7 C 12 6, 22 10, 30 13 M 24 7 L 31 13 L 25 17" stroke="#FFED29"/>
+                            </svg>
+                        </div>
+
+                        <!-- LEFT SIDE 2: Under it "idea ↓ build ↓ break ↓ fix" handwritten & slightly tilted -->
+                        <div class="doodle-text doodle-white" style="top: 13%; left: 5.5%; transform: rotate(-1.5deg); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: clamp(16px, 1.2vw, 22px); line-height: 1.1;">
+                            <span>idea</span>
+                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
+                            <span>build</span>
+                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
+                            <span class="doodle-yellow" style="font-weight: 600;">break</span>
+                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 7px;">↓</span>
+                            <span>fix</span>
+                        </div>
+
+                        <!-- LEFT SIDE 3: Mid-left tiny abstract thought bubble ○ → ○ ↘ ○ with ??? beside it -->
+                        <div class="doodle-text doodle-white" style="top: 31%; left: 4%; transform: rotate(1.5deg); display: flex; align-items: center; gap: 8px;">
+                            <svg width="48" height="32" viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <circle cx="8" cy="10" r="5" stroke="#FFED29"/>
+                                <path d="M 14 10 L 24 10 M 21 7 L 24 10 L 21 13" stroke="#f0f0eb"/>
+                                <circle cx="30" cy="10" r="5"/>
+                                <path d="M 33 14 L 38 21 M 34 21 L 38 21 L 38 17" stroke="#f0f0eb"/>
+                                <circle cx="41" cy="25" r="4" stroke="#FFED29"/>
+                            </svg>
+                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.35vw, 24px); letter-spacing: 0.12em; font-weight: 600;">???</span>
+                        </div>
+
+                        <!-- LEFT SIDE 4: Below that "works on my machine ✓" -->
+                        <div class="doodle-text doodle-white" style="top: 60%; left: 4.5%; transform: rotate(-2.5deg); line-height: 1.15; font-size: clamp(17px, 1.3vw, 24px);">
+                            works<br>
+                            on my<br>
+                            machine <span class="doodle-yellow" style="font-weight: 700; font-size: 1.15em;">✓</span>
+                        </div>
+
+                        <!-- LEFT SIDE 5: Lower-left scribbled circle around 03:47 AM with tiny arrow saying still coding -->
+                        <div class="doodle-text doodle-white" style="top: 76%; left: 4.5%; transform: rotate(-1deg); display: flex; align-items: center; gap: 9px;">
+                            <div style="position: relative; padding: 4px 10px;">
+                                <span style="font-size: clamp(19px, 1.4vw, 25px); letter-spacing: 0.08em;">03:47 AM</span>
+                                <svg class="doodle-svg doodle-yellow" style="position: absolute; inset: -4px -6px; width: calc(100% + 12px); height: calc(100% + 8px);" viewBox="0 0 100 40" fill="none" stroke="#FFED29" stroke-width="1.6" stroke-linecap="round" preserveAspectRatio="none">
+                                    <path d="M 12 20 C 10 7, 85 4, 92 18 C 96 28, 70 36, 25 35 C 6 34, 8 16, 30 10" />
+                                </svg>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                                    <path d="M 2 8 C 8 4, 14 5, 20 8 M 16 4 L 20 8 L 15 11" stroke="#FFED29"/>
+                                </svg>
+                                <span class="doodle-yellow" style="font-size: clamp(14px, 1.05vw, 18px); opacity: 0.9;">still coding</span>
+                            </div>
+                        </div>
+
+                        <!-- LEFT SIDE 6: Near the bottom "{ brain.exe }" with .exe crossed out and replaced by v2 -->
+                        <div class="doodle-text doodle-white" style="top: 88%; left: 5%; transform: rotate(1.5deg); font-size: clamp(18px, 1.35vw, 24px);">
+                            <span>{ brain.</span><span style="position: relative; display: inline-block; color: rgba(240,240,235,0.45);"><span style="text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 2px;">exe</span></span><span class="doodle-yellow" style="margin-left: 5px; font-weight: 600;">v2</span><span> }</span>
+                        </div>
+
+                        <!-- RIGHT SIDE 7: Top-right "[ 0xAF ]" with 0xAF ↘ 1010 -->
+                        <div class="doodle-text doodle-yellow" style="top: 7%; right: 6%; transform: rotate(2deg); text-align: right; line-height: 1.15;">
+                            <div>[ 0xAF ]</div>
+                            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 2px;">
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                                    <path d="M 3 3 L 14 14 M 6 14 L 14 14 L 14 6" />
+                                </svg>
+                                <span class="doodle-white" style="font-family: monospace, sans-serif; font-size: clamp(14px, 1.1vw, 19px); letter-spacing: 0.1em;">1010</span>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT SIDE 8: Under it handwritten "wait..." with a long arrow leading nowhere -->
+                        <div class="doodle-text doodle-white" style="top: 18.5%; right: 6.5%; transform: rotate(-2deg); display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: clamp(19px, 1.4vw, 26px);">wait...</span>
+                            <svg width="95" height="20" viewBox="0 0 95 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <path d="M 2 10 C 25 14, 55 6, 85 11 C 88 11.5, 91 12, 93 12" stroke-dasharray="80 15"/>
+                                <path d="M 87 7 L 93 12 L 88 16" />
+                            </svg>
+                        </div>
+
+                        <!-- RIGHT SIDE 9: Mid-right "BUILD ↓ BREAK ↓ REPEAT" with circle around REPEAT -->
+                        <div class="doodle-text doodle-white" style="top: 30%; right: 5%; transform: rotate(1.5deg); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: clamp(16px, 1.2vw, 22px); line-height: 1.1;">
+                            <span>BUILD</span>
+                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 14px;">↓</span>
+                            <span class="doodle-yellow">BREAK</span>
+                            <span class="doodle-yellow" style="font-size: 13px; margin: -2px 0 -2px 14px;">↓</span>
+                            <div style="position: relative; padding: 2px 8px; margin-top: 1px;">
+                                <span class="doodle-yellow" style="font-weight: 600;">REPEAT</span>
+                                <svg class="doodle-svg" style="position: absolute; inset: -4px -5px; width: calc(100% + 10px); height: calc(100% + 8px);" viewBox="0 0 75 32" fill="none" stroke="#FFED29" stroke-width="1.6" stroke-linecap="round" preserveAspectRatio="none">
+                                    <path d="M 10 16 C 8 5, 62 4, 68 14 C 74 24, 48 30, 16 29 C 4 28, 6 12, 22 7" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT SIDE 10: Beside z-index: "z-index: 999999" with "why." and arrow pointing at 999999 -->
+                        <div class="doodle-text" style="top: 61%; right: 5.5%; transform: rotate(-1.5deg); display: flex; align-items: center; gap: 10px;">
+                            <span class="doodle-yellow" style="font-size: clamp(18px, 1.3vw, 24px);">z-index: 999999</span>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <svg width="26" height="16" viewBox="0 0 26 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                    <path d="M 24 8 C 16 7, 9 9, 2 8 M 8 4 L 2 8 L 8 12" stroke="#FFED29"/>
+                                </svg>
+                                <span class="doodle-white" style="font-size: clamp(17px, 1.25vw, 23px); font-style: italic;">why.</span>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT SIDE 11: Lower-right abstract geometric scribble with hidden UI / API / DB labels -->
+                        <div class="doodle-text doodle-white" style="top: 72%; right: 5.5%; transform: rotate(1deg);">
+                            <div style="position: relative; width: 120px; height: 75px;">
+                                <svg width="120" height="75" viewBox="0 0 120 75" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="6" y1="38" x2="114" y2="38" stroke="rgba(240,240,235,0.4)" stroke-dasharray="3 3"/>
+                                    <path d="M 60 12 L 95 38 L 60 64 L 25 38 Z" stroke="#FFED29" stroke-width="1.5"/>
+                                    <line x1="25" y1="38" x2="95" y2="38" stroke="rgba(240,240,235,0.5)"/>
+                                    <circle cx="60" cy="12" r="4.5" fill="#121316" stroke="#f0f0eb" stroke-width="1.5"/>
+                                    <circle cx="95" cy="38" r="4.5" fill="#121316" stroke="#FFED29" stroke-width="1.5"/>
+                                    <circle cx="60" cy="64" r="4.5" fill="#121316" stroke="#f0f0eb" stroke-width="1.5"/>
+                                    <circle cx="25" cy="38" r="4.5" fill="#121316" stroke="#FFED29" stroke-width="1.5"/>
+                                </svg>
+                                <span style="position: absolute; top: 0; left: 68px; font-size: 11px; font-family: monospace; color: rgba(240,240,235,0.5);">UI</span>
+                                <span style="position: absolute; top: 32px; left: 104px; font-size: 11px; font-family: monospace; color: #FFED29;">API</span>
+                                <span style="position: absolute; bottom: 0; left: 68px; font-size: 11px; font-family: monospace; color: rgba(240,240,235,0.5);">DB</span>
+                                <span style="position: absolute; top: 32px; left: 2px; font-size: 11px; font-family: monospace; color: #FFED29;">WS</span>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT SIDE 12: Near bottom "// keep going" very faint -->
+                        <span class="doodle-text doodle-white" style="bottom: 7%; right: 7%; transform: rotate(-1.5deg); opacity: 0.32; font-size: clamp(17px, 1.2vw, 23px); letter-spacing: 0.08em;">// keep going</span>
+
+                        <!-- AROUND BIG TYPE 13: Tiny { } floating subtly -->
+                        <span class="doodle-text doodle-white" style="top: 10%; left: 34%; font-size: 21px; opacity: 0.35;">{ }</span>
+
+                        <!-- AROUND BIG TYPE 14: Long hand-drawn arrow partially disappearing behind portrait -->
+                        <div class="doodle-text doodle-white" style="top: 22%; left: 18%; opacity: 0.42;">
+                            <svg width="140" height="20" viewBox="0 0 140 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <path d="M 4 10 C 40 8, 90 12, 136 10 M 128 5 L 136 10 L 128 15" stroke="#f0f0eb" />
+                            </svg>
+                        </div>
+
+                        <!-- AROUND BIG TYPE 15: x → y → ? -->
+                        <span class="doodle-text doodle-white" style="top: 12.5%; right: 27%; transform: rotate(2deg); font-size: clamp(16px, 1.2vw, 22px); opacity: 0.65;">x <span class="doodle-yellow">→</span> y <span class="doodle-yellow">→</span> ?</span>
+
+                        <!-- AROUND BIG TYPE 16: Tiny crossed-out block ██████ ↳ nope -->
+                        <div class="doodle-text doodle-white" style="top: 69%; left: 23%; transform: rotate(-2.5deg); font-size: clamp(15px, 1.1vw, 20px); line-height: 1.1;">
+                            <span style="letter-spacing: 0.05em; color: rgba(240,240,235,0.4); text-decoration: line-through; text-decoration-color: #FFED29; text-decoration-thickness: 3px;">████████</span>
+                            <div style="margin-left: 12px; margin-top: 1px; color: #FFED29; font-size: 14px;">↳ nope</div>
+                        </div>
+
+                        <!-- AROUND BIG TYPE 17: ∞ with tiny "iterate" underneath -->
+                        <div class="doodle-text doodle-white" style="bottom: 12%; right: 30%; transform: rotate(2deg); text-align: center; line-height: 1;">
+                            <span class="doodle-yellow" style="font-size: 26px;">∞</span>
+                            <div style="font-size: 13px; letter-spacing: 0.12em; opacity: 0.6; margin-top: -2px;">iterate</div>
+                        </div>
+
+                        <!-- AROUND BIG TYPE 18: Three floating marks + × ○ -->
+                        <span class="doodle-cross" style="top: 25%; left: 21%; font-size: 15px;">+</span>
+                        <span class="doodle-cross" style="bottom: 26%; right: 23%; font-size: 14px;">×</span>
+                        <span class="doodle-cross" style="top: 26%; right: 20%; font-size: 13px;">○</span>
+
+                        <!-- AROUND BIG TYPE 19: Tiny handwritten "v1.0" then crossed out "v∞" -->
+                        <div class="doodle-text doodle-white" style="bottom: 14%; left: 20%; transform: rotate(-3deg); display: flex; align-items: center; gap: 6px;">
+                            <span style="text-decoration: line-through; text-decoration-color: #f0f0eb; text-decoration-thickness: 1.5px; opacity: 0.45; font-size: clamp(16px, 1.15vw, 21px);">v1.0</span>
+                            <span class="doodle-yellow" style="font-size: clamp(19px, 1.4vw, 25px); font-weight: 600;">v∞</span>
+                        </div>
+
+                        <!-- AROUND BIG TYPE 20: Tiny cursor _ or ▌ sitting after handwritten text like actively writing -->
+                        <div class="doodle-text doodle-white" style="top: 25%; left: 13%; transform: rotate(1deg); font-size: clamp(15px, 1.1vw, 20px); opacity: 0.7;">
+                            <span>draft_final_v2</span><span class="doodle-yellow doodle-blink" style="display: inline-block; margin-left: 2px; font-weight: 700;">▌</span>
+                        </div>
+
+                        <!-- Bottom-Center: mouse doodle with s c r o l l (inspired by reference image) -->
+                        <div class="doodle-mouse-wrapper" style="bottom: 4%; left: 50%; transform: translateX(-50%);">
+                            <span class="doodle-white">s</span>
+                            <span class="doodle-white">c</span>
+                            <span class="doodle-yellow">r</span>
+                            <span class="doodle-white">o</span>
+                            <span class="doodle-white">l</span>
+                            <span class="doodle-yellow">l</span>
+                            <svg class="doodle-mouse-svg doodle-white" viewBox="0 0 20 30" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                                <rect x="3" y="2" width="14" height="24" rx="7"/>
+                                <line x1="10" y1="6" x2="10" y2="12" stroke="#FFED29" stroke-width="1.6"/>
+                            </svg>
+                        </div>
+                    </div>
+
                     <!-- SLIDE 1: SHRINKING HERO CARD (LIGHT BLUE BACKGROUND IN SLIDE 1 -> SHRINKS INTO DARK GREY SLIDE 2) -->
                     <div class="hero-shrink-card" id="heroShrinkCard">
                         <canvas id="heroPortraitCanvas" width="1672" height="941"></canvas>
@@ -2804,18 +3327,6 @@
 
                             </g>
                         </svg>
-                    </div>
-
-                    <!-- SLIDE 2: CENTER TARGET BOX & HUGE OVERFLOWING SIGNATURE -->
-                    <div class="slide2-overlay-target">
-                        <div class="slide2-target-box" data-sticky-hero="target">
-
-                            <!-- Huge Overflowing Signature -->
-                            <div class="marquee-gl-rive-target">
-                                <canvas id="signatureRiveCanvas" width="1000" height="640"></canvas>
-                            </div>
-
-                        </div>
                     </div>
 
                 </div>
@@ -3502,43 +4013,8 @@
                 requestAnimationFrame(syncPortrait);
             }
 
-            // 2. Initialize Rive Vector Signature
-            let riveSignature = null;
+            // 2. Rive Signature (Removed per studio directive)
             let signatureScrollInput = null;
-            const sigCanvas = document.getElementById('signatureRiveCanvas');
-
-            function initSignature() {
-                if (typeof rive !== 'undefined' && rive.Rive && sigCanvas) {
-                    try {
-                        riveSignature = new rive.Rive({
-                            src: '/rive/signature.riv',
-                            canvas: sigCanvas,
-                            artboard: 'signature',
-                            stateMachines: 'signature_scroll',
-                            autoplay: true,
-                            layout: new rive.Layout({
-                                fit: rive.Fit.Contain,
-                                alignment: rive.Alignment.Center
-                            }),
-                            onLoad: () => {
-                                riveSignature.resizeDrawingSurfaceToCanvas();
-                                const inputs = riveSignature.stateMachineInputs('signature_scroll');
-                                if (inputs) {
-                                    signatureScrollInput = inputs.find(i => i.name === 'scroll');
-                                    const limeInput = inputs.find(i => i.name === 'color_lime');
-                                    if (limeInput) limeInput.value = true;
-                                    if (signatureScrollInput) signatureScrollInput.value = 0;
-                                }
-                            }
-                        });
-                    } catch (e) {
-                        console.warn('Rive signature loading:', e);
-                    }
-                } else {
-                    setTimeout(initSignature, 50);
-                }
-            }
-            initSignature();
 
             // 3. Living Sketch Spectacles Line-Boil Animation System
             const SPECS_FRAMES = [{"left":{"outer":"M -19.6 -28.1 C -44.9 -32.3, -66.7 -35.1, -93.8 -33.8 C -114 -25.8, -119.4 -21.2, -117.9 -12.8 C -114.7 6.9, -108 23.8, -94.3 34.6 C -68.8 35.6, -42.9 34.7, -27.4 24.1 C -18.2 4.7, -19.9 -13.9, -19.6 -28.1 Z","inner":"M -26.3 -21.7 C -46.3 -28, -69.4 -27.2, -91 -25.8 C -106.1 -21.9, -109.2 -13.2, -109.1 5.7 C -106 19.4, -90.5 24.5, -67.2 31.1 C -49.4 28.4, -34.8 17.3, -25.6 4.7 C -25.7 -4.6, -25.6 -16, -26.5 -22.3 Z","brow":"M -22.9 -27.6 C -47.7 -35.9, -70 -34.7, -97.2 -34.1 C -112.8 -29.4, -120.8 -23.4, -117.3 -10.2","hatch":"M -104.3 -19.1 L -113.9 -12.3 M -98.4 -22.4 L -108.9 -17.5","bridge":"M -20.9 -13.9 C -14.1 -18.200000000000003, -6.9 -17.6, 0 -17.6 L 0 -8.4 C -4.9 -8.8, -13.5 -7.2, -22.2 -7.6 Z","temple":"M -115.2 -18.8 C -136.9 -18.1, -153.5 -15.7, -177 -10.1","nosePad":"M -25 4.1 C -28.5 10.4, -28.5 19.3, -23.1 23.7","glare1":{"x1":-96.5,"y1":-19.4,"x2":-76.8,"y2":-1.9},"glare2":{"x1":-88.4,"y1":-23,"x2":-75.7,"y2":-9.9},"rivet1":{"x":-110.9,"y":-21.8},"rivet2":{"x":-105.3,"y":-23.5}},"right":{"outer":"M 19.6 -28.1 C 44.9 -32.3, 66.7 -35.1, 93.8 -33.8 C 114.0 -25.8, 119.4 -21.2, 117.9 -12.8 C 114.7 6.9, 108.0 23.8, 94.3 34.6 C 68.8 35.6, 42.9 34.7, 27.4 24.1 C 18.2 4.7, 19.9 -13.9, 19.6 -28.1 Z","inner":"M 26.3 -21.7 C 46.3 -28, 69.4 -27.2, 91.0 -25.8 C 106.1 -21.9, 109.2 -13.2, 109.1 5.7 C 106.0 19.4, 90.5 24.5, 67.2 31.1 C 49.4 28.4, 34.8 17.3, 25.6 4.7 C 25.7 -4.6, 25.6 -16, 26.5 -22.3 Z","brow":"M 22.9 -27.6 C 47.7 -35.9, 70.0 -34.7, 97.2 -34.1 C 112.8 -29.4, 120.8 -23.4, 117.3 -10.2","hatch":"M 104.3 -19.1 L 113.9 -12.3 M 98.4 -22.4 L 108.9 -17.5","bridge":"M 20.9 -13.9 C 14.1 -18.200000000000003, 6.9 -17.6, 0 -17.6 L 0 -8.4 C 4.9 -8.8, 13.5 -7.2, 22.2 -7.6 Z","temple":"M 115.2 -18.8 C 136.9 -18.1, 153.5 -15.7, 177.0 -10.1","nosePad":"M 25.0 4.1 C 28.5 10.4, 28.5 19.3, 23.1 23.7","glare1":{"x1":76.8,"y1":-19.4,"x2":96.5,"y2":-1.9},"glare2":{"x1":75.7,"y1":-23,"x2":88.4,"y2":-9.9},"rivet1":{"x":110.9,"y":-21.8},"rivet2":{"x":105.3,"y":-23.5}}},{"left":{"outer":"M -20 -29 C -43.9 -34.5, -69.4 -33.7, -95.5 -31.5 C -112.5 -25.2, -116.7 -21.8, -115.6 -13.7 C -116 9.3, -107.3 24.7, -93.1 32.1 C -68.2 39.4, -40.2 34.8, -25 23.1 C -17.8 3.6, -20.2 -16.6, -20 -29 Z","inner":"M -24.7 -20.9 C -46.3 -27.8, -67.8 -27.7, -93.1 -26.6 C -105 -22.2, -110.4 -12.9, -107.2 4.9 C -106.3 17, -92.5 27.3, -69.4 30.1 C -47.6 27.7, -34.4 19.4, -26.3 5.9 C -23.8 -5.7, -26 -14.7, -26.7 -20.9 Z","brow":"M -23.4 -29.9 C -48.7 -35.4, -71.9 -36.9, -98.1 -33.2 C -111.4 -28.5, -117.7 -23.1, -115.6 -11.2","hatch":"M -104.5 -20.5 L -113.2 -11.1 M -96.8 -22.8 L -108.2 -16.2","bridge":"M -21.9 -13.3 C -14.2 -16.400000000000002, -6.6 -15.8, 0 -15.8 L 0 -10.4 C -5 -10.8, -12.8 -9.200000000000001, -21 -7.8 Z","temple":"M -117 -21.2 C -135 -17.4, -155.6 -13.1, -176.4 -11.5","nosePad":"M -25.4 2.7 C -29.6 11.1, -29.3 17.5, -23.4 23.6","glare1":{"x1":-94.9,"y1":-20.5,"x2":-76.8,"y2":-3.1},"glare2":{"x1":-86.9,"y1":-24,"x2":-75.4,"y2":-10},"rivet1":{"x":-110.9,"y":-22},"rivet2":{"x":-105,"y":-21.7}},"right":{"outer":"M 20.0 -29 C 43.9 -34.5, 69.4 -33.7, 95.5 -31.5 C 112.5 -25.2, 116.7 -21.8, 115.6 -13.7 C 116.0 9.3, 107.3 24.7, 93.1 32.1 C 68.2 39.4, 40.2 34.8, 25.0 23.1 C 17.8 3.6, 20.2 -16.6, 20.0 -29 Z","inner":"M 24.7 -20.9 C 46.3 -27.8, 67.8 -27.7, 93.1 -26.6 C 105.0 -22.2, 110.4 -12.9, 107.2 4.9 C 106.3 17, 92.5 27.3, 69.4 30.1 C 47.6 27.7, 34.4 19.4, 26.3 5.9 C 23.8 -5.7, 26.0 -14.7, 26.7 -20.9 Z","brow":"M 23.4 -29.9 C 48.7 -35.4, 71.9 -36.9, 98.1 -33.2 C 111.4 -28.5, 117.7 -23.1, 115.6 -11.2","hatch":"M 104.5 -20.5 L 113.2 -11.1 M 96.8 -22.8 L 108.2 -16.2","bridge":"M 21.9 -13.3 C 14.2 -16.400000000000002, 6.6 -15.8, 0 -15.8 L 0 -10.4 C 5.0 -10.8, 12.8 -9.200000000000001, 21.0 -7.8 Z","temple":"M 117.0 -21.2 C 135.0 -17.4, 155.6 -13.1, 176.4 -11.5","nosePad":"M 25.4 2.7 C 29.6 11.1, 29.3 17.5, 23.4 23.6","glare1":{"x1":76.8,"y1":-20.5,"x2":94.9,"y2":-3.1},"glare2":{"x1":75.4,"y1":-24,"x2":86.9,"y2":-10},"rivet1":{"x":110.9,"y":-22},"rivet2":{"x":105,"y":-21.7}}},{"left":{"outer":"M -21.9 -28.9 C -45.2 -34.3, -66.8 -34.2, -94.7 -33.2 C -113.8 -25.3, -117.4 -21.4, -115.9 -12.8 C -115.8 9.2, -110.5 26.7, -96.8 33.1 C -69.4 37.7, -41 34.7, -24.3 22.8 C -18.9 4.9, -20.4 -15.5, -21.9 -28.9 Z","inner":"M -26.8 -22 C -43.8 -27.9, -67.3 -28.8, -93 -27.5 C -104.7 -21, -109 -13.4, -109.2 5 C -106.3 18.3, -92.2 24.9, -67.2 28.3 C -48.1 26.2, -35.8 20.6, -25.2 6.6 C -24.4 -3.9, -24.3 -14.8, -27.4 -21 Z","brow":"M -23.7 -29.7 C -48.4 -36.1, -70.1 -36.9, -98 -34.9 C -112.7 -31.2, -117.2 -23.6, -116.9 -9.3","hatch":"M -106.2 -20.7 L -112.7 -12.4 M -96.6 -23.3 L -107.7 -17.2","bridge":"M -21 -13.8 C -13.3 -18.1, -4.9 -17.5, 0 -17.5 L 0 -8.9 C -6.3 -9.3, -14.2 -7.7, -22.1 -7 Z","temple":"M -116.4 -20.4 C -135.1 -18.2, -156.6 -14.7, -178 -11.9","nosePad":"M -26 1.7 C -28.1 10.5, -29 19.1, -21.9 24.6","glare1":{"x1":-95.9,"y1":-20.1,"x2":-78.9,"y2":-1.4},"glare2":{"x1":-88.4,"y1":-22.8,"x2":-75.3,"y2":-8.4},"rivet1":{"x":-109.1,"y":-23.4},"rivet2":{"x":-105.8,"y":-22.5}},"right":{"outer":"M 21.9 -28.9 C 45.2 -34.3, 66.8 -34.2, 94.7 -33.2 C 113.8 -25.3, 117.4 -21.4, 115.9 -12.8 C 115.8 9.2, 110.5 26.7, 96.8 33.1 C 69.4 37.7, 41.0 34.7, 24.3 22.8 C 18.9 4.9, 20.4 -15.5, 21.9 -28.9 Z","inner":"M 26.8 -22 C 43.8 -27.9, 67.3 -28.8, 93.0 -27.5 C 104.7 -21, 109.0 -13.4, 109.2 5 C 106.3 18.3, 92.2 24.9, 67.2 28.3 C 48.1 26.2, 35.8 20.6, 25.2 6.6 C 24.4 -3.9, 24.3 -14.8, 27.4 -21 Z","brow":"M 23.7 -29.7 C 48.4 -36.1, 70.1 -36.9, 98.0 -34.9 C 112.7 -31.2, 117.2 -23.6, 116.9 -9.3","hatch":"M 106.2 -20.7 L 112.7 -12.4 M 96.6 -23.3 L 107.7 -17.2","bridge":"M 21.0 -13.8 C 13.3 -18.1, 4.9 -17.5, 0 -17.5 L 0 -8.9 C 6.3 -9.3, 14.2 -7.7, 22.1 -7 Z","temple":"M 116.4 -20.4 C 135.1 -18.2, 156.6 -14.7, 178.0 -11.9","nosePad":"M 26.0 1.7 C 28.1 10.5, 29.0 19.1, 21.9 24.6","glare1":{"x1":78.9,"y1":-20.1,"x2":95.9,"y2":-1.4},"glare2":{"x1":75.3,"y1":-22.8,"x2":88.4,"y2":-8.4},"rivet1":{"x":109.1,"y":-23.4},"rivet2":{"x":105.8,"y":-22.5}}}];
@@ -3761,9 +4237,13 @@
                     }
                 }
 
-                if (signatureScrollInput) {
-                    const sigProgress = Math.max(0, Math.min(1, (shrinkP - 0.28) / 0.65));
-                    signatureScrollInput.value = sigProgress * 1000;
+                const doodles = document.getElementById('slide2HandwrittenDoodles');
+                if (doodles) {
+                    if (shrinkP > 0.25) {
+                        doodles.classList.add('is-active');
+                    } else {
+                        doodles.classList.remove('is-active');
+                    }
                 }
 
             }
@@ -4186,7 +4666,7 @@
                 const targets = [
                     { sel: 'a, button, [role="button"], .js-menu, .js-sticky-items, .js-menu-toggle-button', tag: 'OPEN' },
                     { sel: '#heroPortraitCanvas', tag: 'SCROLL' },
-                    { sel: '#signatureRiveCanvas, .slide2-target-box, .marquee-gl-rive-target', tag: 'AARAV' },
+                    { sel: '.doodle-text, .doodle-mouse-wrapper', tag: 'SKETCH' },
                     { sel: '.s.is-impact-home, .text-impact-bio', tag: 'ABOUT' },
                     { sel: '.projects__entry, [data-project-key]', tag: 'VIEW' },
                     { sel: '.projects__entry-cta a, .projects__entry-ctaMobile', tag: 'LAUNCH' },
@@ -4423,6 +4903,7 @@
                 initServicesController();
             }
         })();
+
     </script>
 
 </body>

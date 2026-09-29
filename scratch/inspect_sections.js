@@ -1,7 +1,7 @@
 const fs = require('fs');
-const html = fs.readFileSync('final/index.html', 'utf8');
-const sections = [...html.matchAll(/<section[^>]*class=["']([^"']*)["'][^>]*>/gi)].map(m => m[1]);
-console.log('All sections:', sections);
-
-const divs = [...html.matchAll(/<div[^>]*class=["']([^"']*(?:scroller|scroll-content|heroTrack)[^"']*)["'][^>]*>/gi)].map(m => m[1]);
-console.log('Scroll containers/tracks:', divs);
+const content = fs.readFileSync('final/index.html', 'utf8');
+content.split('\n').forEach((l, i) => {
+  if (l.includes('<section') || l.includes('sticky-hero') || l.includes('section-projects') || l.includes('hero-shrink-card')) {
+    console.log(i + ': ' + l.trim().slice(0, 100));
+  }
+});

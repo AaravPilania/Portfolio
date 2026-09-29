@@ -30,25 +30,6 @@
      =================================================== */
   function initPreloader() {
     const loader = document.querySelector('.js-loader');
-    const counter = document.querySelector('.js-progress');
-
-    // Smooth progress counter from 0 to 100 over authentic intro length (3.6s)
-    if (counter) {
-      const duration = 3600; // ms
-      const startTime = Date.now();
-      const timer = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const pct = Math.min(1, elapsed / duration);
-        const progress = Math.floor(pct * 100);
-        counter.textContent = progress;
-
-        if (pct >= 1) {
-          clearInterval(timer);
-          counter.textContent = '100';
-          setTimeout(triggerReveal, 80);
-        }
-      }, 20);
-    }
 
     let revealed = false;
     function triggerReveal() {
@@ -58,7 +39,7 @@
       if (loader && !loader.classList.contains('is-loaded')) {
         loader.classList.add('is-loaded');
         setTimeout(() => {
-          loader.style.display = 'none';
+          if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
         }, 500);
       }
 
@@ -76,10 +57,10 @@
       observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     }
 
-    // Fallback: 3.8 seconds
+    // Safeguard fallback: 8 seconds max
     setTimeout(() => {
       triggerReveal();
-    }, 3800);
+    }, 8000);
   }
 
   function ensurePageElementsRevealed() {
@@ -98,6 +79,7 @@
       stickyMenu.classList.add('is-revealed');
       stickyMenu.style.opacity = '1';
       stickyMenu.style.visibility = 'visible';
+      stickyMenu.style.pointerEvents = 'auto';
       stickyMenu.style.transform = 'translateX(-50%)';
     }
 
@@ -108,6 +90,7 @@
       stickyItems.classList.add('is-revealed');
       stickyItems.style.opacity = '1';
       stickyItems.style.visibility = 'visible';
+      stickyItems.style.pointerEvents = 'auto';
     }
 
     // Sticky Bottom Bar
@@ -140,6 +123,8 @@
   function revealEntrance() {
     ensurePageElementsRevealed();
   }
+
+  window.ensurePageElementsRevealed = ensurePageElementsRevealed;
 
   /* ===================================================
      2. NAVIGATION & DROPDOWN MENU
@@ -249,42 +234,13 @@
   }
 
   /* ===================================================
-     4. HEADER CLOCK & AMSTERDAM TIME
+     4. HEADER CLOCK & AMSTERDAM TIME (DISABLED / REMOVED)
      =================================================== */
   function initClock() {
-    const clockElements = document.querySelectorAll('.js-clock, [data-component="parts/clock"]');
-    if (!clockElements.length) return;
-
-    function updateTime() {
-      const now = new Date();
-      const options = {
-        timeZone: 'Europe/Amsterdam',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      };
-      const formatter = new Intl.DateTimeFormat([], options);
-      const timeParts = formatter.formatToParts(now);
-      const hour = timeParts.find(p => p.type === 'hour')?.value || '12';
-      const minute = timeParts.find(p => p.type === 'minute')?.value || '00';
-      const second = timeParts.find(p => p.type === 'second')?.value || '00';
-
-      clockElements.forEach(el => {
-        const timeDisplay = el.querySelector('.js-time-display') || el;
-        const textNode = Array.from(timeDisplay.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
-        const formatted = `Amsterdam ${hour}:${minute}:${second}`;
-        if (textNode) {
-          textNode.textContent = formatted;
-        } else {
-          const span = el.querySelector('.js-clock-text');
-          if (span) span.textContent = formatted;
-        }
-      });
-    }
-
-    updateTime();
-    state.clockInterval = setInterval(updateTime, 1000);
+    // Completely removed per user request
+    if (state.clockInterval) clearInterval(state.clockInterval);
+    const clockElements = document.querySelectorAll('.js-clock, [data-component="parts/clock"], .ll-block--clock, .js-sticky-bar');
+    clockElements.forEach(el => el.remove());
   }
 
 
@@ -419,63 +375,21 @@
   }
 
   /* ===================================================
-     9. ANIMATED CUSTOM CURSOR & CONTEXTUAL TRAILING BADGE
+     9. BOUTIQUE WHITE CURSOR SYSTEM
      =================================================== */
   function initCursor() {
-    const oldDot = document.querySelector('.ll-cursor-dot');
-    const oldRing = document.querySelector('.ll-cursor-ring');
-    if (oldDot) oldDot.remove();
-    if (oldRing) oldRing.remove();
-
-    const cursorLabel = document.querySelector('.js-cursor-label');
-    const cursorText = cursorLabel?.querySelector('.js-text-container');
+    let cursorDot = document.getElementById('siteCursorDot') || document.querySelector('.site-cursor-dot');
+    if (!cursorDot) {
+      cursorDot = document.createElement('div');
+      cursorDot.className = 'site-cursor-dot';
+      cursorDot.id = 'siteCursorDot';
+      document.body.appendChild(cursorDot);
+    }
 
     window.addEventListener('mousemove', (e) => {
-      state.mouseX = e.clientX;
-      state.mouseY = e.clientY;
+      cursorDot.style.left = e.clientX + 'px';
+      cursorDot.style.top = e.clientY + 'px';
     });
-
-    function updateCursor() {
-      state.cursorX += (state.mouseX - state.cursorX) * 0.18;
-      state.cursorY += (state.mouseY - state.cursorY) * 0.18;
-
-      if (cursorLabel) {
-        cursorLabel.style.transform = `translate3d(${state.cursorX + 18}px, ${state.cursorY + 18}px, 0)`;
-      }
-      requestAnimationFrame(updateCursor);
-    }
-    requestAnimationFrame(updateCursor);
-
-    // Contextual cursor hints on hover
-    window._bindCursorHoverListeners = function() {
-      const ring = document.querySelector('.ll-cursor-ring');
-      document.querySelectorAll('a, button, [role="button"], .js-case-item, .swiper-wrapper, .js-backdrop-item, video, .js-nav-item').forEach(el => {
-        if (el._cursorBound) return;
-        el._cursorBound = true;
-        el.addEventListener('mouseenter', () => {
-          if (ring) ring.classList.add('is-hovering');
-          if (cursorLabel) cursorLabel.style.opacity = '1';
-          let tag = 'VIEW';
-          if (el.classList.contains('js-case-item') || el.closest('.js-case-item')) {
-            tag = 'EXPLORE';
-          } else if (el.closest('.swiper-wrapper')) {
-            tag = 'DRAG';
-          } else if (el.tagName === 'VIDEO' || el.classList.contains('js-backdrop-item') || el.closest('.js-showreel-preview')) {
-            tag = 'PLAY';
-          } else if (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') {
-            tag = el.dataset.text || 'OPEN';
-          } else if (el.dataset.text) {
-            tag = el.dataset.text;
-          }
-          if (cursorText) cursorText.textContent = `[ ${tag} ]`;
-        });
-        el.addEventListener('mouseleave', () => {
-          if (ring) ring.classList.remove('is-hovering');
-          if (cursorLabel) cursorLabel.style.opacity = '0';
-        });
-      });
-    };
-    window._bindCursorHoverListeners();
   }
 
   /* ===================================================

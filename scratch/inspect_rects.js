@@ -1,91 +1,84 @@
 const { spawn } = require('child_process');
 const http = require('http');
-const fs = require('fs');
+const path = require('path');
 
-async function inspectDOM() {
-  const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-  const edge = spawn(edgePath, [
-    '--headless=new',
-    '--remote-debugging-port=9224',
-    '--disable-gpu',
-    '--no-sandbox',
-    '--window-size=1920,1080',
-    'http://localhost:3000/'
-  ]);
+const PORT = 9305;
+const p = spawn('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
+  `--remote-debugging-port=${PORT}`,
+  '--headless=new',
+  '--window-size=1440,900',
+  `--user-data-dir=${path.join(__dirname, 'chrome_rect_inspect')}`
+]);
 
-  await new Promise(r => setTimeout(r, 2000));
-
-  http.get('http://localhost:9224/json', (res) => {
-    let raw = '';
-    res.on('data', c => raw += c);
-    res.on('end', async () => {
-      try {
-        const list = JSON.parse(raw);
-        const tab = list.find(t => t.type === 'page');
-        if (!tab) {
-          edge.kill();
-          process.exit(1);
-        }
-
-        const ws = new WebSocket(tab.webSocketDebuggerUrl);
-
-        ws.onopen = () => {
-          setTimeout(() => {
-            ws.send(JSON.stringify({
-              id: 1,
-              method: 'Runtime.evaluate',
-              params: {
-                expression: `(() => {
-                  const hero = document.querySelector('.ll-section--hero_extended');
-                  const heroRect = hero ? hero.getBoundingClientRect() : null;
-                  const heroContainer = hero ? hero.querySelector('.ll-container') : null;
-                  const containerRect = heroContainer ? heroContainer.getBoundingClientRect() : null;
-                  const h1 = document.querySelector('.ll-section--hero_extended h1');
-                  const h1Rect = h1 ? h1.getBoundingClientRect() : null;
-                  const h1Styles = h1 ? {
-                    color: window.getComputedStyle(h1).color,
-                    opacity: window.getComputedStyle(h1).opacity,
-                    visibility: window.getComputedStyle(h1).visibility,
-                    display: window.getComputedStyle(h1).display,
-                    mixBlendMode: window.getComputedStyle(h1).mixBlendMode
-                  } : null;
-                  const ditherCanvas = document.getElementById('hero-dither-canvas');
-                  const ditherRect = ditherCanvas ? ditherCanvas.getBoundingClientRect() : null;
-                  const videoItem = document.querySelector('.ll-section--hero_extended .js-backdrop-video-item');
-                  const videoRect = videoItem ? videoItem.getBoundingClientRect() : null;
-                  const webglCanvas = document.querySelector('canvas.js-canvas') || document.querySelector('canvas');
-                  const webglRect = webglCanvas ? webglCanvas.getBoundingClientRect() : null;
-
-                  return JSON.stringify({
-                    heroRect,
-                    containerRect,
-                    h1Rect,
-                    h1Styles,
-                    ditherRect,
-                    videoRect,
-                    webglRect
-                  }, null, 2);
-                })()`
-              }
-            }));
-          }, 6000);
-        };
-
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          if (msg.id === 1) {
-            console.log('DOM Elements Report:\n', msg.result.result.value);
-            ws.close();
-            edge.kill();
-            process.exit(0);
-          }
-        };
-      } catch (e) {
-        console.error(e);
-        edge.kill();
-      }
+setTimeout(async () => {
+  try {
+    const data = await new Promise(r => http.get(`http://127.0.0.1:${PORT}/json/list`, res => {
+      let s = ''; res.on('data', d => s += d); res.on('end', () => r(s));
+    }));
+    const page = JSON.parse(data).find(p => p.type === 'page');
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    let id = 1;
+    const send = (method, params = {}) => new Promise(res => {
+      const curId = id++;
+      const handler = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.id === curId) { ws.removeEventListener('message', handler); res(m.result); }
+      };
+      ws.addEventListener('message', handler);
+      ws.send(JSON.stringify({ id: curId, method, params }));
     });
-  });
-}
+    await new Promise(r => ws.onopen = r);
+    await send('Runtime.enable');
+    await send('Page.navigate', { url: 'http://localhost:3010/direction-1-lens.html' });
+    await new Promise(r => setTimeout(r, 2500));
 
-inspectDOM();
+    const rects = await send('Runtime.evaluate', {
+      returnByValue: true,
+      expression: `
+        (() => {
+          const list = [
+            '#introLoader',
+            '.js-upper-canvas',
+            '.js-canvas',
+            '#page',
+            '.js-scroller',
+            '.js-scroll-content',
+            '#heroTrack',
+            '.sticky-hero-viewport',
+            '#heroShrinkCard',
+            '#slide2CenterFeature',
+            '#section-projects',
+            '.ll-section--services'
+          ];
+          return list.map(sel => {
+            const el = document.querySelector(sel);
+            if (!el) return { sel, exists: false };
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              sel,
+              exists: true,
+              x: Math.round(r.x),
+              y: Math.round(r.y),
+              w: Math.round(r.width),
+              h: Math.round(r.height),
+              zIndex: cs.zIndex,
+              display: cs.display,
+              visibility: cs.visibility,
+              opacity: cs.opacity
+            };
+          });
+        })()
+      `
+    });
+    console.log('RECTS AT 0 SCROLL:', JSON.stringify(rects.result.value, null, 2));
+
+    ws.close();
+    p.kill();
+    process.exit(0);
+  } catch(e) {
+    console.error(e);
+    p.kill();
+    process.exit(1);
+  }
+}, 1500);
