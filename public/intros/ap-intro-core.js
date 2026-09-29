@@ -11,6 +11,7 @@
         ['07-block-drop', 'Block Drop'],
         ['08-stem-split', 'Stem Split'],
         ['09-halftone', 'Halftone'],
+        ['10-plotter-bleed', 'Plotter Bleed'],
     ];
 
     const PRELUDE = `
@@ -151,11 +152,10 @@
         outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
     };
 
-    const MARK_H = 40;
-    const PITCH = [MARK_H * 803 / 644 + MARK_H * 0.5, MARK_H * 1.6];
-
     function APIntro(opts) {
         const FILL_MIN = opts.fillMin || 2.0;
+        const MARK_H = opts.markH || 40;
+        const PITCH = [MARK_H * 803 / 644 + MARK_H * 0.5, MARK_H * 1.6];
         const i = Math.max(0, INTROS.findIndex((x) => x[0] === opts.id));
         const prev = INTROS[(i - 1 + INTROS.length) % INTROS.length];
         const next = INTROS[(i + 1) % INTROS.length];
@@ -323,8 +323,8 @@
     }
 
     // Goal Ultra's camera: hold, then pull back with a small swing while the grid ripples in
-    APIntro.grid = function (s) {
-        const HOLD = 0.35, PULL = 1.5, SETTLE = 0.3;
+    APIntro.grid = function (s, o) {
+        const HOLD = (o && o.hold) || 0.35, PULL = 1.5, SETTLE = 0.3;
         const u = { uScale: s.startScale, uRot: 0, uGrow: 0 };
         let since = -1;
         if (s.since >= 0) {
