@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects Lab / 02 Filmstrip</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/guide/projects-lab/lab.css">
+    <style>
+        body { background: #0a0a0b; }
+        .fs-intro, .fs-outro { min-height: 86vh; display: grid; align-content: end; padding: var(--pad) var(--pad) 10vh; }
+        .fs-intro h1 { margin: 16px 0 0; font: 600 clamp(56px, 12vw, 210px)/0.84 var(--sans); letter-spacing: -0.055em; text-transform: uppercase; }
+        .fs-intro h1 em { display: block; font: italic 300 0.44em/1 var(--serif); text-transform: none; letter-spacing: -0.02em; color: var(--sig); margin-left: 0.2em; }
+        .fs-intro__meta { display: flex; justify-content: space-between; margin-top: 5vh; color: var(--dim); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; border-top: 1px solid var(--rule); padding-top: 14px; }
+
+        .fs-reel { position: relative; }
+        .fs-pin { position: sticky; top: 0; height: 100vh; overflow: hidden; background: #050506; }
+        .fs-perf { position: absolute; left: 0; right: 0; height: 26px; z-index: 3; pointer-events: none;
+            background-image: linear-gradient(90deg, transparent 0 9px, rgba(244, 242, 234, 0.13) 9px 21px, transparent 21px 30px);
+            background-size: 30px 10px; background-repeat: repeat-x; background-position: 0 50%;
+            box-shadow: inset 0 1px 0 var(--rule), inset 0 -1px 0 var(--rule); }
+        .fs-perf--top { top: 7vh; }
+        .fs-perf--bot { bottom: 7vh; }
+        .fs-perf span { position: absolute; top: 50%; transform: translateY(-50%); font: 500 9px/1 var(--mono); letter-spacing: 0.3em; color: var(--sig); background: #050506; padding: 0 8px; }
+
+        .fs-track { position: absolute; top: 0; left: 0; height: 100%; display: flex; align-items: center; gap: 4vw; padding: 0 12vw 0 8vw; will-change: transform; }
+        .fs-plate { position: relative; flex: none; display: grid; grid-template-rows: auto auto auto; gap: 12px; transform-origin: 50% 100%; will-change: transform; }
+        .fs-plate__frame { position: relative; overflow: hidden; background: var(--ink); box-shadow: 0 0 0 1px rgba(244, 242, 234, 0.1); }
+        .fs-plate--wide .fs-plate__frame { height: 54vh; aspect-ratio: 16 / 10; }
+        .fs-plate--tall .fs-plate__frame { height: 62vh; aspect-ratio: 4 / 5; }
+        .fs-plate__inner { position: absolute; top: 0; bottom: 0; left: -9%; right: -9%; will-change: transform; }
+        .fs-plate__inner .pl-media { position: absolute; inset: 0; }
+        .fs-plate__frame::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 1.5px var(--sig); opacity: 0; transition: opacity 0.3s linear; }
+        .fs-plate.is-hover .fs-plate__frame::after { opacity: 1; }
+        .fs-plate__meta { display: flex; gap: 18px; align-items: baseline; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+        .fs-plate__meta b { font-weight: 500; color: var(--sig); }
+        .fs-plate__title { margin: 0; font: 600 clamp(28px, 3.6vw, 64px)/0.92 var(--sans); letter-spacing: -0.045em; max-width: 100%; }
+        .fs-plate__foot { display: flex; justify-content: space-between; gap: 16px; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+        .fs-plate__foot a:hover { color: var(--sig); }
+        .fs-plate__aw { display: flex; gap: 10px; color: var(--paper); }
+        .fs-plate__num { position: absolute; top: -0.12em; right: 0.06em; font: 600 clamp(80px, 11vw, 200px)/0.8 var(--sans); letter-spacing: -0.06em; color: transparent; -webkit-text-stroke: 1px rgba(244, 242, 234, 0.35); pointer-events: none; mix-blend-mode: difference; z-index: 2; }
+
+        .fs-hud { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(7vh + 44px); z-index: 4; display: grid; grid-template-columns: auto 1fr auto; gap: 24px; align-items: center; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); pointer-events: none; }
+        .fs-hud__count b { font-weight: 500; color: var(--paper); font-size: 13px; }
+        .fs-hud__bar { height: 1px; background: var(--rule); position: relative; overflow: hidden; }
+        .fs-hud__bar i { position: absolute; inset: 0; background: var(--sig); transform-origin: 0 50%; transform: scaleX(0); will-change: transform; }
+        .fs-hud__tc { color: var(--paper); font-variant-numeric: tabular-nums; }
+        .fs-hud__tc::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff3b2f; margin-right: 10px; vertical-align: 1px; animation: fsRec 1.2s steps(2) infinite; }
+        @keyframes fsRec { 50% { opacity: 0; } }
+
+        .fs-outro { align-content: center; text-align: center; }
+        .fs-outro p { font: italic 300 clamp(36px, 6vw, 110px)/1 var(--serif); margin: 0; }
+        .fs-outro small { display: block; margin-top: 18px; color: var(--dim); font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; }
+
+        @media (prefers-reduced-motion: reduce) { .fs-hud__tc::before { animation: none; } }
+    </style>
+</head>
+<body>
+    <section class="fs-intro">
+        <p class="pl-kicker">Slide 03 &mdash; Reel 01 of 01</p>
+        <h1>Projects <em>frame by frame</em></h1>
+        <div class="fs-intro__meta"><span>16 frames &middot; 2019&ndash;2025</span><span>Scroll to advance the reel &darr;</span></div>
+    </section>
+    <div class="fs-reel" id="fsReel">
+    <section class="fs-pin" id="fsPin">
+        <div class="fs-perf fs-perf--top"><span style="left:8vw">RB&ndash;16 &nbsp;SAFETY FILM</span></div>
+        <div class="fs-track" id="fsTrack"></div>
+        <div class="fs-perf fs-perf--bot"><span style="right:8vw">&#9656; 24 FPS</span></div>
+        <div class="fs-hud">
+            <span class="fs-hud__count"><b id="fsCount">01</b> / 16</span>
+            <span class="fs-hud__bar"><i id="fsBar"></i></span>
+            <span class="fs-hud__tc" id="fsTc">00:00:00:00</span>
+        </div>
+    </section>
+    </div>
+    <section class="fs-outro">
+        <p>End of reel.</p>
+        <small>Scroll back up to rewind</small>
+    </section>
+
+    <script src="/guide/projects-lab/data.js"></script>
+    <script src="/guide/projects-lab/lab.js"></script>
+    <script src="/guide/projects-lab/d02-filmstrip.js"></script>
+</body>
+</html>

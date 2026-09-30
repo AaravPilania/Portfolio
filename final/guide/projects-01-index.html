@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects Lab / 01 Index</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/guide/projects-lab/lab.css">
+    <style>
+        .ix { padding: calc(var(--pad) * 2.4) var(--pad) 28vh; position: relative; z-index: 1; }
+        .ix-head { display: grid; grid-template-columns: minmax(0, 1fr) 24ch; align-items: end; gap: 24px; padding-bottom: clamp(24px, 4vw, 64px); }
+        .ix-word { margin: 14px 0 0; font: 600 clamp(64px, 14.6vw, 270px)/0.8 var(--sans); letter-spacing: -0.055em; text-transform: uppercase; }
+        .ix-word sup { font: 500 clamp(11px, 1vw, 14px)/1 var(--mono); letter-spacing: 0.16em; vertical-align: top; margin-left: 0.8em; color: var(--sig); position: relative; top: 1.2em; }
+        .ix-note { margin: 0; text-align: right; color: var(--dim); font-size: 11px; letter-spacing: 0.08em; }
+        .ix-note em { font: italic 300 1.35em/1.2 var(--serif); color: var(--paper); letter-spacing: 0; }
+
+        .ix-cols, .ix-row { display: grid; grid-template-columns: 4ch 6ch minmax(9ch, 1.1fr) 4fr minmax(12ch, 1.2fr) 10ch; column-gap: clamp(10px, 1.6vw, 28px); align-items: baseline; }
+        .ix-cols { padding: 0 0 12px; border-bottom: 1px solid var(--rule); color: var(--dim); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+
+        .ix-list { list-style: none; margin: 0; padding: 0; }
+        .ix-row { position: relative; padding: clamp(10px, 1.1vw, 18px) 0 clamp(8px, 0.9vw, 14px); transition: opacity 0.6s var(--ease-out); }
+        .ix-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--rule); }
+        .ix-row::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--sig); transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.7s var(--ease-out); z-index: 1; }
+        .ix-list.has-hover .ix-row:not(.is-hover) { opacity: 0.16; }
+        .ix-row.is-hover::before { transform: scaleX(1); }
+
+        .ix-row__no, .ix-row__year, .ix-row__client, .ix-row__aw, .ix-row__cta { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+        .ix-row__no { color: var(--dim); transition: color 0.3s linear; }
+        .ix-row.is-hover .ix-row__no { color: var(--sig); }
+        .ix-row__year { color: var(--paper); }
+        .ix-row__client { color: var(--dim); }
+        .ix-row__title { font: 600 clamp(30px, 5.6vw, 96px)/1 var(--sans); letter-spacing: -0.045em; white-space: nowrap; transform: translate3d(0, 0, 0); transition: transform 0.8s var(--ease-out); }
+        .ix-row.is-hover .ix-row__title { transform: translate3d(1.2vw, 0, 0); }
+        .ix-row__aw { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+        .ix-row__aw a { position: relative; color: var(--paper); }
+        .ix-row__aw a::after { content: ''; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: 100% 50%; transition: transform 0.4s var(--ease-out); }
+        .ix-row__aw a:hover { color: var(--sig); }
+        .ix-row__aw a:hover::after { transform: scaleX(1); transform-origin: 0 50%; }
+        .ix-row__cta { justify-self: end; }
+        .ix-row__cta a { display: inline-flex; gap: 8px; align-items: center; padding: 6px 0; color: var(--paper); }
+        .ix-row__cta a i { font-style: normal; display: inline-block; transition: transform 0.5s var(--ease-out); }
+        .ix-row.is-hover .ix-row__cta a i { transform: translate3d(4px, -4px, 0); color: var(--sig); }
+        .ix-row__cta span.is-off { color: var(--dim); }
+
+        .ix-foot { display: flex; justify-content: space-between; padding-top: 28px; color: var(--dim); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+
+        .ix-gl { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20; }
+        .ix-float { position: fixed; left: 0; top: 0; width: 26vw; aspect-ratio: 16 / 10; pointer-events: none; z-index: 20; opacity: 0; transition: opacity 0.35s linear; will-change: transform; }
+        .ix-float.is-on { opacity: 1; }
+
+        @media (max-width: 900px) {
+            .ix-cols { display: none; }
+            .ix-row { grid-template-columns: 3ch 1fr auto; row-gap: 4px; }
+            .ix-row__year { grid-column: 3; grid-row: 1; justify-self: end; }
+            .ix-row__client { grid-column: 2; grid-row: 1; }
+            .ix-row__title { grid-column: 1 / -1; grid-row: 2; }
+            .ix-row__aw { grid-column: 1 / 3; grid-row: 3; }
+            .ix-row__cta { grid-column: 3; grid-row: 3; }
+            .ix-note { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <main class="ix">
+        <header class="ix-head">
+            <div>
+                <p class="pl-kicker">Slide 03 &mdash; Selected works, 2019 &rarr; 2025</p>
+                <h1 class="ix-word">Projects<sup>(16)</sup></h1>
+            </div>
+            <p class="ix-note">An index, <em>not a gallery</em> &mdash; the work surfaces only where you point.</p>
+        </header>
+        <div class="ix-cols" aria-hidden="true"><span>No.</span><span>Year</span><span>Client</span><span>Project</span><span>Recognition</span><span style="text-align:right">Link</span></div>
+        <ol class="ix-list" id="ixList"></ol>
+        <footer class="ix-foot"><span>16 entries</span><span>Hover &middot; scroll with the pointer still</span></footer>
+    </main>
+    <canvas class="ix-gl" id="ixGl" aria-hidden="true"></canvas>
+
+    <script src="/guide/projects-lab/data.js"></script>
+    <script src="/guide/projects-lab/lab.js"></script>
+    <script src="/guide/projects-lab/d01-index.js"></script>
+</body>
+</html>

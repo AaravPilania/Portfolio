@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects Lab / 05 Marquee</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/guide/projects-lab/lab.css">
+    <style>
+        body { background: #000; overflow-x: hidden; }
+        .mq-head { padding: calc(var(--pad) * 2) var(--pad) 6vh; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4vw; }
+        .mq-head h1 { margin: 14px 0 0; font: italic 300 clamp(40px, 6.4vw, 120px)/0.92 var(--serif); letter-spacing: -0.03em; }
+        .mq-head h1 b { font: 600 1em/1 var(--sans); font-style: normal; letter-spacing: -0.05em; text-transform: uppercase; }
+        .mq-head .mq-note { margin: 0; max-width: 30ch; text-align: right; color: var(--dim); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1.8; }
+        .mq-speed { color: var(--sig); font-variant-numeric: tabular-nums; }
+
+        .mq-list { border-top: 1px solid var(--rule); }
+        .mq-row { position: relative; overflow: hidden; isolation: isolate; background: #000; border-bottom: 1px solid var(--rule); transition: opacity 0.5s var(--ease-out); }
+        .mq-list.has-hover .mq-row:not(.is-hover) { opacity: 0.22; }
+        .mq-track { display: flex; width: max-content; white-space: nowrap; will-change: transform; padding: clamp(6px, 0.8vw, 14px) 0 clamp(2px, 0.4vw, 8px); }
+        .mq-seq { display: flex; align-items: baseline; flex: none; }
+        .mq-item { display: inline-flex; align-items: baseline; gap: 0.3em; padding-right: 0.45em; font: 600 clamp(52px, 8.6vw, 156px)/0.98 var(--sans); letter-spacing: -0.05em; }
+        .mq-item small { font: 500 clamp(10px, 0.8vw, 13px)/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; align-self: center; transform: translateY(-0.4em); }
+        .mq-item .mq-star { font-size: 0.5em; transform: translateY(-0.3em); display: inline-block; }
+
+        .mq-track--base { color: rgba(244, 242, 234, 0.92); transition: color 0.35s linear; }
+        .mq-track--base small { color: var(--dim); }
+        .mq-row.is-hover .mq-track--base, .mq-row.is-hover .mq-track--base small { color: #fff; }
+        .mq-media { position: absolute; inset: 0; z-index: 1; mix-blend-mode: multiply; opacity: 0; transition: opacity 0.45s linear; pointer-events: none; }
+        .mq-media .pl-media { position: absolute; inset: -10% 0; }
+        .mq-row.is-hover .mq-media { opacity: 1; }
+        .mq-track--outline { position: absolute; left: 0; top: 0; z-index: 2; color: transparent; -webkit-text-stroke: 1px var(--sig); opacity: 0; transition: opacity 0.35s linear; pointer-events: none; }
+        .mq-track--outline small, .mq-track--outline .mq-star { -webkit-text-stroke: 0; color: transparent; }
+        .mq-row.is-hover .mq-track--outline { opacity: 1; }
+
+        .mq-tag { position: absolute; right: var(--pad); top: 50%; z-index: 3; display: flex; gap: 0; transform: translate3d(0, -50%, 0); pointer-events: none; opacity: 0; transition: opacity 0.3s linear; font: 500 10px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
+        .mq-tag span { padding: 8px 10px 7px; background: #000; box-shadow: inset 0 0 0 1px rgba(244,242,234,0.3); }
+        .mq-tag span:first-child { background: var(--sig); color: var(--ink); box-shadow: none; }
+        .mq-row.is-hover .mq-tag { opacity: 1; }
+        .mq-hit { position: absolute; inset: 0; z-index: 4; }
+
+        .mq-foot { padding: 14vh var(--pad) 24vh; display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <header class="mq-head">
+        <div>
+            <p class="pl-kicker">Slide 03 &mdash; Wire service</p>
+            <h1><b>Projects</b>, on the wire</h1>
+        </div>
+        <p class="mq-note">Every line runs on its own. Scroll pushes them, reverse flips them. Hover to stop the press &mdash; <span class="mq-speed" id="mqSpeed">1.00&times;</span></p>
+    </header>
+    <section class="mq-list" id="mqList"></section>
+    <footer class="mq-foot"><span>16 lines &middot; 2019&ndash;2025</span><span>End of transmission</span></footer>
+
+    <script src="/guide/projects-lab/data.js"></script>
+    <script src="/guide/projects-lab/lab.js"></script>
+    <script src="/guide/projects-lab/d05-marquee.js"></script>
+</body>
+</html>
