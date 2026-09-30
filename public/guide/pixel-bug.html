@@ -54,6 +54,11 @@
                         s.src = '/js/pixel-bug.js';
                         w.document.body.appendChild(s);
                         document.getElementById('mpDock').classList.add('is-visible');
+                        // The site pins GLITCH; swap to the stored pick once its bug has mounted
+                        (function applyPick() {
+                            if (w.__pixelBugSetSkin) w.__pixelBugSetSkin(initial);
+                            else setTimeout(applyPick, 200);
+                        })();
                         return;
                     }
                 } catch (e) { /* not ready */ }

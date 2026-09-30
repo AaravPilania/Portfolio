@@ -4,6 +4,9 @@
     'use strict';
     if (window.__pixelBug) return;
     window.__pixelBug = true;
+    try {
+        if (window.frameElement && window.frameElement.hasAttribute('data-no-bug')) return;
+    } catch (e) { /* cross-origin parent */ }
 
     const doc = document;
     const S = 2;                      // CSS px per sprite pixel
@@ -107,16 +110,20 @@
     ] };
     const SKINS = {
         beetle: { name: 'GLITCH', body: BODY, ant: ANT, legDx: 0, wings: 'membrane',
-            welcome: 'hi. i\'m glitch. every good site ships with one bug. i\'m it.', scroll: 'scroll-jacked.' },
+            welcome: 'hi. i\'m glitch. every good site ships with one bug. i\'m it.', scroll: 'scroll-jacked.',
+            click: ['click. clack. i\'m a click beetle now.', 'that\'s not a bug report. that\'s a summons.'] },
         firefly: { name: 'SPARK', body: FIREFLY, legDx: 3, wings: 'membrane', lantern: true,
             ant: { out: [[10, 3], [9, 2], [8, 1], [7, 1]], up: [[11, 3], [11, 2], [10, 1]], wide: [[10, 3], [9, 3], [8, 2], [7, 2], [6, 1]], down: [[10, 3], [9, 3], [8, 4], [7, 5]] },
-            welcome: 'hi. i\'m spark. i light up when you find the good stuff.', scroll: 'my light can\'t keep up with you.' },
+            welcome: 'hi. i\'m spark. i light up when you find the good stuff.', scroll: 'my light can\'t keep up with you.',
+            click: ['flash. saw that.', 'lighting the way.'] },
         stag: { name: 'PINCH', body: STAG, legDx: 0, wings: 'membrane', extra: MANDIBLE,
             ant: { out: [[6, 5], [5, 4], [4, 4], [3, 3]], up: [[6, 5], [6, 4], [5, 3]], wide: [[6, 5], [5, 5], [4, 4], [3, 4], [2, 3]], down: [[5, 6], [4, 7], [3, 8]] },
-            welcome: 'i\'m pinch. i guard the portfolio. mostly by standing here.', scroll: 'easy. these pincers aren\'t seatbelts.' },
+            welcome: 'i\'m pinch. i guard the portfolio. mostly by standing here.', scroll: 'easy. these pincers aren\'t seatbelts.',
+            click: ['you poked the guard.', 'pinch first, questions later.'] },
         moth: { name: 'DUST', body: MOTH, legDx: 0, wings: 'moth', noLegs: true,
             ant: { out: [[10, 3], [9, 2], [8, 2], [8, 1], [7, 1]], up: [[11, 3], [10, 2], [10, 1], [9, 1]], wide: [[10, 3], [9, 3], [8, 2], [7, 2], [7, 1], [6, 1]], down: [[10, 3], [9, 3], [8, 3], [7, 4]] },
-            welcome: 'i\'m dust. came for the glow of your screen, stayed for the work.', scroll: 'wheee. is that a lamp?' },
+            welcome: 'i\'m dust. came for the glow of your screen, stayed for the work.', scroll: 'wheee. is that a lamp?',
+            click: ['was that a light switch?', 'drawn to it. can\'t help it.'] },
     };
     const GLYPH = {
         heart: ['yy.yy', 'yyyyy', '.yyy.', '..y..'],
@@ -134,6 +141,8 @@
         pet: ['tickles.', '*antennae intensify*', 'careful. i bite. in bytes.', 'you\'re not squashing me. i like you.'],
         caught: ['gotcha. not a feature.', 'reproduced it.', 'found you. marking as resolved.', 'faster than your QA team.', 'tag. you\'re the bug now.'],
         flip: ['i\'m fine. this is fine.', 'help. legs. air.', 'undefined is not a function.', 'works on my machine.'],
+        click: ['on it.', 'you rang?', 'breakpoint hit.', 'what\'s over there?', 'is that a crumb?', 'clicked. logged. investigating.',
+            'right behind you.', 'event received.', 'ooh, a click.', 'coming. six legs, one speed.'],
     };
 
     function blank() {
@@ -385,30 +394,39 @@
             wake();
         }, { passive: true });
 
-        const scroller = doc.querySelector('.js-scroller');
-        const scrollTop = () => (scroller ? scroller.scrollTop : window.scrollY);
-        // Scroll velocity is smoothed in the listener itself (Lenis writes scrollTop each frame), so detection
-        // doesn't depend on the render loop's frame rate; a sustained fast stretch arms a takeoff for the loop
-        let lastSt = scrollTop(), lastStAt = performance.now(), scrollV = 0, fastStart = 0, scrollArmed = 0;
-        let lastScrollMove = -1e9, lastScrollFly = -1e9, lastScrollSay = -1e9;
-        (scroller || window).addEventListener('scroll', () => {
-            const now = performance.now(), st = scrollTop();
-            const ms = now - lastStAt;
-            if (ms > 0) {
-                const v = (st - lastSt) / ms * 1000;
-                scrollV += (v - scrollV) * (1 - Math.exp(-ms / 60));
+        // Velocity is measured over a sliding window in the listener, so it holds up whether scroll events
+        // arrive every 8ms or every 100ms; a fast window arms a takeoff for the loop.
+        // Captured on the document because swup can swap the .js-scroller element after mount.
+        const FAST = 1200, WINDOW = 200;
+        const trace = [];
+        let traceEl = null, scrollV = 0, scrollArmed = 0;
+        let lastScrollMove = -1e9, lastScrollFly = -1e9, lastScrollSay = -1e9, scrollFlights = 0;
+        const scrollOf = (el) => (el === window ? window.scrollY : el.scrollTop);
+        const initialScroller = doc.querySelector('.js-scroller') || window;
+        trace.push([performance.now(), scrollOf(initialScroller)]);
+        traceEl = initialScroller;
+        doc.addEventListener('scroll', (e) => {
+            const t = e.target;
+            const page = t === doc || t === doc.documentElement || t === doc.body || t === doc.scrollingElement;
+            if (!page && !(t.classList && t.classList.contains('js-scroller'))) return;
+            const el = page ? window : t;
+            const now = performance.now(), st = scrollOf(el);
+            if (el !== traceEl) {
+                traceEl = el;
+                trace.length = 0;
             }
-            if (Math.abs(st - lastSt) > 0.5) lastScrollMove = now;
-            if (Math.abs(scrollV) > 1800) {
-                if (!fastStart) fastStart = now;
-                else if (now - fastStart > 120) scrollArmed = Math.sign(scrollV);
-            } else {
-                fastStart = 0;
-            }
-            lastSt = st;
-            lastStAt = now;
+            const prev = trace.length ? trace[trace.length - 1][1] : st;
+            if (Math.abs(st - prev) > 0.5) lastScrollMove = now;
+            // After an idle gap the old position is re-timed to two frames ago, so the first frame of a flick counts
+            if (trace.length && now - trace[trace.length - 1][0] > 400) trace.splice(0, trace.length - 1, [now - 33, prev]);
+            trace.push([now, st]);
+            while (trace.length > 2 && now - trace[1][0] > WINDOW) trace.shift();
+            const span = now - trace[0][0];
+            const v = (st - trace[0][1]) / Math.min(Math.max(span, 16), 1000) * 1000;
+            scrollV = v;
+            if (Math.abs(v) > FAST && Math.abs(st - trace[0][1]) > 40) scrollArmed = Math.sign(v);
             lastActive = now;
-        }, { passive: true });
+        }, { passive: true, capture: true });
 
         function spawn(kind, n) {
             const count = n || 1;
@@ -427,12 +445,12 @@
         // --- Speech bubble with a fixed footprint so typing never reflows it
         const queue = [];
         let say = null;
-        function speak(text, now) {
+        function speak(text, now, kind) {
             ghost.textContent = text;
             typed.textContent = '';
             bubble.classList.remove('is-done');
             bubble.classList.add('is-on');
-            say = { text, start: now, hold: 1900 + text.length * 48, bw: bubble.offsetWidth, bh: bubble.offsetHeight };
+            say = { text, kind, start: now, hold: 1900 + text.length * 48, bw: bubble.offsetWidth, bh: bubble.offsetHeight };
         }
         function enqueue(text) {
             if (queue.indexOf(text) < 0) queue.push(text);
@@ -543,6 +561,44 @@
             }
         }
 
+        // Any click on the page gets a reaction: usually a scurry to the spot, sometimes a start in place.
+        // Passive and never prevented, so links and buttons still work underneath.
+        let lastClickSay = -1e9, clickLine = 0;
+        const clickPool = () => LINES.click.concat(skin.click || []);
+        doc.addEventListener('pointerdown', (e) => {
+            if (e.button > 0 || bug.contains(e.target)) return;
+            const now = performance.now();
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.t = now;
+            mouse.seen = true;
+            if (state === 'held' || state === 'flip' || press) return;
+            const wasAsleep = state === 'sleep';
+            wake();
+            twitch = 0.35;
+            twitchSide = e.clientX < x ? 'L' : 'R';
+            if (!wasAsleep) spawn('bang');
+            squash = Math.max(squash, 0.12);
+            const spot = { x: e.clientX, y: e.clientY };
+            if (!reduced) {
+                if (act && act.type === 'fly' && act.phase === 'air') {
+                    act.scroll = false;
+                    act.pts[0] = spot;
+                } else if (Math.random() < 0.7 && Math.hypot(spot.x - x, spot.y - y) > 44) {
+                    act = { type: 'visit', spot, until: now + 4200 };
+                } else {
+                    act = { type: 'pause', until: now + 700 + Math.random() * 500, face: true };
+                }
+            }
+            const free = !say || say.kind === 'click';
+            if (free && now - lastClickSay > 2500 && Math.random() < 0.8) {
+                lastClickSay = now;
+                const pool = clickPool();
+                clickLine = (clickLine + 1 + (Math.random() * (pool.length - 1) | 0)) % pool.length;
+                speak(pool[clickLine], now, 'click');
+            }
+        }, { passive: true });
+
         function caught(now) {
             happy = 2.2;
             spawn('heart');
@@ -602,14 +658,16 @@
             let liftTo = 0;
 
             // Fast scrolling blows it off its feet: a short flight that drifts with the scroll and lands once it settles
-            if (now - lastScrollMove > 120) {
-                scrollV *= Math.exp(-dt * 10);
-                fastStart = 0;
-            }
+            if (now - lastScrollMove > 200) scrollV *= Math.exp(-dt * 10);
+            // Every fast stretch launches a flight, in either direction; only the line that goes with it is rationed
             const armed = scrollArmed;
             scrollArmed = 0;
-            if (armed && !(act && act.scroll) && now - lastScrollFly > 6000 && state !== 'held' && state !== 'flip' && !reduced) {
+            if (armed && act && act.scroll) {
+                act.dir = armed;
+                act.until = Math.max(act.until, now + 1500);
+            } else if (armed && (now - lastScrollFly > 900 || (act && act.type === 'fly')) && state !== 'held' && state !== 'flip' && !reduced) {
                 lastScrollFly = now;
+                scrollFlights++;
                 if (state === 'sleep') {
                     state = 'idle';
                     spawn('bang');
@@ -644,9 +702,9 @@
 
                 // A lot of cursor movement sometimes catches its eye, but it won't drop everything every time
                 if (now > nextInterest) {
-                    nextInterest = now + 1600;
+                    nextInterest = now + 1000;
                     const busy = act && (act.type === 'visit' || act.type === 'fly');
-                    if (!busy && cursorLive && mouse.travel > 260 && Math.random() < 0.35) act = { type: 'visit', until: now + 4200 };
+                    if (!busy && cursorLive && mouse.travel > 180 && Math.random() < 0.5) act = { type: 'visit', until: now + 4200 };
                     mouse.travel = 0;
                 }
                 if ((near || hover) && act && act.type === 'visit') {
@@ -669,7 +727,7 @@
                     const menu = say
                         ? [['pause', 3], ['groom', 2]]
                         : [['roam', 28], ['scuttle', 16], ['pause', 16], ['groom', 12], ['circle', 8], ['fly', 8],
-                            ['visit', mouse.seen && now - lastVisit > 9000 ? 7 : 0]];
+                            ['visit', mouse.seen && now - lastVisit > 3500 ? 9 : 0]];
                     let roll = Math.random() * menu.reduce((a, m) => a + m[1], 0);
                     let type = menu[0][0];
                     for (const [t, w] of menu) { if ((roll -= w) < 0) { type = t; break; } }
@@ -708,8 +766,9 @@
 
                 let target = 0, goal = null;
                 if (act && act.type === 'visit') {
-                    const dx = x - mouse.x, dy = y - mouse.y, d = Math.hypot(dx, dy) || 1;
-                    goal = { x: clampX(mouse.x + dx / d * 38), y: clampY(mouse.y + dy / d * 38) };
+                    const at = act.spot || mouse;
+                    const dx = x - at.x, dy = y - at.y, d = Math.hypot(dx, dy) || 1;
+                    goal = { x: clampX(at.x + dx / d * 38), y: clampY(at.y + dy / d * 38) };
                     if (now > act.until) {
                         act = { type: 'pause', until: now + 900 };
                         goal = null;
@@ -753,7 +812,12 @@
                     const through = act.pts && act.i < act.pts.length - 1;
                     if (dist < (through ? 12 : 6)) {
                         if (act.type === 'visit') {
-                            if (travelled > 100) caught(now);
+                            if (act.spot) {
+                                happy = 0.8;
+                                twitch = 0.35;
+                            } else if (travelled > 100) {
+                                caught(now);
+                            }
                             lastVisit = now;
                             act = { type: 'pause', until: now + 2400, face: true };
                         } else if (act.type === 'fly') {
@@ -771,7 +835,7 @@
                         const want = Math.atan2(dy, dx) + (act.type === 'roam' ? Math.sin(clock * 7.3) * 0.35 : 0);
                         let da = want - heading;
                         da = Math.atan2(Math.sin(da), Math.cos(da));
-                        const turn = (act.type === 'fly' ? 4.5 : speed < 50 ? 18 : 9) * dt;
+                        const turn = (act.type === 'fly' ? (act.scroll ? 8 : 4.5) : speed < 50 ? 18 : 9) * dt;
                         heading += Math.max(-turn, Math.min(turn, da));
                         const top = act.type === 'visit' ? Math.min(SPEED.visit, 90 + dist * 0.9) : SPEED[act.type];
                         target = through ? top : Math.min(top, Math.sqrt(2 * 1800 * Math.max(0, dist - 4)));
@@ -925,12 +989,15 @@
             squash = 0.25;
             speak(skin.welcome, performance.now());
         };
-        window.__pixelBugState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed, lift, skin: skinKey, scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll) });
+        window.__pixelBugState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed, lift, skin: skinKey, scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll), scrollDir: act && act.scroll ? act.dir : 0, scrollFlights, spot: !!(act && act.spot) });
         if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH, SKINS: Object.keys(SKINS) };
     }
 
+    // The AP loader flags the page is-loaded while its own canvas is still playing on top, so wait for that too
     function ready() {
-        if (doc.body && doc.body.classList.contains('is-loaded')) mount();
+        const intro = doc.getElementById('apIntro');
+        const introOn = intro && intro.isConnected && !intro.classList.contains('is-done') && intro.style.display !== 'none';
+        if (doc.body && doc.body.classList.contains('is-loaded') && !introOn) mount();
         else setTimeout(ready, 200);
     }
     ready();
