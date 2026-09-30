@@ -1,0 +1,124 @@
+/* Slide 04 skills wheel, layered over the services particle backdrop (which this file never styles) */
+
+/* Row 16's asterisk hides while its clone flies */
+#section-projects .projects__entry-index.sk-detached::before {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+/* Scroll length comes from this track (1 viewport of stage + 1.15 viewports per category); the stage sticks inside it */
+.sk {
+    --sk-pad: clamp(18px, 3.2vw, 56px);
+    --sk-sun: #FFED29;
+    --sk-paper: #f4f2ea;
+    --sk-hair: rgba(244, 242, 234, 0.22);
+    --sk-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
+    --sk-sans: 'PP-Mori', 'Suisse Intl', sans-serif;
+    --sk-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='%23000' stroke-width='3.2' stroke-linecap='square'%3E%3Cpath d='M3 12h18'/%3E%3Cpath d='M7.5 4.2l9 15.6'/%3E%3Cpath d='M16.5 4.2l-9 15.6'/%3E%3C/g%3E%3C/svg%3E");
+    grid-column: 1 / -1;
+    justify-self: start;
+    position: relative;
+    z-index: 2;
+    width: var(--sk-w, 100vw);
+    margin-left: var(--sk-x, calc(50% - 50vw));
+    height: calc(100vh + 5 * 115vh);
+    pointer-events: none;
+}
+
+.sk__stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: visible;
+}
+
+.sk-star {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    z-index: 3;
+    width: var(--sk-S, 55vmin);
+    height: var(--sk-S, 55vmin);
+    margin-top: calc(var(--sk-S, 55vmin) / -2);
+    background: var(--sk-sun);
+    -webkit-mask: var(--sk-star) center / contain no-repeat;
+    mask: var(--sk-star) center / contain no-repeat;
+    transform-origin: 50% 50%;
+    will-change: transform;
+    opacity: 0;
+}
+
+/* Meer "legacy" swap: one category at a time, title in the middle column, its skills right-aligned on the same axis */
+.sk-legacy { position: absolute; inset: 0; z-index: 2; }
+.sk-cat { position: absolute; inset: 0; }
+.ll-section--services .sk-title {
+    position: absolute;
+    left: 29%;
+    width: 40%;
+    top: 50%;
+    margin: 0;
+    transform: translateY(-50%);
+    font-family: 'Brier', Georgia, serif !important;
+    font-weight: 700;
+    font-size: clamp(2.8rem, 5.8vw, 6.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    color: #fff;
+}
+.sk-kicker {
+    display: block;
+    margin: 0 0 0.9rem;
+    font: 500 11px/1 var(--sk-mono);
+    letter-spacing: 0.16em;
+    color: var(--sk-sun);
+}
+.sk-set {
+    position: absolute;
+    right: var(--sk-pad);
+    top: 50%;
+    transform: translateY(-50%);
+    max-width: 27%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    text-align: right;
+    font-family: var(--sk-sans);
+    font-weight: 400;
+    font-size: clamp(16px, 1.55vw, 26px);
+    line-height: 1.22;
+    letter-spacing: -0.02em;
+    color: rgba(244, 242, 234, 0.86);
+}
+.sk-set li { display: block; }
+
+/* Per-character masks: each word (title) or item (skills) clips its own glyphs so multi-line text never bleeds between lines */
+.sk-mk { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+.sk-ch { display: inline-block; will-change: transform; }
+.sk-set .sk-mk { white-space: nowrap; }
+
+@media (max-width: 900px) {
+    .ll-section--services .sk-title { left: 27%; width: 44%; font-size: clamp(2.2rem, 7vw, 4rem); }
+    .sk-set { max-width: 30%; font-size: 14px; }
+}
+
+/* Reduced motion: no sticky wheel; the star sits in the slide and every category is listed statically */
+@media (prefers-reduced-motion: reduce) {
+    .sk { height: auto; }
+    .sk__stage { position: relative; height: auto; min-height: 100vh; }
+    .sk-star { opacity: 1; }
+    .sk-legacy { position: relative; inset: auto; padding: 16vh var(--sk-pad) 10vh 29%; }
+    .sk-cat {
+        position: relative;
+        inset: auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 4vw;
+        padding: 3vh 0;
+        border-top: 1px solid var(--sk-hair);
+    }
+    .ll-section--services .sk-title, .sk-set { position: static; transform: none; }
+    .ll-section--services .sk-title { width: auto; flex: 1 1 55%; font-size: clamp(2rem, 3.6vw, 4rem); }
+    .sk-set { max-width: 40%; }
+}

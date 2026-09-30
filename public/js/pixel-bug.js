@@ -136,7 +136,7 @@
         hero: ['move your cursor. he watches it. i just try not to get squashed.', 'drag me anywhere. i won\'t file a report.'],
         screen: ['same guy, smaller screen. i live in the gaps between the words.', 'keep it simple, stupid. i\'m the simple part.'],
         projects: ['the good work is down here. hover a row, i\'ll wait on the line.', 'zero bugs in any of these. except me, visiting.'],
-        services: ['how he pays rent. i work for crumbs.', 'party tricks. mine is vanishing on refresh.'],
+        services: ['scroll me. i\'m a wheel now.', 'six arms, five stacks. i ride the spare one.'],
         logos: ['people he\'s shipped with. none of them caught me.', 'big names. i\'ve crawled across all their screens.'],
         pet: ['tickles.', '*antennae intensify*', 'careful. i bite. in bytes.', 'you\'re not squashing me. i like you.'],
         caught: ['gotcha. not a feature.', 'reproduced it.', 'found you. marking as resolved.', 'faster than your QA team.', 'tag. you\'re the bug now.'],
@@ -375,6 +375,8 @@
         let twitch = 0, twitchSide = 'L', nextTwitch = 1.5;
         const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false, travel: 0 };
         const parts = [];
+        const LEASH_MS = 700;
+        let leash = null, sceneLine = '';
         const entering = () => !!(act && act.phase === 'entry');
 
         window.addEventListener('resize', () => {
@@ -645,7 +647,7 @@
             if (!wasAsleep) spawn('bang');
             squash = Math.max(squash, 0.12);
             const spot = { x: e.clientX, y: e.clientY };
-            if (!reduced && !entering()) {
+            if (!reduced && !entering() && !leash) {
                 if (act && act.type === 'fly' && act.phase === 'air') {
                     act.scroll = false;
                     act.pts[0] = spot;
@@ -697,6 +699,36 @@
             announce(skin.welcome, now);
         }
 
+        // Buzzing in place after a fast scroll; returns the lift to hold while it lasts
+        function hoverStep(now) {
+            speed = 0;
+            const k = Math.min(1, (now - act.t0) / 200);
+            hoverX = (Math.sin(clock * 23) * 1.5 + Math.sin(clock * 37) * 1) * k;
+            hoverY = (Math.sin(clock * 11) * 3 - 3 + Math.sin(clock * 41) * 0.8) * k;
+            hoverTilt = Math.sin(clock * 7) > 0.55 ? 1 : Math.sin(clock * 7) < -0.55 ? -1 : 0;
+            if (Math.abs(scrollV) > 200) act.dir = Math.sign(scrollV);
+            if (now > act.until && now - lastScrollMove > 250) {
+                act.phase = 'land';
+                act.until = now + 340;
+                squash = 0.2;
+            }
+            return 0.8;
+        }
+
+        // Six feet, one pair of track dots per step, only while it's on the ground
+        function footsteps(dt) {
+            if (speed > 20 && lift < 0.1) {
+                const prev = Math.floor(stride);
+                stride += speed * dt / 7;
+                if (Math.floor(stride) !== prev) {
+                    stepSide = -stepSide;
+                    const c = Math.cos(heading), s = Math.sin(heading);
+                    dot(x - s * 8 * stepSide + c * 5, y + c * 8 * stepSide + s * 5);
+                    dot(x + s * 8 * stepSide - c * 4, y - c * 8 * stepSide - s * 4);
+                }
+            }
+        }
+
         function loop(now) {
             // rAF timestamps can trail performance.now(), so the first step may come out negative
             const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
@@ -742,6 +774,8 @@
             }
             hoverX = hoverY = hoverTilt = 0;
 
+            // A drag or a flip always wins over a leash; the leash then re-approaches from wherever it was dropped
+            if (leash && (state === 'held' || state === 'flip')) leash.t0 = now;
             if (state === 'held') {
                 x = mouse.x - press.ox;
                 y = mouse.y - press.oy;
@@ -755,6 +789,39 @@
                     squash = 0.2;
                     pauseUntil = now + 500;
                 }
+            } else if (leash && !reduced) {
+                // A scene steers it (the slide 04 skills wheel): it chases the target loosely, then locks on by LEASH_MS.
+                // Scroll hovers and speech still play on top; it flies while the target is far and walks once it's close.
+                wob *= 0.8;
+                lastActive = now;
+                if (act && act.type === 'fly' && act.scroll) {
+                    if (act.phase === 'hover') liftTo = hoverStep(now);
+                    else if (now > act.until) act = null;
+                } else {
+                    act = null;
+                }
+                const p = leash.target(now);
+                speed = 0;
+                if (p) {
+                    const k = Math.min(1, (now - leash.t0) / LEASH_MS);
+                    const px = clampX(p.x), py = clampY(p.y);
+                    let nx = px, ny = py;
+                    if (k < 1) {
+                        const f = 1 - Math.exp(-dt * (4 + 26 * k * k));
+                        nx = x + (px - x) * f;
+                        ny = y + (py - y) * f;
+                        if (Math.hypot(px - x, py - y) > 90) liftTo = 1;
+                    }
+                    const moved = Math.hypot(nx - x, ny - y);
+                    const want = k < 1 && moved > 1 ? Math.atan2(ny - y, nx - x) : p.heading;
+                    const da = Math.atan2(Math.sin(want - heading), Math.cos(want - heading));
+                    heading += Math.max(-14 * dt, Math.min(14 * dt, da));
+                    x = nx;
+                    y = ny;
+                    if (dt > 0) speed = moved / dt;
+                }
+                footsteps(dt);
+                state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
             } else if (state !== 'sleep' && !reduced) {
                 wob *= 0.8;
                 const near = Math.hypot(mouse.x - x, mouse.y - y) < 26;
@@ -844,18 +911,7 @@
                         liftTo = 1;
                         if (k >= 1) land(now);
                     } else if (act.phase === 'hover') {
-                        speed = 0;
-                        liftTo = 0.8;
-                        const k = Math.min(1, (now - act.t0) / 200);
-                        hoverX = (Math.sin(clock * 23) * 1.5 + Math.sin(clock * 37) * 1) * k;
-                        hoverY = (Math.sin(clock * 11) * 3 - 3 + Math.sin(clock * 41) * 0.8) * k;
-                        hoverTilt = Math.sin(clock * 7) > 0.55 ? 1 : Math.sin(clock * 7) < -0.55 ? -1 : 0;
-                        if (Math.abs(scrollV) > 200) act.dir = Math.sign(scrollV);
-                        if (now > act.until && now - lastScrollMove > 250) {
-                            act.phase = 'land';
-                            act.until = now + 340;
-                            squash = 0.2;
-                        }
+                        liftTo = hoverStep(now);
                     } else if (act.phase === 'warm') {
                         if (now > act.until) act.phase = 'air';
                     } else if (act.phase === 'air') {
@@ -924,18 +980,7 @@
                     y = clampY(y);
                 }
                 travelled += speed * dt;
-
-                // Six feet, one pair of track dots per step, only while it's on the ground
-                if (speed > 20 && lift < 0.1) {
-                    const prev = Math.floor(stride);
-                    stride += speed * dt / 7;
-                    if (Math.floor(stride) !== prev) {
-                        stepSide = -stepSide;
-                        const c = Math.cos(heading), s = Math.sin(heading);
-                        dot(x - s * 8 * stepSide + c * 5, y + c * 8 * stepSide + s * 5);
-                        dot(x + s * 8 * stepSide - c * 4, y - c * 8 * stepSide - s * 4);
-                    }
-                }
+                footsteps(dt);
                 state = flying ? 'fly' : speed > 20 ? 'walk' : act && act.type === 'groom' ? 'groom' : 'idle';
             }
             lift += (liftTo - lift) * Math.min(1, dt * 6);
@@ -1065,7 +1110,37 @@
             squash = 0.25;
             speak(skin.welcome, now, 'skin', USER);
         };
-        window.__pixelBugState = () => ({ live, state, x, y, section, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
+        // Scenes can take GLITCH over: target(now) returns { x, y, heading } in viewport px every frame (heading 0 = right).
+        // Passing null hands it back to wandering from wherever the scene left it.
+        window.__pixelBugLeash = (target) => {
+            const now = performance.now();
+            if (target) {
+                leash = { target, t0: now };
+                wake(now, true);
+                entered = true;
+                if (act && !(act.type === 'fly' && act.scroll)) act = null;
+            } else if (leash) {
+                leash = null;
+                if (act && !(act.type === 'fly' && act.scroll)) act = null;
+                pauseUntil = now + 600;
+            }
+        };
+        // Scene narration: never cuts off a reaction to the user, and a newer scene line replaces a queued older one
+        window.__pixelBugSay = (text) => {
+            const qi = sceneLine ? queue.indexOf(sceneLine) : -1;
+            if (qi >= 0) queue.splice(qi, 1);
+            if (!text || !live) {
+                if (say && say.kind === 'scene') hush();
+                sceneLine = '';
+                return;
+            }
+            const now = performance.now();
+            sceneLine = text;
+            wake(now, true);
+            if (say && say.pri >= USER) queue.unshift(text);
+            else speak(text, now, 'scene', SECTION);
+        };
+        window.__pixelBugState = () => ({ live, state, x, y, section, leash: !!leash, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
             entering: entering(), parts: parts.length, act: act && act.type, phase: act && act.phase, speed, lift, skin: skinKey,
             scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll), scrollDir: act && act.scroll ? act.dir : 0, scrollFlights, spot: !!(act && act.spot) });
         if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH, SKINS: Object.keys(SKINS) };
