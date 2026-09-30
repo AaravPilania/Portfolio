@@ -1029,6 +1029,7 @@ uniform float uProgressEnter;
 uniform float uProgressEnterPixel;
 uniform float uColsFactor;
 uniform float uRatio;
+uniform vec2 uUvScale;
 uniform sampler2D uTxt;
 uniform sampler2D uNoiseTxt;
 varying vec2 vUv;
@@ -1067,7 +1068,7 @@ void main() {
     );
     puv = mix(puv, vUv, smoothstep(0.9, 1.0, np));
 
-    vec4 txt = texture2D(uTxt, puv);
+    vec4 txt = texture2D(uTxt, (puv - 0.5) * uUvScale + 0.5);
 
     gl_FragColor = vec4(txt.rgb, alpha);
 }`;
@@ -1080,7 +1081,6 @@ void main() {
         { colsFactor: 4, smallColsFactor: 3, noiseFactor: 0.045 }
     ];
 
-    const Z_OFFSETS = [{ z: 0 }, { z: 120 }, { z: 200 }, { z: 40 }];
     const P3 = n => Math.sin(0.3 * n - Math.cos(1 * n)) + Math.sin(0.4 * n + Math.cos(2 * n));
 
     // Global Preloaded Resource Store
@@ -1088,7 +1088,7 @@ void main() {
 
     function preloadAllProjectAssets() {
         PROJECTS.forEach(project => {
-            project.images.forEach(img => {
+            project.images.slice(0, 1).forEach(img => {
                 if (RESOURCES.has(img.key)) return;
 
                 if (img.type === 'video') {
@@ -1160,12 +1160,14 @@ void main() {
     }
 
     class ProjectGroup extends THREE.Group {
-        constructor(data, presetRtt, onRemoveCallback, type = "desktop") {
+        constructor(data, presetRtt, onRemoveCallback, row, sectionTop) {
             super();
             this.data = data;
             this.presetRtt = presetRtt;
             this.onRemoveCallback = onRemoveCallback;
-            this.type = type;
+            this.row = row;
+            this.box = null;
+            this.texture = null;
             this.meshes = [];
             this.videos = [];
             this.tl1 = gsap.timeline();
@@ -1176,17 +1178,66 @@ void main() {
             this.visible = false;
             this.uuid = THREE.MathUtils.generateUUID();
 
+            this.measure(sectionTop);
             this.init();
         }
 
+        measure(sectionTop) {
+            if (!this.row) return;
+            const rowRect = this.row.getBoundingClientRect();
+            const gap = this.row.querySelector('.projects__entry-gap');
+            let left, width;
+            const gapRect = gap ? gap.getBoundingClientRect() : null;
+            if (gapRect && gapRect.width >= 40) {
+                left = gapRect.left;
+                width = gapRect.width;
+            } else {
+                width = rowRect.width * 0.85;
+                left = rowRect.left + (rowRect.width - width) * 0.5;
+            }
+            this.box = { left, width, top: rowRect.top - sectionTop, height: rowRect.height };
+        }
+
+        mediaAspect() {
+            const src = this.texture && this.texture.image;
+            if (src) {
+                const w = src.videoWidth || src.naturalWidth || 0;
+                const h = src.videoHeight || src.naturalHeight || 0;
+                if (w && h) return w / h;
+            }
+            return 16 / 10;
+        }
+
+        layout(sectionTop, vw, vh) {
+            const b = this.box;
+            const mesh = this.meshes[0];
+            if (!b || !mesh) return;
+
+            const aspect = this.mediaAspect();
+            const w = b.width;
+            const h = Math.min(w / aspect, vh * 0.7);
+            const pad = 16;
+            let cy = sectionTop + b.top + b.height * 0.5;
+            if (h + pad * 2 < vh) cy = Math.min(Math.max(cy, h * 0.5 + pad), vh - h * 0.5 - pad);
+
+            this.position.x = b.left + w * 0.5 - vw * 0.5;
+            this.position.y = vh * 0.5 - cy;
+            this.scale.set(w, h, 1);
+
+            const u = mesh.material.uniforms;
+            const meshRatio = w / h;
+            u.uRatio.value = meshRatio;
+            if (meshRatio > aspect) u.uUvScale.value.set(1, aspect / meshRatio);
+            else u.uUvScale.value.set(meshRatio / aspect, 1);
+        }
+
         init() {
-            const { colsFactor, smallColsFactor } = this.presetRtt.preset;
+            const { colsFactor } = this.presetRtt.preset;
             const noiseTex = this.presetRtt.texture;
 
-            this.data.images.forEach((imgData, idx) => {
-                const isBig = idx === 0;
-                const cols = isBig ? colsFactor : smallColsFactor;
-                
+            this.data.images.slice(0, 1).forEach((imgData) => {
+                const cols = colsFactor;
+
                 let texture = RESOURCES.get(imgData.key);
                 let isVideo = imgData.type === 'video';
 
@@ -1215,12 +1266,7 @@ void main() {
                     this.videos.push(texture.userData.video);
                 }
 
-                const d = 16 / 9;
-                const f = 1;
-                const m = f / d;
-                const g = f * imgData.width;
-                const pos = imgData.position[this.type] || imgData.position.desktop || [0, 0];
-                const y = g / d;
+                this.texture = texture;
 
                 const mat = new THREE.ShaderMaterial({
                     vertexShader: MESH_VS,
@@ -1230,12 +1276,13 @@ void main() {
                         uProgressEnterPixel: { value: 0 },
                         uTxt: { value: texture },
                         uColsFactor: { value: cols },
-                        uRatio: { value: d },
+                        uRatio: { value: 16 / 10 },
+                        uUvScale: { value: new THREE.Vector2(1, 1) },
                         uNoiseTxt: { value: noiseTex }
                     },
                     defines: {
                         DECODE_VIDEO_TEXTURE: isVideo,
-                        IS_BIG: isBig
+                        IS_BIG: true
                     },
                     transparent: true,
                     depthTest: false,
@@ -1244,11 +1291,6 @@ void main() {
 
                 const geom = new THREE.PlaneGeometry(1, 1);
                 const mesh = new THREE.Mesh(geom, mat);
-                mesh.scale.x = g;
-                mesh.scale.y = y;
-                mesh.position.x = pos[0] * 0.5 * f;
-                mesh.position.y = pos[1] * 0.5 * m;
-                mesh.position.z = (Z_OFFSETS[idx] || { z: 0 }).z;
                 mesh.userData.initialPosition = mesh.position.clone();
 
                 this.meshes.push(mesh);
@@ -1374,7 +1416,7 @@ void main() {
 
             preloadAllProjectAssets();
 
-            this.tracker = document.querySelector('.projects__gl');
+            this.section = document.getElementById('section-projects');
             this.renderer = new THREE.WebGLRenderer({
                 canvas: this.canvas,
                 alpha: true,
@@ -1404,7 +1446,8 @@ void main() {
             };
             this.clock = new THREE.Clock();
             this.timeElapsed = 0;
-            this.size = { w: 600, h: 600 };
+            this.vw = window.innerWidth;
+            this.vh = window.innerHeight;
 
             this.initNoiseMaps();
             this.initAudio();
@@ -1520,7 +1563,7 @@ void main() {
 
                 this.presetProgress = targetIdx % this.noisePresets.length;
                 const key = targetRow.getAttribute('data-project-key');
-                if (key) this.enterProject(key);
+                if (key) this.enterProject(key, targetRow);
             };
 
             this.checkSectionBounds = () => {
@@ -1634,7 +1677,7 @@ void main() {
                 // Click row to launch project
                 row.addEventListener('click', (e) => {
                     if (e.target.closest('a')) return;
-                    const ctaLink = row.querySelector('.projects__entry-cta a');
+                    const ctaLink = row.querySelector('.projects__entry-cta:not(.projects__entry-cta--github) a');
                     if (ctaLink && ctaLink.href) {
                         window.open(ctaLink.href, '_blank');
                     }
@@ -1647,7 +1690,7 @@ void main() {
             setTimeout(() => this.checkSectionBounds(), 100);
         }
 
-        enterProject(key) {
+        enterProject(key, row) {
             const projectData = PROJECTS.find(p => p.key === key);
             if (!projectData) return;
 
@@ -1666,12 +1709,15 @@ void main() {
             }
 
             const presetRtt = this.noisePresets[this.presetProgress];
+            const secTop = this.section ? this.section.getBoundingClientRect().top : 0;
             const pGroup = new ProjectGroup(
                 projectData,
                 presetRtt,
                 () => { if (prevId) this.removeItem(prevId); },
-                window.innerWidth < 650 ? "mobile" : "desktop"
+                row,
+                secTop
             );
+            pGroup.layout(secTop, this.vw, this.vh);
 
             this.queueMap.set(pGroup.uuid, pGroup);
             this.lastEnterKey = pGroup.uuid;
@@ -1709,22 +1755,13 @@ void main() {
             this.camera.aspect = w / h;
             this.camera.updateProjectionMatrix();
 
-            if (!this.tracker) this.tracker = document.querySelector('.projects__gl');
-            const rect = this.tracker ? this.tracker.getBoundingClientRect() : { width: Math.min(1000, w * 0.52), height: 600 };
-            const scaleW = rect.width > 100 ? rect.width : (w >= 650 ? Math.min(1000, w * 0.52) : w * 0.85);
-            
-            this.size.w = scaleW;
-            this.size.h = scaleW * (9 / 16);
+            this.vw = w;
+            this.vh = h;
 
-            this.contentGroup.scale.x = this.size.w;
-            this.contentGroup.scale.y = this.size.w;
-
-            if (window.innerWidth < 650) {
-                this.contentGroup.position.y = 30;
-            } else {
-                this.contentGroup.position.y = 0;
+            if (this.queueMap.size) {
+                const secTop = this.section ? this.section.getBoundingClientRect().top : 0;
+                this.queueMap.forEach(group => group.measure(secTop));
             }
-            this.contentGroup.position.x = 0;
         }
 
         animate() {
@@ -1754,18 +1791,15 @@ void main() {
                 this.floatYArr[i] = P3(this.timeElapsed * 0.5 + i);
             }
 
-            // Animate queue items
+            // Each group is pinned to its row's gap cell; tilt stays small so the plane never leaves it
+            const secTop = this.sectionTop || 0;
             this.queueMap.forEach(group => {
+                group.layout(secTop, this.vw, this.vh);
                 group.animate(this.floatYArr, this.mouse.smooth);
+                group.rotation.y = this.mouse.smooth.x * 0.08;
+                group.rotation.x = this.mouse.smooth.y * -0.05;
+                group.rotation.z = this.speed * 0.3;
             });
-
-            // Authentic Robert Borghesi mouse parallax & tilt on content group
-            const baseY = window.innerWidth < 650 ? 30 : 0;
-            this.contentGroup.position.x = this.mouse.smooth.x * (0.15 * this.size.w);
-            this.contentGroup.position.y = baseY + this.mouse.smooth.y * (0.03 * this.size.h);
-            this.contentGroup.rotation.y = this.mouse.smooth.x * 0.3;
-            this.contentGroup.rotation.x = this.mouse.smooth.y * -0.15;
-            this.contentGroup.rotation.z = this.speed;
 
             this.renderer.render(this.scene, this.camera);
         }
