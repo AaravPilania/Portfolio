@@ -1,5 +1,5 @@
-// Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, spins once the slide pins,
-// GLITCH orbits it, and the five skill rows rise in over the Lama Lama particle backdrop.
+// Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, then turns like a scroll wheel.
+// Each detent is one arm (60°) and swaps in the next category with Meer Mohsin's "legacy" per-character rise.
 (function () {
     'use strict';
     const doc = document;
@@ -15,104 +15,107 @@
     const bubble = $('#skBubble');
     const ghost = bubble.querySelector('.pb-ghost');
     const typed = bubble.querySelector('.pb-type');
+    const cats = [...doc.querySelectorAll('#skLegacy .sk-cat')];
+    const N = cats.length;
 
-    const rows = [...doc.querySelectorAll('#skRows .sk-row')];
-    const SKILLS = rows.map((r) => r.querySelector('.sk-skills').textContent.split(',').map((s) => s.trim()));
-    const HEADS = rows.map((r) => r.querySelector('.sk-head').textContent.trim());
-
-    const LINES = [
-        'orbiting his stack. small universe, big bundle.',
-        'react 19. i\'m still on 0.0.1-beta.',
-        'pytorch trained a model to find bugs. it found me. twice.',
-        'fastapi is fast. i have six legs. we\'re even.',
-        'gsap does the easing. i do the queasing.',
-        'docker? i live in a container too. it\'s called a div.',
-        'SELECT * FROM crumbs WHERE free = true;',
-        'RAG: retrieval augmented glitching.',
-        'c++ has pointers. i have antennae. same energy.',
-        'multi-agent pipeline. i\'m the agent of chaos.',
-        'git blame says it was me. git blame is right.',
-        'three.js renders in 3d. i\'m two pixels deep.',
+    const CAT_LINES = [
+        'frontend. react 19, gsap, three.js. and still nobody can center me.',
+        'backend. fastapi and postgres. i live in the logs now.',
+        'ai / ml. pytorch found me in the training data. rude.',
+        'seven languages. i only speak segfault.',
+        'git, docker, ollama. git blame still says it was me.',
     ];
+    const IDLE_LINE = 'scroll me. i\'m a wheel now.';
 
-    const OMEGA = Math.PI * 2 / 16;
-    const st = { travel: 0, travelT: 0, angle: 0, speed: 0, bug: 0, revealed: false };
-    let W = 0, H = 0, S = 0, cx = 0;
-    let srcY = 0, srcS = 0.03;
-    let pinST = null, reveal = null, frame = '', lineIdx = 0, sayTimer = null, say = null;
+    const ARM = Math.PI / 3;          // one detent: the asterisk's six arms repeat every 60°
+    const HOLD = 1.1;                 // timeline seconds each category rests at its detent
+    const STEP_VH = 1.15;             // viewport heights of scroll per category
+    const STRIDE_REF = ARM * 1.5;     // rad/s that counts as a full walking stride for the bug
 
-    function wrapLine(parent, nodes) {
-        const m = doc.createElement('span'), l = doc.createElement('span');
-        m.className = 'ln-mask';
-        l.className = 'ln';
-        nodes.forEach((n, k) => {
-            l.appendChild(n);
-            if (k < nodes.length - 1) l.appendChild(doc.createTextNode(' '));
+    const st = { travel: 0, travelT: 0, wheel: 0, bug: 0, angle: 0, vel: 0 };
+    let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03;
+    let pinST = null, tl = null, total = 1, frame = '', sayTimer = null, say = null, active = -1;
+    const inStart = [];
+
+    // Meer's split: every glyph is its own inline-block inside an overflow mask; spaces become nbsp so widths hold
+    function splitInto(parent, text, whole) {
+        const chars = [];
+        const groups = whole ? [text] : text.split(' ');
+        groups.forEach((g, gi) => {
+            const mk = doc.createElement('span');
+            mk.className = 'mk';
+            for (const c of g) {
+                const ch = doc.createElement('span');
+                ch.className = 'ch';
+                ch.textContent = c === ' ' ? '\u00a0' : c;
+                mk.appendChild(ch);
+                chars.push(ch);
+            }
+            parent.appendChild(mk);
+            if (gi < groups.length - 1) parent.appendChild(doc.createTextNode(' '));
         });
-        m.appendChild(l);
-        parent.appendChild(m);
+        return chars;
     }
 
-    // Masked-line split: skill units are grouped by rendered offsetTop so each visual line gets its own overflow mask
-    function buildRows() {
-        rows.forEach((row, i) => {
-            const h = row.querySelector('.sk-head');
-            h.textContent = '';
-            wrapLine(h, [doc.createTextNode(HEADS[i])]);
-            const idx = row.querySelector('.sk-idx');
-            const n = idx.textContent.trim();
-            idx.textContent = '';
-            wrapLine(idx, [doc.createTextNode(n)]);
-
-            const p = row.querySelector('.sk-skills');
-            p.textContent = '';
-            const units = SKILLS[i].map((item, k, all) => {
-                const u = doc.createElement('span');
-                u.style.whiteSpace = 'nowrap';
-                u.textContent = item;
-                if (k < all.length - 1) {
-                    const s = doc.createElement('span');
-                    s.className = 'sep';
-                    s.textContent = ' /';
-                    u.appendChild(s);
-                }
-                return u;
-            });
-            units.forEach((u, k) => {
-                p.appendChild(u);
-                if (k < units.length - 1) p.appendChild(doc.createTextNode(' '));
-            });
-            const lines = [];
-            let top = null;
-            units.forEach((u) => {
-                const t = u.offsetTop;
-                if (top === null || Math.abs(t - top) > 2) { lines.push([]); top = t; }
-                lines[lines.length - 1].push(u);
-            });
-            p.textContent = '';
-            lines.forEach((ws) => wrapLine(p, ws));
+    const parts = cats.map((cat, i) => {
+        const title = cat.querySelector('.sk-title');
+        const label = title.textContent.trim();
+        title.setAttribute('aria-label', label);
+        title.textContent = '';
+        const kick = doc.createElement('span');
+        kick.className = 'sk-kicker';
+        kick.setAttribute('aria-hidden', 'true');
+        title.appendChild(kick);
+        const kickChars = splitInto(kick, '[ 0' + (i + 1) + ' / 0' + N + ' ]', true);
+        const titleChars = kickChars.concat(splitInto(title, label, false));
+        const items = [];
+        cat.querySelectorAll('li').forEach((li) => {
+            const t = li.textContent.trim();
+            li.setAttribute('aria-label', t);
+            li.textContent = '';
+            items.push(...splitInto(li, t, true));
         });
-    }
+        return { title: titleChars, items };
+    });
 
-    function buildReveal() {
-        if (reveal) reveal.kill();
-        reveal = gsap.timeline({ paused: true });
-        rows.forEach((row, i) => {
-            const at = i * 0.14;
-            reveal.fromTo(row, { '--rule': 0 }, { '--rule': 1, duration: 1.1, ease: 'expo.inOut' }, at);
-            reveal.fromTo(row.querySelectorAll('.sk-idx .ln, .sk-head .ln'), { yPercent: 112, rotation: 3.5 },
-                { yPercent: 0, rotation: 0, duration: 1.25, ease: 'expo.out' }, at + 0.06);
-            row.querySelectorAll('.sk-skills .ln').forEach((l, k) => {
-                reveal.fromTo(l, { yPercent: 112, rotation: 3.5 }, { yPercent: 0, rotation: 0, duration: 1.25, ease: 'expo.out' }, at + 0.14 + k * 0.08);
-            });
+    // Meer's per-glyph stagger, capped: our skill lists run 2-3x his glyph count and would otherwise swallow the detent
+    const perGlyph = (each, n, cap) => Math.min(each, cap / Math.max(1, n - 1));
+
+    function buildTimeline() {
+        tl = gsap.timeline({ paused: true });
+        const titleIn = [], outStart = [];
+        parts.forEach((p, i) => {
+            const first = i === 0;
+            const t0 = tl.duration();
+            const dur = first ? 1 : 0.6;
+            const ease = first ? 'power1.out' : 'power4.out';
+            inStart[i] = t0;
+            tl.fromTo(p.title, { yPercent: 120 }, { yPercent: 0, stagger: 0.03, duration: dur, ease, immediateRender: true }, t0);
+            tl.fromTo(p.items, { yPercent: 120 }, { yPercent: 0, stagger: perGlyph(0.04, p.items.length, 1.8), duration: 0.6, ease, immediateRender: true }, t0);
+            titleIn[i] = t0 + dur + 0.03 * (p.title.length - 1);
+            const rest = tl.duration() + HOLD;
+            if (i < N - 1) {
+                outStart[i] = rest;
+                tl.to(p.title, { yPercent: -120, stagger: 0.02, duration: 1, ease: 'power1.out' }, rest);
+                tl.to(p.items, { yPercent: -120, stagger: perGlyph(0.02, p.items.length, 0.9), duration: 1, ease: 'power1.out' }, rest);
+            } else {
+                tl.to({}, { duration: HOLD }, tl.duration());
+            }
         });
-        reveal.progress(st.revealed ? 1 : 0);
+        // The wheel turns one arm per category, landing as that category's title settles
+        parts.forEach((p, i) => {
+            const a = i === 0 ? 0 : outStart[i - 1];
+            tl.fromTo(st, { wheel: i }, { wheel: i + 1, duration: titleIn[i] - a, ease: 'power2.inOut', immediateRender: false }, a);
+        });
+        total = tl.duration();
+        const detents = parts.map((p, i) => (i < N - 1 ? outStart[i] - HOLD * 0.5 : total - HOLD * 0.5) / total);
+        return [0].concat(detents, [1]);
     }
 
     function measure() {
         W = sec.clientWidth;
         H = sec.clientHeight;
-        S = Math.round(Math.min(W, H) * (W < 650 ? 0.7 : 0.58));
+        S = Math.round(Math.min(W, window.innerHeight) * (W < 650 ? 0.7 : 0.58));
         sec.style.setProperty('--S', S + 'px');
         // Row 16's ::before: a 0.8em box flush left in the index cell, vertically centred
         const r = src.getBoundingClientRect();
@@ -136,21 +139,22 @@
 
     function render(now) {
         const e = ease(st.travel);
-        const rot = 60 * e + st.angle * 180 / Math.PI;
         const on = st.travel > 0.0005;
         star.style.opacity = on ? 1 : 0;
         src.classList.toggle('is-detached', on);
-        star.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) rotate(' + rot + 'deg) scale(' + (srcS + (1 - srcS) * e) + ')';
+        star.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) rotate(' + (60 * e + st.angle * 180 / Math.PI) + 'deg) scale(' + (srcS + (1 - srcS) * e) + ')';
 
-        // Bug starts in the top V of the star (same x as its centre) and turns with it; x is clamped so the left arc stays on screen
+        // Bug starts in the top V of the star (same x as its centre) and rides the wheel; x is clamped so the left arc stays on screen
         const th = st.angle - Math.PI / 2;
         const R = S * 0.44 + 40;
         const bx = Math.max(34, Math.min(W - 34, cx + R * Math.cos(th)));
         const by = Math.max(40, Math.min(H - 40, H / 2 + R * Math.sin(th)));
-        const head = th + Math.PI / 2 + (Math.PI / 2) * Math.min(1, st.speed);
+        const m = Math.max(-1, Math.min(1, st.vel / STRIDE_REF));
+        const head = th + Math.PI / 2 + (Math.PI / 2) * m;
         bugEl.style.opacity = st.bug;
         bugEl.style.transform = 'translate3d(' + bx + 'px,' + by + 'px,0) rotate(' + head + 'rad) scale(' + (1 + (1 - st.bug) * 0.6) + ')';
-        drawBug(st.speed > 0.05 ? (Math.floor(now / (140 / Math.max(0.4, st.speed))) % 2 ? 'a' : 'b') : 'mid');
+        const am = Math.abs(m);
+        drawBug(am > 0.05 ? (Math.floor(now / (140 / Math.max(0.4, am))) % 2 ? 'a' : 'b') : 'mid');
 
         if (say) {
             if (!reduced) {
@@ -171,60 +175,40 @@
         }
     }
 
-    function speak(text) {
+    function speak(text, hold) {
+        clearTimeout(sayTimer);
         ghost.textContent = text;
         typed.textContent = reduced ? text : '';
         bubble.classList.toggle('is-done', reduced);
         bubble.classList.add('is-on');
         say = { text, t0: performance.now(), n: -1, bw: bubble.offsetWidth, bh: bubble.offsetHeight };
+        if (hold) sayTimer = setTimeout(hush, text.length * 28 + hold);
     }
 
     function hush() {
+        clearTimeout(sayTimer);
         bubble.classList.remove('is-on');
         say = null;
     }
 
-    function chatter(delay) {
-        clearTimeout(sayTimer);
-        sayTimer = setTimeout(() => {
-            const text = LINES[lineIdx % LINES.length];
-            lineIdx++;
-            speak(text);
-            sayTimer = setTimeout(() => {
-                hush();
-                chatter(3200 + Math.random() * 3600);
-            }, text.length * 28 + 2600);
-        }, delay);
-    }
-
-    function spinOn() {
-        st.revealed = true;
-        reveal.timeScale(1).play();
-        gsap.to(st, { speed: 1, duration: 1.6, ease: 'power2.inOut', overwrite: 'auto' });
-        gsap.to(st, { bug: 1, duration: 0.45, ease: 'steps(4)' });
-        chatter(1400);
-    }
-
-    function spinOff() {
-        st.revealed = false;
-        reveal.timeScale(1.8).reverse();
-        gsap.to(st, { speed: 0, duration: 0.9, ease: 'power2.out', overwrite: 'auto' });
-        gsap.to(st, { bug: 0, duration: 0.3, ease: 'steps(3)' });
-        clearTimeout(sayTimer);
-        hush();
+    function onProgress(self) {
+        const t = self.progress * total;
+        let next = -1;
+        for (let i = 0; i < N; i++) if (t >= inStart[i] + 0.3) next = i;
+        if (next === active) return;
+        active = next;
+        if (active >= 0) speak(CAT_LINES[active], 2600);
     }
 
     function init() {
-        buildRows();
         if (reduced) {
             doc.documentElement.classList.add('is-reduced');
             st.travel = 1;
             st.bug = 1;
             measure();
-            speak(LINES[0]);
+            speak(IDLE_LINE, 0);
             render(0);
             window.addEventListener('resize', () => {
-                buildRows();
                 measure();
                 render(0);
             });
@@ -232,28 +216,33 @@
         }
 
         gsap.registerPlugin(ScrollTrigger);
-        buildReveal();
+        const snaps = buildTimeline();
         ScrollTrigger.create({
             trigger: sec, start: 'top bottom', end: 'top top',
             onUpdate: (self) => { st.travelT = self.progress; },
         });
         pinST = ScrollTrigger.create({
-            trigger: sec, start: 'top top', end: '+=150%', pin: true,
-            onEnter: spinOn,
-            onLeaveBack: spinOff,
+            trigger: sec, start: 'top top', end: () => '+=' + Math.round(window.innerHeight * STEP_VH * N),
+            pin: true, scrub: 0.7, animation: tl, invalidateOnRefresh: true,
+            snap: { snapTo: snaps, duration: { min: 0.35, max: 0.9 }, delay: 0.08, ease: 'power3.inOut' },
+            onEnter: () => gsap.to(st, { bug: 1, duration: 0.45, ease: 'steps(4)', overwrite: 'auto' }),
+            onLeaveBack: () => {
+                gsap.to(st, { bug: 0, duration: 0.3, ease: 'steps(3)', overwrite: 'auto' });
+                active = -1;
+                hush();
+            },
+            onUpdate: onProgress,
         });
-        ScrollTrigger.addEventListener('refreshInit', buildRows);
-        ScrollTrigger.addEventListener('refresh', () => {
-            measure();
-            buildReveal();
-        });
+        ScrollTrigger.addEventListener('refresh', measure);
         measure();
 
         gsap.ticker.add((time, dt) => {
-            const s = Math.min(dt, 50) / 1000;
+            const s = Math.max(1, Math.min(dt, 50)) / 1000;
             st.travel += (st.travelT - st.travel) * (1 - Math.exp(-s * 14));
             if (Math.abs(st.travelT - st.travel) < 1e-4) st.travel = st.travelT;
-            st.angle += st.speed * OMEGA * s;
+            const a = st.wheel * ARM;
+            st.vel += ((a - st.angle) / s - st.vel) * (1 - Math.exp(-s * 10));
+            st.angle = a;
             render(time * 1000);
         });
 
