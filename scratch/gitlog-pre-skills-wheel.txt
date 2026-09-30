@@ -1,0 +1,15 @@
+b6060e8 Turn slide 04's asterisk into a scroll-driven wheel: 60-degree detents swap one skill category at a time with Meer Mohsin's Legacy per-glyph rise
+932546a Skills slide: asterisk / headings / skills three-column rows over the services particle video backdrop
+cea88f4 Skills slide: single Lusion section-2 ribbon drawn on scroll with skills on a textPath marquee
+df27cd1 Skills slide: vertical asterisk drop in its own column, Lusion-style tilted ribbon marquees per category
+4b3a76c public: track ScrollTrigger.min.js used by the skills slide
+0cc3b15 Guide: skills slide prototype (asterisk travel, spin, Lusion line reveal, orbiting GLITCH)
+7ccd9b0 Projects: yellow six-arm asterisk before row numbers
+94512d5 Projects: sequential numbering, project names, GitHub button, single gap-fitted hover reveal
+5ff48bb Pixel bug: fast scroll hovers in place instead of flying off
+bc82c21 Projects lab 06: Meer stacked-steps study with row-hover reveal
+c7b5c0e Add Projects lab: hub + five alternative Projects section studies (index reveal, filmstrip, cylinder, contact sheet, marquee)
+aaae772 Add cursor lab: eight drop-in cursor concepts (pixel wake, plotter, ink bleed, dither halo, bracket morph, liquid pixel, afterimage, rubber stamp) around the white dot and bracket tag, with a live dock and test surfaces
+7aa5162 Give GLITCH a fly-in entrance the instant the intro hands over, and make every user interaction speak: shuffle-bag lines, user reactions replace the bubble, bursts throttled without going silent
+c6904b9 Add plate II bug concept gallery: 20 animated guide-bug specimens across ink, plotter, dither, ascii, riso, neon, metaball, stitch, halftone and more, with focus view, finalise and shortlist
+e5ab556 Centre the shrunk slide 2 card again and let its mirror haze out into the floor; ship GLITCH on the site
