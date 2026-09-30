@@ -144,7 +144,7 @@
         nav.setAttribute('aria-label', 'Projects lab');
         nav.innerHTML =
             '<a class="pl-dock__back" href="/guide/projects-lab.html" data-cursor="BACK">&larr; Lab</a>' +
-            '<span class="pl-dock__num">' + esc(num) + '<i>/05</i></span>' +
+            '<span class="pl-dock__num">' + esc(num) + '<i>/06</i></span>' +
             '<span class="pl-dock__name">' + esc(name) + '</span>' +
             (hint ? '<span class="pl-dock__hint">' + esc(hint) + '</span>' : '');
         document.body.appendChild(nav);

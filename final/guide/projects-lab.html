@@ -49,11 +49,11 @@
     <header class="hub-head">
         <div>
             <p class="pl-kicker">Guide &mdash; Projects lab</p>
-            <h1>Projects <em>five ways of showing sixteen things</em></h1>
+            <h1>Projects <em>six ways of showing sixteen things</em></h1>
         </div>
         <div class="hub-status">
             Slide 03 &middot; <b>16</b> projects<br>
-            <b>05</b> studies, same data<br>
+            <b>06</b> studies, same data<br>
             <a href="/">&larr; back to site</a>
         </div>
     </header>
@@ -106,6 +106,16 @@
                 <h2 class="hub-name">Marquee <em>/ on the wire</em></h2>
                 <p class="hub-concept">Each project is an endless line of type. Scroll speed pushes the lines and scrolling back up reverses them. Hover stops the press: the line freezes, the footage plays inside the letters, and a yellow outline traces the glyphs.</p>
                 <span class="hub-tags"><span>Scroll velocity</span><span>Blend mask</span><span>Dual track</span><span>#FFED29</span></span>
+            </div>
+            <span class="hub-go">Open <i>&rarr;</i></span>
+        </a></li>
+        <li class="hub-item"><a class="hub-link" href="projects-06-meer.html" data-cursor="OPEN 06">
+            <span class="hub-no">06</span>
+            <span class="hub-thumb"><canvas data-kind="meer" width="320" height="200"></canvas></span>
+            <div>
+                <h2 class="hub-name">Meer study <em>/ stacked steps</em></h2>
+                <p class="hub-concept">After meermohsin.me: a pinned stage where one card holds the centre, the previous shrinks away above and the next waits small below, over a blurred copy of the active work. Every project that steps in arrives through our row-hover reveal, with noise blocks dissolving in as the mosaic resolves.</p>
+                <span class="hub-tags"><span>Sticky pin</span><span>Noise reveal</span><span>Split words</span><span>Progress ring</span></span>
             </div>
             <span class="hub-go">Open <i>&rarr;</i></span>
         </a></li>
@@ -219,6 +229,29 @@
                     }
                     g.fillStyle = 'rgba(244,242,234,0.1)'; g.fillRect(0, y + 20, w, 1);
                 }
+            },
+            meer(g, w, h, t) {
+                g.fillStyle = '#0b0b0c'; g.fillRect(0, 0, w, h);
+                const cyc = t * 0.4, k = cyc % 1, e = 1 - Math.pow(1 - Math.min(1, k * 2.5), 4);
+                const lerp = (a, b) => a + (b - a) * e;
+                const cw = w * 0.45, ch = h * 0.5, cx = w * 0.28 + cw / 2;
+                const card = (y, s, o, fill) => {
+                    g.globalAlpha = o; g.fillStyle = fill;
+                    g.fillRect(cx - cw * s / 2, y * h + ch / 2 - ch * s / 2, cw * s, ch * s);
+                    g.globalAlpha = 1;
+                };
+                card(lerp(-0.10, -0.25), lerp(0.3, 0), lerp(0.4, 0), PAPER);
+                card(lerp(0.25, -0.10), lerp(1, 0.3), lerp(1, 0.4), PAPER);
+                card(lerp(0.80, 0.60), lerp(0.1, 0.3), lerp(0.1, 0.4), PAPER);
+                const s = lerp(0.3, 1), y = lerp(0.60, 0.25);
+                const x0 = cx - cw * s / 2, y0 = y * h + ch / 2 - ch * s / 2, pw = cw * s, ph = ch * s;
+                const cells = 12, rows = 7, prog = Math.min(1, k * 1.6);
+                for (let j = 0; j < rows; j++) for (let i = 0; i < cells; i++) {
+                    const n = (Math.sin(i * 12.9898 + j * 78.233 + Math.floor(cyc) * 3.1) * 43758.5453) % 1;
+                    if (Math.abs(n) < prog) { g.fillStyle = (i + j) % 3 ? DIM : SIG; g.fillRect(x0 + i * pw / cells, y0 + j * ph / rows, pw / cells + 0.5, ph / rows + 0.5); }
+                }
+                g.fillStyle = PAPER; g.fillRect(14, h / 2 - 4, 46, 8); g.fillRect(w - 70, h / 2 - 2, 50, 4);
+                g.strokeStyle = 'rgba(244,242,234,0.7)'; g.beginPath(); g.arc(w - 26, h * 0.72, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); g.stroke();
             }
         };
 
