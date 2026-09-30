@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide / Cursor Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/guide/cursor-lab/lab.css">
+</head>
+<body>
+
+<header class="cl-hero cl-paper" data-zone="paper">
+    <div class="cl-hero__bar cl-mono">
+        <span>[ AP — Cursor studies ]</span>
+        <span>Sheet 01 / 08</span>
+        <span>Scale 1:1</span>
+    </div>
+    <h1 class="cl-hero__title">
+        <span>Cursor</span>
+        <span><span class="cl-ring">Lab.<svg viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true"><path d="M58 6 C 30 2, 6 12, 5 30 C 4 48, 30 57, 55 56 C 82 55, 97 44, 95 28 C 93 12, 72 3, 48 5 C 36 6, 26 9, 20 13"/></svg></span></span>
+    </h1>
+    <div class="cl-hero__foot">
+        <p class="cl-hero__lede" data-cursor="TEXT">Eight pointers built from the site’s own parts: the white dot, the bracket tag and the 16px grid. Pick one in the dock, then run it across paper, black, a project index, links, prose and something you can throw around.</p>
+        <div class="cl-hero__spec cl-mono">
+            Grid 20 / 100<br>
+            Dot <b>#FFFFFF</b> · Z 99999999<br>
+            Keys 1–8 · ← →
+        </div>
+    </div>
+</header>
+
+<section class="cl-split" aria-label="Paper and void surfaces">
+    <div class="cl-paper" data-zone="paper">
+        <i class="cl-split__cross is-tl"></i><i class="cl-split__cross is-br"></i>
+        <span class="cl-split__word">Paper</span>
+        <span class="cl-split__cap cl-mono">Graph sheet · 20 / 100</span>
+    </div>
+    <div class="cl-split__void" data-zone="void">
+        <i class="cl-split__cross is-tl"></i><i class="cl-split__cross is-br"></i>
+        <span class="cl-split__word">Void</span>
+        <span class="cl-split__cap cl-mono cl-dim">#000 · cross the seam, the dot stays white</span>
+    </div>
+</section>
+
+<section class="cl-section cl-projects" data-zone="void">
+    <div class="cl-section__head">
+        <h2 class="cl-section__title">Index</h2>
+        <span class="cl-mono cl-dim">Rows → [ VIEW ] · Case link → [ OPEN ]</span>
+    </div>
+    <ul class="cl-rows">
+        <li class="cl-row" data-cursor="VIEW"><span class="cl-row__idx cl-mono cl-dim">01</span><span class="cl-row__name">Monolith Records</span><span class="cl-row__meta cl-mono cl-dim">WebGL · Identity</span><span class="cl-row__year cl-mono cl-dim">2026</span><a class="cl-row__link cl-mono" href="#" data-cursor="OPEN">Case ↗</a></li>
+        <li class="cl-row" data-cursor="VIEW"><span class="cl-row__idx cl-mono cl-dim">02</span><span class="cl-row__name">Salt &amp; Signal</span><span class="cl-row__meta cl-mono cl-dim">Editorial · Motion</span><span class="cl-row__year cl-mono cl-dim">2025</span><a class="cl-row__link cl-mono" href="#" data-cursor="OPEN">Case ↗</a></li>
+        <li class="cl-row" data-cursor="VIEW"><span class="cl-row__idx cl-mono cl-dim">03</span><span class="cl-row__name">Kiln Ceramics Archive</span><span class="cl-row__meta cl-mono cl-dim">Commerce · 3D</span><span class="cl-row__year cl-mono cl-dim">2025</span><a class="cl-row__link cl-mono" href="#" data-cursor="OPEN">Case ↗</a></li>
+        <li class="cl-row" data-cursor="VIEW"><span class="cl-row__idx cl-mono cl-dim">04</span><span class="cl-row__name">Night Bus Atlas</span><span class="cl-row__meta cl-mono cl-dim">Data · Cartography</span><span class="cl-row__year cl-mono cl-dim">2024</span><a class="cl-row__link cl-mono" href="#" data-cursor="OPEN">Case ↗</a></li>
+        <li class="cl-row" data-cursor="VIEW"><span class="cl-row__idx cl-mono cl-dim">05</span><span class="cl-row__name">Field Notes Radio</span><span class="cl-row__meta cl-mono cl-dim">Audio · Interaction</span><span class="cl-row__year cl-mono cl-dim">2024</span><a class="cl-row__link cl-mono" href="#" data-cursor="OPEN">Case ↗</a></li>
+    </ul>
+</section>
+
+<section class="cl-section cl-actions cl-paper" data-zone="paper">
+    <div class="cl-section__head">
+        <h2 class="cl-section__title">Links</h2>
+        <span class="cl-mono">Anything clickable → [ OPEN ]</span>
+    </div>
+    <div class="cl-actions__grid">
+        <div>
+            <a class="cl-biglink" href="#" data-cursor="OPEN">Start a<br>project<sup>↗</sup></a><br>
+            <a class="cl-mail" href="#" data-cursor="OPEN">hello@studio.ap</a>
+        </div>
+        <div>
+            <div class="cl-btns">
+                <button class="cl-btn is-primary" type="button" data-cursor="OPEN">[ Book a call ]</button>
+                <button class="cl-btn" type="button" data-cursor="OPEN">Download CV</button>
+            </div>
+            <nav class="cl-nav cl-mono" aria-label="Mock navigation">
+                <a href="#" data-cursor="OPEN">Work</a><a href="#" data-cursor="OPEN">About</a><a href="#" data-cursor="OPEN">Journal</a><a href="#" data-cursor="OPEN">Contact</a>
+            </nav>
+        </div>
+    </div>
+</section>
+
+<section class="cl-section cl-prose" data-zone="void">
+    <div class="cl-section__head">
+        <h2 class="cl-section__title">Prose</h2>
+        <span class="cl-mono cl-dim">Text → caret, no tag</span>
+    </div>
+    <div class="cl-prose__body">
+        <span class="cl-mono cl-sig">[ Note 03 ]</span>
+        <div>
+            <p data-cursor="TEXT">A cursor is the only part of a website that is always touching the visitor. It should behave like a good pen: quiet while you read, exact while you aim, a little theatrical when you commit.</p>
+            <p data-cursor="TEXT">Try selecting this sentence. The pointer narrows to an I-beam, the tag steps aside, and every study keeps the same bright white dot at its centre, so the site never loses its signature. Only the ink around it changes.</p>
+        </div>
+    </div>
+</section>
+
+<section class="cl-section cl-paper" data-zone="paper">
+    <div class="cl-section__head">
+        <h2 class="cl-section__title">Throw it</h2>
+        <span class="cl-mono">Card → [ DRAG ]</span>
+    </div>
+    <div class="cl-stage">
+        <div class="cl-card" data-cursor="DRAG">
+            <span class="cl-mono cl-sig">Specimen 07</span>
+            <span class="cl-card__px"></span>
+            <span class="cl-card__name">Drag<br>me</span>
+        </div>
+    </div>
+</section>
+
+<footer class="cl-foot cl-mono cl-dim" data-zone="void">
+    <span>Built on #siteCursorDot, #cursorLabel and the 16px grid</span>
+    <a href="/" data-cursor="OPEN">← Back to site</a>
+</footer>
+
+<aside class="cl-dock" data-cursor-fixed data-zone="void" aria-label="Cursor concepts">
+    <div class="cl-dock__meta">
+        <span class="cl-sig">[ Cursor lab ]</span>
+        <b data-active>—</b>
+        <span class="cl-dock__grow"></span>
+        <span class="cl-dock__hint">Drop-in <code data-code></code> · console for the hook</span>
+        <button class="cl-dock__toggle" type="button" data-reduced data-cursor="TOGGLE" aria-pressed="false">Reduced motion</button>
+    </div>
+    <div class="cl-dock__items"></div>
+</aside>
+
+<script src="/guide/cursor-lab/core.js"></script>
+<script src="/guide/cursor-lab/concepts.js"></script>
+<script src="/guide/cursor-lab/lab.js"></script>
+</body>
+</html>
