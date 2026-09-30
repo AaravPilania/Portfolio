@@ -23,17 +23,32 @@ const PORT = 9441;
     ws.send(JSON.stringify({ id: curId, method, params }));
   });
   await new Promise(r => ws.onopen = r);
+  await send('Runtime.enable');
+  const errs = [];
+  ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') errs.push(m.params.exceptionDetails.text + ' ' + (m.params.exceptionDetails.exception || {}).description); });
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: 'http://localhost:3010/guide/pixel-dog.html' });
   const F = `document.getElementById('siteFrame').contentWindow`;
-  for (let k = 0; k < 45; k++) {
-    await new Promise(r => setTimeout(r, 700));
+  const acts = [];
+  let maxSpeed = 0, lastAct = '';
+  const mouse = (x, y) => send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none' });
+  for (let k = 0; k < 110; k++) {
+    await new Promise(r => setTimeout(r, 350));
+    // Keep the dog awake with small wiggles far away, plus big sweeps in the second half
+    if (k % 8 === 0) await mouse(1380 - (k % 16), 60);
+    if (k > 60 && k % 6 === 0) for (let i = 0; i < 6; i++) await mouse(300 + i * 120, 300 + (k % 12) * 30);
     const v = (await send('Runtime.evaluate', { returnByValue: true, expression: `JSON.stringify(${F}.__pixelDogState ? ${F}.__pixelDogState() : null)` })).result.value;
     if (v && v !== 'null') {
       const s = JSON.parse(v);
-      console.log(k, s.state, Math.round(s.x), Math.round(s.y), 'goal', s.goal && Math.round(s.goal.x) + ',' + Math.round(s.goal.y) + ' ' + s.goal.kind, 'hd', s.heading.toFixed(2), 'sp', Math.round(s.speed), 'vp', s.vw, s.vh);
+      maxSpeed = Math.max(maxSpeed, s.speed);
+      const a = (s.act || '-') + '/' + s.state;
+      if (a !== lastAct) { acts.push((k > 60 ? '*' : '') + a); lastAct = a; }
     }
   }
+  console.log('activity sequence (* = cursor sweeping):', acts.join(' > '));
+  console.log('max speed seen:', Math.round(maxSpeed));
+  console.log('trail prints alive:', (await send('Runtime.evaluate', { returnByValue: true, expression: `${F}.document.querySelectorAll('.pd-paw').length` })).result.value);
+  console.log('errors:', errs.length ? errs.join('\n') : 'none');
   ws.close();
   chrome.kill();
   process.exit(0);

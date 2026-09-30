@@ -276,15 +276,17 @@
         const BODY_CX = (OX + DW / 2) * S, BODY_CY = (OY + DH / 2) * S;
         const FOOT_Y = (OY + DH) * S - 3;
         const home = () => ({ x: 24, y: vh - H - 8 });
-        // Runs in from the left edge, then lives on screen: chases the cursor, roams, sniffs, sits
+        // Runs in from the left edge, then plays on its own; visiting the cursor is just one of its moods
+        const SPEED = { visit: 400, roam: 120, zoom: 330, spin: 150, dash: 300 };
         let x = reduced ? home().x : -W, y = home().y, vx = 0, vy = 0;
-        let heading = 0, speed = 0, goal = reduced ? null : { x: home().x + BODY_CX + 60, y: home().y + BODY_CY, kind: 'roam' };
-        let pauseUntil = 0, sniffUntil = 0, stride = 0, footSide = 1;
+        let heading = 0, speed = 0, goal = null;
+        let act = reduced ? null : { type: 'roam', pts: [{ x: home().x + BODY_CX + 60, y: home().y + BODY_CY }], i: 0 };
+        let pauseUntil = 0, stride = 0, footSide = 1, nextInterest = 0, lastVisit = 0;
         let state = 'idle';
         let hover = false, happy = 0, squash = 0, hop = 0, rot = 0;
         let lastActive = performance.now(), nextBlink = 2, blink = 0, clock = 0;
         let travelled = 0, lastCaughtSay = -1e9;
-        const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false };
+        const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false, travel: 0 };
         const parts = [];
 
         window.addEventListener('resize', () => {
@@ -302,7 +304,10 @@
 
         doc.addEventListener('pointermove', (e) => {
             const now = performance.now();
-            if (mouse.t) mouse.vx = (e.clientX - mouse.x) / Math.max(1, now - mouse.t) * 1000;
+            if (mouse.t) {
+                mouse.vx = (e.clientX - mouse.x) / Math.max(1, now - mouse.t) * 1000;
+                mouse.travel += Math.hypot(e.clientX - mouse.x, e.clientY - mouse.y);
+            }
             mouse.x = e.clientX;
             mouse.y = e.clientY;
             mouse.t = now;
@@ -409,7 +414,7 @@
             if (state === 'held') {
                 state = 'idle';
                 vx = vy = speed = 0;
-                goal = null;
+                goal = act = null;
                 pauseUntil = performance.now() + 1500;
                 squash = 0.2;
                 label(hover ? '[ PET ]' : '');
@@ -512,7 +517,7 @@
                 if (now - lastActive > 18000 && !say && !queue.length) {
                     state = 'sleep';
                     vx = vy = speed = 0;
-                    goal = null;
+                    goal = act = null;
                     hush();
                 }
             }
@@ -527,50 +532,123 @@
                 rot *= 0.7;
                 const minX = BODY_CX - OX * S, maxX = vw - (W - BODY_CX) + OX * S;
                 const minY = BODY_CY - OY * S + 8, maxY = vh - (H - BODY_CY);
+                const clampX = (v) => Math.max(minX, Math.min(maxX, v));
+                const clampY = (v) => Math.max(minY, Math.min(maxY, v));
                 const near = Math.hypot(mouse.x - cx, mouse.y - cy) < 52;
-                const chasing = mouse.seen && now - mouse.t < 1400 && !near && !hover;
-                if (chasing) {
-                    goal = { x: mouse.x + 44, y: mouse.y + 40, kind: 'chase' };
-                } else if (near || hover) {
-                    if (goal && goal.kind === 'chase') goal = null;
-                } else if (!goal && !say && now > pauseUntil && now > sniffUntil) {
-                    // Off-lead: trot to a random spot on screen, not too close and not across the whole page
-                    let gx = cx, gy = cy;
-                    for (let i = 0; i < 8; i++) {
-                        gx = minX + 30 + Math.random() * Math.max(0, maxX - minX - 60);
-                        gy = minY + 30 + Math.random() * Math.max(0, maxY - minY - 60);
-                        const d = Math.hypot(gx - cx, gy - cy);
-                        if (d > 140 && d < 460) break;
+                const cursorLive = mouse.seen && now - mouse.t < 1500;
+
+                // A lot of cursor movement sometimes catches its eye, but it won't drop everything every time
+                if (now > nextInterest) {
+                    nextInterest = now + 1600;
+                    const busy = act && (act.type === 'visit' || act.type === 'bow');
+                    if (!busy && cursorLive && mouse.travel > 260 && Math.random() < 0.35) {
+                        act = { type: 'visit', until: now + 3800 };
                     }
-                    goal = { x: gx, y: gy, kind: 'roam' };
+                    mouse.travel = 0;
+                }
+                if ((near || hover) && act && act.type === 'visit') {
+                    act = null;
+                    pauseUntil = now + 1200;
+                }
+
+                if (!act && now > pauseUntil && !near && !hover) {
+                    const spot = (lo, hi) => {
+                        let gx = cx, gy = cy;
+                        for (let i = 0; i < 8; i++) {
+                            gx = minX + 30 + Math.random() * Math.max(0, maxX - minX - 60);
+                            gy = minY + 30 + Math.random() * Math.max(0, maxY - minY - 60);
+                            const d = Math.hypot(gx - cx, gy - cy);
+                            if (d > lo && d < hi) break;
+                        }
+                        return { x: gx, y: gy };
+                    };
+                    // While it's talking it only picks calm things so the bubble stays readable
+                    const menu = say
+                        ? [['sit', 3], ['sniff', 2]]
+                        : [['roam', 30], ['sniff', 14], ['sit', 18], ['zoom', 12], ['spin', 9], ['bow', 9], ['visit', mouse.seen && now - lastVisit > 9000 ? 8 : 0]];
+                    let roll = Math.random() * menu.reduce((a, m) => a + m[1], 0);
+                    let type = menu[0][0];
+                    for (const [t, w] of menu) { if ((roll -= w) < 0) { type = t; break; } }
+
+                    if (type === 'roam') {
+                        act = { type, pts: [spot(140, 420)], i: 0 };
+                    } else if (type === 'zoom') {
+                        // Zoomies: a fast lap around a loose loop
+                        const r = 90 + Math.random() * 70, n = 6, a0 = Math.random() * Math.PI * 2, dir = Math.random() < 0.5 ? 1 : -1;
+                        const ox = clampX(cx + Math.cos(a0) * r) - Math.cos(a0) * r, oy = clampY(cy + Math.sin(a0) * r) - Math.sin(a0) * r;
+                        const pts = [];
+                        for (let k = 1; k <= n + 1; k++) {
+                            const a = a0 + Math.PI + dir * k * Math.PI * 2 / n;
+                            pts.push({ x: ox + Math.cos(a0) * r + Math.cos(a) * r, y: oy + Math.sin(a0) * r + Math.sin(a) * r * 0.75 });
+                        }
+                        act = { type, pts, i: 0 };
+                    } else if (type === 'spin') {
+                        // Chasing its own tail: two tight laps on the spot
+                        const r = 22, pts = [], ccx = clampX(cx + r), ccy = clampY(cy);
+                        for (let k = 1; k <= 16; k++) {
+                            const a = Math.PI + k * Math.PI / 4;
+                            pts.push({ x: ccx + Math.cos(a) * r, y: ccy + Math.sin(a) * r });
+                        }
+                        act = { type, pts, i: 0 };
+                    } else if (type === 'visit') {
+                        act = { type, until: now + 3800 };
+                    } else {
+                        act = { type, until: now + (type === 'bow' ? 900 : type === 'sit' ? 2200 + Math.random() * 2600 : 1400 + Math.random() * 1200) };
+                    }
                 }
 
                 let target = 0;
+                goal = null;
+                if (act && act.type === 'visit') {
+                    goal = { x: clampX(mouse.x + 44), y: clampY(mouse.y + 40) };
+                    if (now > act.until) {
+                        act = { type: 'sniff', until: now + 1400 };
+                        goal = null;
+                    }
+                } else if (act && act.pts) {
+                    const p = act.pts[act.i];
+                    goal = { x: clampX(p.x), y: clampY(p.y) };
+                } else if (act && now > act.until) {
+                    if (act.type === 'bow') {
+                        // Play bow, then a bouncy dash
+                        hop = 1;
+                        const a = mouse.seen ? Math.atan2(mouse.y - cy, mouse.x - cx) : Math.random() * Math.PI * 2;
+                        act = { type: 'dash', pts: [{ x: cx + Math.cos(a) * 110, y: cy + Math.sin(a) * 110 }], i: 0 };
+                    } else {
+                        act = null;
+                        pauseUntil = now + 300 + Math.random() * 700;
+                    }
+                }
+
                 if (goal) {
-                    goal.x = Math.max(minX, Math.min(maxX, goal.x));
-                    goal.y = Math.max(minY, Math.min(maxY, goal.y));
                     const dx = goal.x - cx, dy = goal.y - cy, dist = Math.hypot(dx, dy);
-                    if (dist < 7) {
-                        if (goal.kind === 'chase' && travelled > 140) caught(now);
-                        if (goal.kind === 'roam') {
-                            if (Math.random() < 0.45) sniffUntil = now + 1200 + Math.random() * 900;
-                            pauseUntil = now + 1800 + Math.random() * 3200;
+                    const through = act && act.pts && act.i < act.pts.length - 1;
+                    if (dist < (through ? 16 : 7)) {
+                        if (act.type === 'visit') {
+                            if (travelled > 140) caught(now);
+                            lastVisit = now;
+                            act = { type: 'sit', until: now + 2400 };
+                        } else if (through) {
+                            act.i++;
+                        } else {
+                            if (act.type === 'spin') spawn('bang');
+                            act = null;
+                            pauseUntil = now + 400 + Math.random() * 900;
                         }
                         travelled = 0;
-                        goal = null;
                     } else {
                         // Heading turns at a limited rate so paths curve; a standing dog can pivot on the spot
                         const want = Math.atan2(dy, dx);
                         let da = want - heading;
                         da = Math.atan2(Math.sin(da), Math.cos(da));
-                        const turn = (speed < 80 ? 28 : 8) * dt;
+                        const turn = (speed < 70 ? 24 : act.type === 'spin' ? 9 : 6) * dt;
                         heading += Math.max(-turn, Math.min(turn, da));
-                        const top = goal.kind === 'chase' ? Math.min(820, 280 + dist * 1.8) : 230;
-                        target = Math.min(top, Math.sqrt(2 * 2400 * Math.max(0, dist - 5)));
-                        if (Math.abs(da) > 1.7) target = Math.min(target, 90);
+                        const top = act.type === 'visit' ? Math.min(SPEED.visit, 160 + dist * 0.9) : SPEED[act.type];
+                        target = through ? top : Math.min(top, Math.sqrt(2 * 1500 * Math.max(0, dist - 5)));
+                        if (Math.abs(da) > 1.7) target = Math.min(target, 70);
                     }
                 }
-                speed += Math.max(-3400 * dt, Math.min(2200 * dt, target - speed));
+                speed += Math.max(-2200 * dt, Math.min(1300 * dt, target - speed));
                 vx = Math.cos(heading) * speed;
                 vy = Math.sin(heading) * speed;
                 x += vx * dt;
@@ -588,7 +666,7 @@
                         pawPrint(fx, fy, heading);
                     }
                 }
-                state = speed > 25 ? 'walk' : now < sniffUntil ? 'sniff' : 'idle';
+                state = speed > 25 ? 'walk' : act && (act.type === 'sniff' || act.type === 'bow') ? act.type : 'idle';
             }
 
             nextBlink -= dt;
@@ -616,10 +694,14 @@
                 const f = Math.floor(stride) % 4;
                 pose.legs = ['walkL', 'stand', 'walkR', 'stand'][f];
                 pose.tail = f < 2 ? 'a' : 'b';
-                const amp = speed > 500 ? 3 : speed > 180 ? 2 : 1;
+                const amp = speed > 280 ? 3 : speed > 110 ? 2 : 1;
                 bob = -Math.round(Math.sin((stride % 1) * Math.PI) * amp);
-                pose.lean = Math.abs(vx) > 120 ? Math.sign(vx) : 0;
-                pose.tongue = speed > 560;
+                pose.lean = Math.abs(vx) > 90 ? Math.sign(vx) : 0;
+                pose.tongue = speed > 290;
+            } else if (state === 'bow') {
+                pose.lie = true;
+                pose.tongue = true;
+                pose.tail = Math.floor(clock / 0.08) % 2 ? 'b' : 'a';
             } else if (state === 'sniff') {
                 pose.lookX = 0;
                 pose.lookY = 1;
@@ -686,7 +768,7 @@
         requestAnimationFrame(loop);
 
         enqueue(LINES.welcome[0]);
-        window.__pixelDogState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, goal, heading, speed, vw, vh });
+        window.__pixelDogState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed });
         if (window.__pixelDogDebug) window.__pixelDogDebug = { compose, PAL, DW, DH };
     }
 
