@@ -140,7 +140,10 @@
         logos: ['people he\'s shipped with. none of them caught me.', 'big names. i\'ve crawled across all their screens.'],
         pet: ['tickles.', '*antennae intensify*', 'careful. i bite. in bytes.', 'you\'re not squashing me. i like you.'],
         caught: ['gotcha. not a feature.', 'reproduced it.', 'found you. marking as resolved.', 'faster than your QA team.', 'tag. you\'re the bug now.'],
-        flip: ['i\'m fine. this is fine.', 'help. legs. air.', 'undefined is not a function.', 'works on my machine.'],
+        flip: ['i\'m fine. this is fine.', 'help. legs. air.', 'undefined is not a function.', 'works on my machine.',
+            'stack overflow. literally.', 'this side up. apparently not.'],
+        held: ['put me down.', 'whee—', 'i get airsick.', 'this is not how you move a bug.', 'altitude: concerning.', 'hands off the prod build.'],
+        wake: ['huh? i was compiling.', 'not asleep. just idle.', 'five more minutes.', 'back online.', 'i wasn\'t sleeping. i was caching.'],
         click: ['on it.', 'you rang?', 'breakpoint hit.', 'what\'s over there?', 'is that a crumb?', 'clicked. logged. investigating.',
             'right behind you.', 'event received.', 'ooh, a click.', 'coming. six legs, one speed.'],
     };
@@ -284,6 +287,7 @@
         const bug = doc.createElement('button');
         bug.type = 'button';
         bug.className = 'pb-bug';
+        bug.style.visibility = 'hidden';
         bug.setAttribute('aria-label', 'Glitch, the site guide. Press for a tip.');
         bug._hintBound = true;
         const shadow = doc.createElement('canvas');
@@ -355,30 +359,32 @@
 
         let vw = window.innerWidth, vh = window.innerHeight;
         const HALF = BOX * S / 2;
-        const home = () => ({ x: 70, y: vh - 60 });
         const SPEED = { roam: 85, scuttle: 230, circle: 70, visit: 260, fly: 340 };
-        // (x, y) is the centre of the bug; heading 0 points right
-        let x = reduced ? home().x : -30, y = home().y;
-        let heading = 0, speed = 0, entered = reduced;
-        let act = reduced ? null : { type: 'roam', pts: [{ x: 190, y: home().y - 30 }], i: 0 };
+        const ENTRY_MS = 1250;
+        // (x, y) is the centre of the bug; heading 0 points right. Placed by start().
+        let x = -200, y = -200;
+        let heading = 0, speed = 0, entered = false, live = false, shown = false;
+        let act = null;
         let pauseUntil = 0, stride = 0, stepSide = 1, nextInterest = 0, lastVisit = 0;
         let state = 'idle', hover = false, happy = 0, squash = 0, lift = 0, wob = 0, flipUntil = 0, flips = 0;
-        let lastActive = performance.now(), clock = 0, travelled = 0, lastCaughtSay = -1e9;
+        let lastActive = performance.now(), clock = 0, travelled = 0;
         let twitch = 0, twitchSide = 'L', nextTwitch = 1.5;
         const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false, travel: 0 };
         const parts = [];
+        const entering = () => !!(act && act.phase === 'entry');
 
         window.addEventListener('resize', () => {
             vw = window.innerWidth;
             vh = window.innerHeight;
         }, { passive: true });
 
-        function wake() {
-            lastActive = performance.now();
-            if (state === 'sleep') {
-                state = 'idle';
-                spawn('bang');
-            }
+        function wake(now, quiet) {
+            lastActive = now;
+            if (state !== 'sleep') return false;
+            state = 'idle';
+            spawn('bang');
+            if (!quiet) react('wake', now);
+            return true;
         }
 
         doc.addEventListener('pointermove', (e) => {
@@ -391,7 +397,7 @@
             mouse.y = e.clientY;
             mouse.t = now;
             mouse.seen = true;
-            wake();
+            if (live) wake(now);
         }, { passive: true });
 
         // Velocity is measured over a sliding window in the listener, so it holds up whether scroll events
@@ -400,7 +406,7 @@
         const FAST = 1200, WINDOW = 200;
         const trace = [];
         let traceEl = null, scrollV = 0, scrollArmed = 0;
-        let lastScrollMove = -1e9, lastScrollFly = -1e9, lastScrollSay = -1e9, scrollFlights = 0;
+        let lastScrollMove = -1e9, lastScrollFly = -1e9, scrollFlights = 0;
         const scrollOf = (el) => (el === window ? window.scrollY : el.scrollTop);
         const initialScroller = doc.querySelector('.js-scroller') || window;
         trace.push([performance.now(), scrollOf(initialScroller)]);
@@ -443,14 +449,72 @@
         }
 
         // --- Speech bubble with a fixed footprint so typing never reflows it
+        const USER = 3, SECTION = 2;
         const queue = [];
         let say = null;
-        function speak(text, now, kind) {
+        function speak(text, now, kind, pri) {
             ghost.textContent = text;
             typed.textContent = '';
             bubble.classList.remove('is-done');
             bubble.classList.add('is-on');
-            say = { text, kind, start: now, hold: 1900 + text.length * 48, bw: bubble.offsetWidth, bh: bubble.offsetHeight };
+            say = { text, kind: kind || 'section', pri: pri || SECTION, start: now, hold: 1900 + text.length * 48,
+                bw: bubble.offsetWidth, bh: bubble.offsetHeight };
+        }
+        // Section-level lines never cut off a reaction; they wait at the front of the queue instead
+        function announce(text, now) {
+            if (say && say.text === text) return;
+            if (say && say.pri >= USER) queue.unshift(text);
+            else speak(text, now, 'section', SECTION);
+        }
+
+        // Shuffle bag per line set: every line plays once before any repeats, never the same one twice in a row
+        const bags = {};
+        function draw(key, pool) {
+            const bag = bags[key] || (bags[key] = { left: [], last: '' });
+            if (!bag.left.length) {
+                const b = pool.slice();
+                for (let i = b.length - 1; i > 0; i--) {
+                    const j = Math.random() * (i + 1) | 0;
+                    [b[i], b[j]] = [b[j], b[i]];
+                }
+                if (b.length > 1 && b[b.length - 1] === bag.last) [b[0], b[b.length - 1]] = [b[b.length - 1], b[0]];
+                bag.left = b;
+            }
+            return (bag.last = bag.left.pop());
+        }
+
+        // Every user-caused reaction speaks and replaces whatever is showing. A burst of the same trigger speaks
+        // on its first hit, then swaps lines at most every REPEAT ms, with the last hit of the burst still answered.
+        const REPEAT = 900;
+        const lastSaid = {};
+        let pending = null;
+        const PICK = {
+            click: () => (state === 'flip' ? draw('flip', LINES.flip) : draw('click:' + skinKey, LINES.click.concat(skin.click || []))),
+            pet: () => {
+                const lines = section && LINES[section];
+                if (pets % 2 === 1 && lines) {
+                    const line = lines[(told[section] || 0) % lines.length];
+                    told[section] = (told[section] || 0) + 1;
+                    const qi = queue.indexOf(line);
+                    if (qi >= 0) queue.splice(qi, 1);
+                    return line;
+                }
+                return draw('pet', LINES.pet);
+            },
+            held: () => draw('held', LINES.held),
+            flip: () => draw('flip', LINES.flip),
+            scroll: () => draw('scroll:' + skinKey, LINES.scroll.concat(skin.scroll)),
+            caught: () => draw('caught', LINES.caught),
+            wake: () => draw('wake', LINES.wake),
+        };
+        function react(kind, now) {
+            if (say && say.kind === kind && now - lastSaid[kind] < REPEAT) {
+                pending = { kind, due: lastSaid[kind] + REPEAT };
+                return;
+            }
+            pending = null;
+            lastSaid[kind] = now;
+            speak(PICK[kind](), now, kind, USER);
         }
         function enqueue(text) {
             if (queue.indexOf(text) < 0) queue.push(text);
@@ -494,7 +558,7 @@
             } else if (key && !seen[key] && now - sectionSince > 700 && state !== 'held') {
                 seen[key] = true;
                 told[key] = 1;
-                if (state === 'sleep') wake();
+                wake(now);
                 spawn('bang');
                 enqueue(LINES[key][0]);
             }
@@ -511,8 +575,10 @@
         bug.addEventListener('pointermove', (e) => {
             if (!press || reduced) return;
             if (state !== 'held' && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) {
+                const now = performance.now();
+                lastActive = now;
                 state = 'held';
-                hush();
+                react('held', now);
                 label('[ WHEE ]');
             }
         });
@@ -527,7 +593,8 @@
                 act = null;
                 squash = 0.25;
                 flips++;
-                if (flips === 1 || Math.random() < 0.4) speak(LINES.flip[(flips - 1) % LINES.flip.length], now);
+                entered = true;
+                react('flip', now);
                 label(hover ? '[ BOOP ]' : '');
             } else {
                 pet(now);
@@ -545,42 +612,36 @@
         });
 
         function pet(now) {
-            wake();
+            wake(now, true);
             happy = 1.6;
             squash = 0.2;
             spawn('heart', 3);
             pets++;
-            queue.length = 0;
-            const lines = section && LINES[section];
-            if (pets % 2 === 1 && lines) {
-                const i = (told[section] || 0) % lines.length;
-                told[section] = i + 1;
-                speak(lines[i], now);
-            } else {
-                speak(LINES.pet[(pets >> 1) % LINES.pet.length], now);
-            }
+            react('pet', now);
         }
 
         // Any click on the page gets a reaction: usually a scurry to the spot, sometimes a start in place.
         // Passive and never prevented, so links and buttons still work underneath.
-        let lastClickSay = -1e9, clickLine = 0;
-        const clickPool = () => LINES.click.concat(skin.click || []);
         doc.addEventListener('pointerdown', (e) => {
-            if (e.button > 0 || bug.contains(e.target)) return;
+            if (!live || e.button > 0 || bug.contains(e.target)) return;
             const now = performance.now();
             mouse.x = e.clientX;
             mouse.y = e.clientY;
             mouse.t = now;
             mouse.seen = true;
-            if (state === 'held' || state === 'flip' || press) return;
-            const wasAsleep = state === 'sleep';
-            wake();
+            if (state === 'held' || press) return;
+            if (state === 'flip') {
+                lastActive = now;
+                react('click', now);
+                return;
+            }
+            const wasAsleep = wake(now, true);
             twitch = 0.35;
             twitchSide = e.clientX < x ? 'L' : 'R';
             if (!wasAsleep) spawn('bang');
             squash = Math.max(squash, 0.12);
             const spot = { x: e.clientX, y: e.clientY };
-            if (!reduced) {
+            if (!reduced && !entering()) {
                 if (act && act.type === 'fly' && act.phase === 'air') {
                     act.scroll = false;
                     act.pts[0] = spot;
@@ -590,22 +651,13 @@
                     act = { type: 'pause', until: now + 700 + Math.random() * 500, face: true };
                 }
             }
-            const free = !say || say.kind === 'click';
-            if (free && now - lastClickSay > 2500 && Math.random() < 0.8) {
-                lastClickSay = now;
-                const pool = clickPool();
-                clickLine = (clickLine + 1 + (Math.random() * (pool.length - 1) | 0)) % pool.length;
-                speak(pool[clickLine], now, 'click');
-            }
+            react(wasAsleep ? 'wake' : 'click', now);
         }, { passive: true });
 
         function caught(now) {
             happy = 2.2;
             spawn('heart');
-            if (!say && !queue.length && now - lastCaughtSay > 7000) {
-                lastCaughtSay = now;
-                speak(LINES.caught[Math.random() * LINES.caught.length | 0], now);
-            }
+            react('caught', now);
         }
 
         function drawParts() {
@@ -631,7 +683,15 @@
         }
 
         let last = performance.now(), nextDetect = 0, nextZ = 0, lastKey = '';
-        const mountedAt = last;
+
+        function land(now) {
+            act = { type: 'fly', phase: 'land', until: now + 340, pts: [], i: 0 };
+            entered = true;
+            speed = 0;
+            squash = 0.22;
+            announce(skin.welcome, now);
+        }
+
         function loop(now) {
             // rAF timestamps can trail performance.now(), so the first step may come out negative
             const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
@@ -639,6 +699,7 @@
             clock += dt;
             happy = Math.max(0, happy - dt);
             squash = Math.max(0, squash - dt);
+            if (pending && now >= pending.due) react(pending.kind, now);
 
             if (now > nextDetect) {
                 detect(now);
@@ -665,21 +726,14 @@
             if (armed && act && act.scroll) {
                 act.dir = armed;
                 act.until = Math.max(act.until, now + 1500);
-            } else if (armed && (now - lastScrollFly > 900 || (act && act.type === 'fly')) && state !== 'held' && state !== 'flip' && !reduced) {
+            } else if (armed && (now - lastScrollFly > 900 || (act && act.type === 'fly')) && state !== 'held' && state !== 'flip' && !reduced && !entering()) {
                 lastScrollFly = now;
                 scrollFlights++;
-                if (state === 'sleep') {
-                    state = 'idle';
-                    spawn('bang');
-                }
+                wake(now, true);
                 act = { type: 'fly', phase: 'air', scroll: true, dir: armed, until: now + 5000,
                     pts: [{ x: clampX(x + (Math.random() - 0.5) * 220), y }], i: 0 };
                 squash = 0.15;
-                if (!say && !queue.length && now - lastScrollSay > 12000) {
-                    lastScrollSay = now;
-                    const pool = LINES.scroll.concat(skin.scroll);
-                    speak(pool[Math.random() * pool.length | 0], now);
-                }
+                react('scroll', now);
             }
 
             if (state === 'held') {
@@ -774,7 +828,16 @@
                         goal = null;
                     }
                 } else if (act && act.type === 'fly') {
-                    if (act.phase === 'warm') {
+                    if (act.phase === 'entry') {
+                        // Quadratic swoop in from off-screen, easing out so it brakes into the landing
+                        const k = Math.min(1, (now - act.t0) / ENTRY_MS), e = 1 - Math.pow(1 - k, 3), u = 1 - e;
+                        const p0 = act.p0, c = act.c, p1 = act.p1;
+                        x = u * u * p0.x + 2 * u * e * c.x + e * e * p1.x;
+                        y = u * u * p0.y + 2 * u * e * c.y + e * e * p1.y;
+                        heading = Math.atan2(u * (c.y - p0.y) + e * (p1.y - c.y), u * (c.x - p0.x) + e * (p1.x - c.x));
+                        liftTo = 1;
+                        if (k >= 1) land(now);
+                    } else if (act.phase === 'warm') {
                         if (now > act.until) act.phase = 'air';
                     } else if (act.phase === 'air') {
                         if (act.scroll) {
@@ -846,7 +909,6 @@
                 speed += Math.max((flying ? -900 : -2600) * dt, Math.min((flying ? 700 : 1500) * dt, target - speed));
                 x += Math.cos(heading) * speed * dt;
                 y += Math.sin(heading) * speed * dt;
-                if (x > minX) entered = true;
                 if (entered) {
                     x = clampX(x);
                     y = clampY(y);
@@ -954,8 +1016,12 @@
             const tx = Math.round((x - HALF) / S) * S;
             const ty = Math.round((y - HALF) / S) * S;
             bug.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0)';
+            if (!shown) {
+                shown = true;
+                bug.style.visibility = '';
+            }
 
-            if (!say && queue.length && now - mountedAt > 1100 && state !== 'held' && state !== 'sleep') speak(queue.shift(), now);
+            if (!say && queue.length && entered && state !== 'held' && state !== 'sleep') speak(queue.shift(), now);
             if (say) {
                 const n = Math.min(say.text.length, Math.floor((now - say.start) / 31));
                 if (typed.textContent.length !== n) typed.textContent = say.text.slice(0, n);
@@ -973,32 +1039,90 @@
 
             requestAnimationFrame(loop);
         }
-        requestAnimationFrame(loop);
 
-        enqueue(skin.welcome);
         window.__pixelBugSetSkin = (key) => {
             if (!SKINS[key] || key === skinKey) return;
             skinKey = key;
             skin = SKINS[key];
             applySkin();
             glow.style.opacity = '0';
-            hush();
             queue.length = 0;
-            wake();
+            const now = performance.now();
+            wake(now, true);
             spawn('bang');
             squash = 0.25;
-            speak(skin.welcome, performance.now());
+            speak(skin.welcome, now, 'skin', USER);
         };
-        window.__pixelBugState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed, lift, skin: skinKey, scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll), scrollDir: act && act.scroll ? act.dir : 0, scrollFlights, spot: !!(act && act.spot) });
+        window.__pixelBugState = () => ({ live, state, x, y, section, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
+            entering: entering(), parts: parts.length, act: act && act.type, phase: act && act.phase, speed, lift, skin: skinKey,
+            scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll), scrollDir: act && act.scroll ? act.dir : 0, scrollFlights, spot: !!(act && act.spot) });
         if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH, SKINS: Object.keys(SKINS) };
+
+        // Warm the flight frames so the first airborne frame doesn't pay for composing them
+        for (const f of [1, 2]) compose({ skin: skinKey, legs: 'tuck', antL: 'wide', antR: 'wide', fly: f, belly: false, happy: false, lit: false });
+
+        return function start() {
+            const now = performance.now();
+            vw = window.innerWidth;
+            vh = window.innerHeight;
+            live = true;
+            last = now;
+            lastActive = now;
+            scrollArmed = 0;
+            // Lands in the lower third, on the side it came in from
+            const fromLeft = Math.random() < 0.5;
+            const p1 = {
+                x: Math.max(90, Math.min(vw - 90, vw * (fromLeft ? 0.26 : 0.74))),
+                y: Math.max(90, Math.min(vh - 70, vh * 0.8)),
+            };
+            if (reduced) {
+                x = p1.x;
+                y = p1.y;
+                heading = -Math.PI / 2;
+                entered = true;
+                announce(skin.welcome, now);
+            } else {
+                const p0 = { x: fromLeft ? -70 : vw + 70, y: -70 };
+                const c = { x: p1.x + (fromLeft ? 1 : -1) * vw * 0.14, y: vh * 0.3 };
+                act = { type: 'fly', phase: 'entry', t0: now, p0, c, p1, pts: [], i: 0 };
+                x = p0.x;
+                y = p0.y;
+                heading = Math.atan2(c.y - p0.y, c.x - p0.x);
+                lift = 1;
+                state = 'fly';
+            }
+            loop(now);
+        };
     }
 
-    // The AP loader flags the page is-loaded while its own canvas is still playing on top, so wait for that too
+    // Hands over the instant the intro does: is-loaded on the body AND the AP loader canvas gone.
+    // The AP loader fires intro-complete while its own canvas is still playing on top, so its class/style is watched too.
+    let start = null, started = false, watcher = null;
+    function build() {
+        if (!start && doc.body) start = mount();
+    }
     function ready() {
+        if (started || !doc.body) return;
         const intro = doc.getElementById('apIntro');
         const introOn = intro && intro.isConnected && !intro.classList.contains('is-done') && intro.style.display !== 'none';
-        if (doc.body && doc.body.classList.contains('is-loaded') && !introOn) mount();
-        else setTimeout(ready, 200);
+        if (intro && watcher && !intro._pbWatched) {
+            intro._pbWatched = true;
+            watcher.observe(intro, { attributes: true, attributeFilter: ['class', 'style'] });
+        }
+        if (!doc.body.classList.contains('is-loaded') || introOn) return;
+        started = true;
+        if (watcher) watcher.disconnect();
+        window.removeEventListener('intro-complete', ready);
+        build();
+        start();
     }
-    ready();
+    function boot() {
+        watcher = new MutationObserver(ready);
+        watcher.observe(doc.body, { attributes: true, attributeFilter: ['class'], childList: true });
+        window.addEventListener('intro-complete', ready);
+        ready();
+        if (!started) (window.requestIdleCallback || ((f) => setTimeout(f, 300)))(build);
+    }
+    if (doc.body) boot();
+    else doc.addEventListener('DOMContentLoaded', boot, { once: true });
 })();
