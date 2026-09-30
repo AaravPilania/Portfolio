@@ -56,9 +56,13 @@ fs.mkdirSync(outDir, { recursive: true });
   await shot('01_welcome_zoom', true);
   console.log('after mount:', JSON.stringify(await st()));
 
-  await wait(4000);
+  const roam = [];
+  for (let k = 0; k < 5; k++) { await wait(2000); const r = await st(); roam.push(Math.round(r.x) + ',' + Math.round(r.y) + ' ' + r.state); }
+  console.log('roaming while cursor idle:', roam.join(' | '));
   for (let i = 0; i <= 12; i++) { await mouse('mouseMoved', 200 + i * 60, 800 - i * 45); await wait(60); }
-  await wait(400);
+  await wait(1200);
+  console.log('paw prints alive mid-chase:', await evalv(`${F}.document.querySelectorAll('.pd-paw').length`));
+  await shot('02_walk_full');
   await shot('02_walk_zoom', true);
   await wait(3500);
   await shot('02_caught_zoom', true);

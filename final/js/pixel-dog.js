@@ -158,8 +158,34 @@
             put(g, 20, 13 + dy, 't');
         }
         stamp(g, ['yy', 'yy'], 13, 19 + dy);
+        // Running: the head leads the body by a pixel in the direction of travel
+        if (p.lean) {
+            for (let y = 0; y <= 16 + dy; y++) {
+                const row = g[y];
+                const shifted = new Array(DW).fill('.');
+                for (let x = 0; x < DW; x++) {
+                    const nx = x + p.lean;
+                    if (nx >= 0 && nx < DW && row[x] !== '.') shifted[nx] = row[x];
+                }
+                g[y] = shifted;
+            }
+        }
         cache.set(key, g);
         return g;
+    }
+
+    // Pixel paw print, drawn once and reused as a background image
+    const PAW = ['k.k.k', '.....', '.kkk.', 'kkkkk', '.kkk.'];
+    function pawImage(color) {
+        const c = doc.createElement('canvas');
+        c.width = 5;
+        c.height = 5;
+        const x = c.getContext('2d');
+        x.fillStyle = color;
+        PAW.forEach((row, py) => {
+            for (let px = 0; px < 5; px++) if (row[px] === 'k') x.fillRect(px, py, 1, 1);
+        });
+        return c.toDataURL();
     }
 
     function mount() {
@@ -187,6 +213,11 @@
             .pd-type::after { content: ''; display: inline-block; width: 6px; height: 11px; margin-left: 2px; vertical-align: -1px; background: #121316; animation: pdCaret 0.8s steps(1) infinite; }
             .pd-bubble.is-done .pd-type::after { display: none; }
             @keyframes pdCaret { 50% { opacity: 0; } }
+            .pd-trail { position: fixed; inset: 0; z-index: 9999989; pointer-events: none; overflow: hidden; }
+            .pd-paw { position: absolute; left: 0; top: 0; width: ${5 * S}px; height: ${5 * S}px; margin: ${-2.5 * S}px 0 0 ${-2.5 * S}px;
+                background: url(${pawImage('#8f5e3b')}) 0 0 / 100% 100% no-repeat; image-rendering: pixelated;
+                opacity: 0; animation: pdPaw 3.6s linear forwards; will-change: opacity; }
+            @keyframes pdPaw { 0% { opacity: 0; } 4% { opacity: 0.85; } 72% { opacity: 0.85; } 100% { opacity: 0; } }
         `;
         doc.head.appendChild(style);
 
@@ -208,8 +239,21 @@
         bubble.innerHTML = '<span class="pd-tag">[ BYTE ]</span><span class="pd-body"><span class="pd-ghost"></span><span class="pd-type"></span></span>';
         const ghost = bubble.querySelector('.pd-ghost');
         const typed = bubble.querySelector('.pd-type');
+        const trail = doc.createElement('div');
+        trail.className = 'pd-trail';
+        trail.setAttribute('aria-hidden', 'true');
+        doc.body.appendChild(trail);
         doc.body.appendChild(bubble);
         doc.body.appendChild(dog);
+
+        function pawPrint(px, py, angle) {
+            const p = doc.createElement('span');
+            p.className = 'pd-paw';
+            p.style.transform = 'translate3d(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px,0) rotate(' + (angle * 180 / Math.PI + 90).toFixed(1) + 'deg)';
+            p.addEventListener('animationend', () => p.remove(), { once: true });
+            trail.appendChild(p);
+            if (trail.childElementCount > 70) trail.firstElementChild.remove();
+        }
 
         const cursorDot = doc.getElementById('siteCursorDot');
         const cursorLabel = doc.getElementById('cursorLabel');
@@ -230,10 +274,13 @@
         const W = CW * S, H = CH * S;
         // Sprite-space anchors in CSS px from the canvas top-left
         const BODY_CX = (OX + DW / 2) * S, BODY_CY = (OY + DH / 2) * S;
+        const FOOT_Y = (OY + DH) * S - 3;
         const home = () => ({ x: 24, y: vh - H - 8 });
-        let x = home().x, y = -H, vx = 0, vy = 0;
-        let state = reduced ? 'idle' : 'enter';
-        if (reduced) y = home().y;
+        // Runs in from the left edge, then lives on screen: chases the cursor, roams, sniffs, sits
+        let x = reduced ? home().x : -W, y = home().y, vx = 0, vy = 0;
+        let heading = 0, speed = 0, goal = reduced ? null : { x: home().x + BODY_CX + 60, y: home().y + BODY_CY, kind: 'roam' };
+        let pauseUntil = 0, sniffUntil = 0, stride = 0, footSide = 1;
+        let state = 'idle';
         let hover = false, happy = 0, squash = 0, hop = 0, rot = 0;
         let lastActive = performance.now(), nextBlink = 2, blink = 0, clock = 0;
         let travelled = 0, lastCaughtSay = -1e9;
@@ -361,7 +408,9 @@
             if (!press) return;
             if (state === 'held') {
                 state = 'idle';
-                vx = vy = 0;
+                vx = vy = speed = 0;
+                goal = null;
+                pauseUntil = performance.now() + 1500;
                 squash = 0.2;
                 label(hover ? '[ PET ]' : '');
             } else {
@@ -443,11 +492,12 @@
             }
         }
 
-        let last = performance.now(), nextDetect = 0, nextZ = 0, stride = 0;
+        let last = performance.now(), nextDetect = 0, nextZ = 0;
         const mountedAt = last;
         function loop(now) {
-            const dt = Math.min(0.05, (now - last) / 1000);
-            last = now;
+            // rAF timestamps can trail performance.now(), so the first step may come out negative
+            const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+            last = Math.max(last, now);
             clock += dt;
             happy = Math.max(0, happy - dt);
             squash = Math.max(0, squash - dt);
@@ -458,10 +508,11 @@
                 nextDetect = now + 250;
             }
 
-            if (state === 'idle' || state === 'walk') {
+            if (state === 'idle' || state === 'walk' || state === 'sniff') {
                 if (now - lastActive > 18000 && !say && !queue.length) {
                     state = 'sleep';
-                    vx = vy = 0;
+                    vx = vy = speed = 0;
+                    goal = null;
                     hush();
                 }
             }
@@ -472,41 +523,72 @@
                 y = mouse.y - press.oy;
                 rot += (Math.max(-18, Math.min(18, -mouse.vx * 0.02)) - rot) * Math.min(1, dt * 10);
                 mouse.vx *= 0.9;
-            } else if (state === 'enter') {
-                vy += 2600 * dt;
-                y += vy * dt;
-                if (y >= home().y) {
-                    y = home().y;
-                    vy = 0;
-                    squash = 0.2;
-                    state = 'idle';
-                    lastActive = now;
-                }
             } else if (state !== 'sleep' && !reduced) {
-                // Settles just below-right of the cursor; stands still once the cursor comes in to pet it
-                let tx = cx, ty = cy;
+                rot *= 0.7;
+                const minX = BODY_CX - OX * S, maxX = vw - (W - BODY_CX) + OX * S;
+                const minY = BODY_CY - OY * S + 8, maxY = vh - (H - BODY_CY);
                 const near = Math.hypot(mouse.x - cx, mouse.y - cy) < 52;
-                if (mouse.seen && !near && !hover) {
-                    tx = mouse.x + 44;
-                    ty = mouse.y + 40;
+                const chasing = mouse.seen && now - mouse.t < 1400 && !near && !hover;
+                if (chasing) {
+                    goal = { x: mouse.x + 44, y: mouse.y + 40, kind: 'chase' };
+                } else if (near || hover) {
+                    if (goal && goal.kind === 'chase') goal = null;
+                } else if (!goal && !say && now > pauseUntil && now > sniffUntil) {
+                    // Off-lead: trot to a random spot on screen, not too close and not across the whole page
+                    let gx = cx, gy = cy;
+                    for (let i = 0; i < 8; i++) {
+                        gx = minX + 30 + Math.random() * Math.max(0, maxX - minX - 60);
+                        gy = minY + 30 + Math.random() * Math.max(0, maxY - minY - 60);
+                        const d = Math.hypot(gx - cx, gy - cy);
+                        if (d > 140 && d < 460) break;
+                    }
+                    goal = { x: gx, y: gy, kind: 'roam' };
                 }
-                tx = Math.max(BODY_CX - OX * S, Math.min(vw - (W - BODY_CX) + OX * S, tx));
-                ty = Math.max(BODY_CY - OY * S + 8, Math.min(vh - (H - BODY_CY), ty));
-                const k = 70, c = 15;
-                vx += ((tx - cx) * k - vx * c) * dt;
-                vy += ((ty - cy) * k - vy * c) * dt;
-                const sp = Math.hypot(vx, vy);
-                if (sp > 2600) { vx *= 2600 / sp; vy *= 2600 / sp; }
+
+                let target = 0;
+                if (goal) {
+                    goal.x = Math.max(minX, Math.min(maxX, goal.x));
+                    goal.y = Math.max(minY, Math.min(maxY, goal.y));
+                    const dx = goal.x - cx, dy = goal.y - cy, dist = Math.hypot(dx, dy);
+                    if (dist < 7) {
+                        if (goal.kind === 'chase' && travelled > 140) caught(now);
+                        if (goal.kind === 'roam') {
+                            if (Math.random() < 0.45) sniffUntil = now + 1200 + Math.random() * 900;
+                            pauseUntil = now + 1800 + Math.random() * 3200;
+                        }
+                        travelled = 0;
+                        goal = null;
+                    } else {
+                        // Heading turns at a limited rate so paths curve; a standing dog can pivot on the spot
+                        const want = Math.atan2(dy, dx);
+                        let da = want - heading;
+                        da = Math.atan2(Math.sin(da), Math.cos(da));
+                        const turn = (speed < 80 ? 28 : 8) * dt;
+                        heading += Math.max(-turn, Math.min(turn, da));
+                        const top = goal.kind === 'chase' ? Math.min(820, 280 + dist * 1.8) : 230;
+                        target = Math.min(top, Math.sqrt(2 * 2400 * Math.max(0, dist - 5)));
+                        if (Math.abs(da) > 1.7) target = Math.min(target, 90);
+                    }
+                }
+                speed += Math.max(-3400 * dt, Math.min(2200 * dt, target - speed));
+                vx = Math.cos(heading) * speed;
+                vy = Math.sin(heading) * speed;
                 x += vx * dt;
                 y += vy * dt;
-                travelled += sp * dt;
-                const moving = sp > 40;
-                if (!moving && state === 'walk' && travelled > 140 && Math.hypot(tx - cx, ty - cy) < 14) {
-                    travelled = 0;
-                    caught(now);
+                travelled += speed * dt;
+
+                // One step per 13px travelled; every footfall leaves a print on alternating sides
+                if (speed > 25) {
+                    const prev = Math.floor(stride);
+                    stride += speed * dt / 13;
+                    if (Math.floor(stride) !== prev && Math.floor(stride) % 2 === 1) {
+                        footSide = -footSide;
+                        const fx = x + BODY_CX - Math.sin(heading) * 5 * footSide;
+                        const fy = y + FOOT_Y + Math.cos(heading) * 5 * footSide;
+                        pawPrint(fx, fy, heading);
+                    }
                 }
-                state = moving ? 'walk' : 'idle';
-                rot += (Math.max(-8, Math.min(8, vx * 0.006)) - rot) * Math.min(1, dt * 8);
+                state = speed > 25 ? 'walk' : now < sniffUntil ? 'sniff' : 'idle';
             }
 
             nextBlink -= dt;
@@ -526,16 +608,23 @@
                 lookY = Math.abs(dy) > 24 ? Math.sign(dy) : 0;
             }
 
-            const pose = { legs: 'stand', tail: 'a', eyes: blink > 0 ? 'shut' : 'open', lookX, lookY, tongue: false, blush: false, lie: false };
+            const pose = { legs: 'stand', tail: 'a', eyes: blink > 0 ? 'shut' : 'open', lookX, lookY, tongue: false, blush: false, lie: false, lean: 0 };
             let bob = 0;
             const talking = say && now - say.start < say.text.length * 31;
             if (state === 'walk') {
-                stride += Math.min(18, Math.hypot(vx, vy) / 40) * dt;
+                // Legs cycle with distance, and the whole dog hops off the ground on every step
                 const f = Math.floor(stride) % 4;
                 pose.legs = ['walkL', 'stand', 'walkR', 'stand'][f];
                 pose.tail = f < 2 ? 'a' : 'b';
-                bob = f % 2 ? 0 : -1;
-                pose.tongue = Math.hypot(vx, vy) > 700;
+                const amp = speed > 500 ? 3 : speed > 180 ? 2 : 1;
+                bob = -Math.round(Math.sin((stride % 1) * Math.PI) * amp);
+                pose.lean = Math.abs(vx) > 120 ? Math.sign(vx) : 0;
+                pose.tongue = speed > 560;
+            } else if (state === 'sniff') {
+                pose.lookX = 0;
+                pose.lookY = 1;
+                pose.tail = Math.floor(clock / 0.1) % 2 ? 'b' : 'a';
+                bob = Math.floor(clock * 7) % 2;
             } else if (state === 'sleep') {
                 pose.lie = true;
                 pose.eyes = 'shut';
@@ -597,7 +686,7 @@
         requestAnimationFrame(loop);
 
         enqueue(LINES.welcome[0]);
-        window.__pixelDogState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length });
+        window.__pixelDogState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, goal, heading, speed, vw, vh });
         if (window.__pixelDogDebug) window.__pixelDogDebug = { compose, PAL, DW, DH };
     }
 
