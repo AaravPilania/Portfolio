@@ -387,14 +387,24 @@
 
         const scroller = doc.querySelector('.js-scroller');
         const scrollTop = () => (scroller ? scroller.scrollTop : window.scrollY);
-        // Scroll velocity is sampled from the listener (Lenis writes scrollTop each frame) and smoothed in the loop
-        let lastSt = scrollTop(), lastStAt = performance.now(), scrollV = 0, rawV = 0, fastFor = 0;
+        // Scroll velocity is smoothed in the listener itself (Lenis writes scrollTop each frame), so detection
+        // doesn't depend on the render loop's frame rate; a sustained fast stretch arms a takeoff for the loop
+        let lastSt = scrollTop(), lastStAt = performance.now(), scrollV = 0, fastStart = 0, scrollArmed = 0;
         let lastScrollMove = -1e9, lastScrollFly = -1e9, lastScrollSay = -1e9;
         (scroller || window).addEventListener('scroll', () => {
             const now = performance.now(), st = scrollTop();
             const ms = now - lastStAt;
-            if (ms > 0) rawV = (st - lastSt) / ms * 1000;
+            if (ms > 0) {
+                const v = (st - lastSt) / ms * 1000;
+                scrollV += (v - scrollV) * (1 - Math.exp(-ms / 60));
+            }
             if (Math.abs(st - lastSt) > 0.5) lastScrollMove = now;
+            if (Math.abs(scrollV) > 1800) {
+                if (!fastStart) fastStart = now;
+                else if (now - fastStart > 120) scrollArmed = Math.sign(scrollV);
+            } else {
+                fastStart = 0;
+            }
             lastSt = st;
             lastStAt = now;
             lastActive = now;
@@ -592,16 +602,19 @@
             let liftTo = 0;
 
             // Fast scrolling blows it off its feet: a short flight that drifts with the scroll and lands once it settles
-            if (now - lastScrollMove > 90) rawV = 0;
-            scrollV += (rawV - scrollV) * Math.min(1, dt * 14);
-            fastFor = Math.abs(scrollV) > 1800 ? fastFor + dt : 0;
-            if (fastFor > 0.12 && !(act && act.scroll) && now - lastScrollFly > 6000 && state !== 'held' && state !== 'flip' && !reduced) {
+            if (now - lastScrollMove > 120) {
+                scrollV *= Math.exp(-dt * 10);
+                fastStart = 0;
+            }
+            const armed = scrollArmed;
+            scrollArmed = 0;
+            if (armed && !(act && act.scroll) && now - lastScrollFly > 6000 && state !== 'held' && state !== 'flip' && !reduced) {
                 lastScrollFly = now;
                 if (state === 'sleep') {
                     state = 'idle';
                     spawn('bang');
                 }
-                act = { type: 'fly', phase: 'air', scroll: true, dir: Math.sign(scrollV), until: now + 5000,
+                act = { type: 'fly', phase: 'air', scroll: true, dir: armed, until: now + 5000,
                     pts: [{ x: clampX(x + (Math.random() - 0.5) * 220), y }], i: 0 };
                 squash = 0.15;
                 if (!say && !queue.length && now - lastScrollSay > 12000) {
