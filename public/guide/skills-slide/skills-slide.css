@@ -103,7 +103,7 @@ body { font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x
 /* Orbit layer: star + bug live inside the section so they leave with it once the pin releases */
 .sk__orbit, .sk__ribbons, .sk__fly { position: absolute; inset: 0; pointer-events: none; }
 .sk__orbit { z-index: 3; }
-.sk__ribbons { z-index: 2; display: flex; flex-direction: column; justify-content: center; gap: var(--rb-gap); padding-top: 40px; }
+.sk__ribbons { z-index: 2; }
 .sk__fly { z-index: 4; }
 .sk-star {
     position: absolute; left: 0; top: 50%;
@@ -115,36 +115,10 @@ body { font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x
     transform-origin: 50% 50%; will-change: transform; opacity: 0;
 }
 
-/* Lusion-style ribbons: thick round-capped strokes, tilted, each carrying a seamless marquee */
-.sk {
-    --rb-h: clamp(38px, 6.2vh, 70px);
-    --rb-gap: clamp(4px, 1.1vh, 14px);
-    --t-sun: #FFED29; --t-ultra: #2f3bf5; --t-paper: #f4f2ea; --t-peri: #5b74ff; --t-bone: #b9b5a8;
-}
-.rb { position: relative; flex: none; height: var(--rb-h); transform: rotate(var(--tilt, 0deg)); transform-origin: 50% 50%; }
-.rb-band {
-    position: absolute; top: 0; left: -24vw; width: 148vw; height: 100%;
-    border-radius: 999px; overflow: hidden; background: var(--tone); color: var(--ink);
-    display: flex; align-items: center; will-change: transform;
-}
-.rb[data-tone="ultra"], .rb[data-tone="peri"] { --fg: #f4f2ea; }
-.rb-band { color: var(--fg, #121316); }
-.rb-track { display: flex; width: max-content; will-change: transform; animation: rbRun var(--dur, 40s) linear infinite; animation-direction: var(--dir, normal); }
-.rb-seq { display: flex; align-items: center; flex: none; }
-.rb-item {
-    flex: none; padding: 0 0.55em; white-space: nowrap;
-    font-family: var(--sans); font-weight: 400; font-size: calc(var(--rb-h) * 0.5); line-height: 1; letter-spacing: -0.03em;
-}
-.rb-tag {
-    flex: none; margin: 0 0.9em 0 0.6em; padding: 0.42em 0.8em 0.38em; border-radius: 999px; white-space: nowrap;
-    font: 500 calc(var(--rb-h) * 0.2)/1 var(--mono); letter-spacing: 0.16em;
-    background: var(--fg, #121316); color: var(--tone);
-}
-.rb-star {
-    flex: none; width: calc(var(--rb-h) * 0.26); height: calc(var(--rb-h) * 0.26); background: currentColor;
-    -webkit-mask: var(--star) center / contain no-repeat; mask: var(--star) center / contain no-repeat;
-}
-@keyframes rbRun { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+/* Lusion ribbon: one round-capped tube drawn along a Catmull-Rom path, skills riding inside on a textPath */
+.sk-ribbon { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+.sk-ribbon .rb-text { font-family: var(--mono); font-weight: 500; letter-spacing: 0.08em; fill: var(--paper); }
+.sk-ribbon .rb-tag { fill: var(--sun); }
 
 .sk-bug {
     position: absolute; left: 0; top: 0; z-index: 3; width: 48px; height: 60px; margin: -30px 0 0 -24px;
@@ -179,4 +153,3 @@ body { font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x
 .is-reduced .sk-star { opacity: 1; }
 .is-reduced .sk-bug { opacity: 1; }
 .is-reduced .projects__entry-index::before { transition: none; }
-.is-reduced .rb-track { animation: none; }
