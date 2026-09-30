@@ -6,11 +6,11 @@
     transition: none !important;
 }
 
-/* Scroll length comes from this track (1 viewport of stage + 1.15 viewports per category); the stage sticks inside it */
+/* Scroll length: one stage height plus 0.3 of it per detent; the stage sticks inside it.
+   --sk-h is the scroller's client height (set by skills-wheel.js), so 50% of the stage is the viewport's centre line. */
 .sk {
     --sk-pad: clamp(18px, 3.2vw, 56px);
     --sk-sun: #FFED29;
-    --sk-paper: #f4f2ea;
     --sk-hair: rgba(244, 242, 234, 0.22);
     --sk-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
     --sk-sans: 'PP-Mori', 'Suisse Intl', sans-serif;
@@ -21,15 +21,37 @@
     z-index: 2;
     width: var(--sk-w, 100vw);
     margin-left: var(--sk-x, calc(50% - 50vw));
-    height: calc(100vh + 5 * 115vh);
+    height: calc(var(--sk-h, 100vh) * (1 + var(--sk-step, 0.3) * var(--sk-steps, 4)));
     pointer-events: none;
 }
 
 .sk__stage {
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: var(--sk-h, 100vh);
     overflow: visible;
+}
+
+/* The axis: one hairline through the stage's vertical centre, cut into segments that stop short of the words */
+.sk-rail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    margin-top: -0.5px;
+    z-index: 1;
+}
+.sk-rail__seg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: #fff;
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    will-change: transform;
 }
 
 .sk-star {
@@ -48,77 +70,118 @@
     opacity: 0;
 }
 
-/* Meer "legacy" swap: one category at a time, title in the middle column, its skills right-aligned on the same axis */
+/* Meer "legacy" swap: one category at a time; title and skills are each centred on the axis as whole blocks.
+   --sk-ty / --sk-sy lift each block by its font's cap-centre offset so the ink, not the line box, sits on the axis. */
 .sk-legacy { position: absolute; inset: 0; z-index: 2; }
 .sk-cat { position: absolute; inset: 0; }
+.sk:not(.is-live) .sk-cat + .sk-cat { visibility: hidden; }
+
 .ll-section--services .sk-title {
     position: absolute;
-    left: 29%;
-    width: 40%;
+    left: var(--sk-tx, 29%);
     top: 50%;
+    width: var(--sk-tw, 40%);
     margin: 0;
-    transform: translateY(-50%);
+    transform: translate(0, calc(-50% - var(--sk-ty, 0px)));
     font-family: 'Brier', Georgia, serif !important;
     font-weight: 700;
-    font-size: clamp(2.8rem, 5.8vw, 6.5rem);
-    line-height: 0.95;
-    letter-spacing: -0.03em;
+    font-size: calc(clamp(2.6rem, 5.4vw, 6.25rem) * var(--sk-fit, 1));
+    line-height: 1;
+    letter-spacing: -0.02em;
     text-transform: uppercase;
-    color: #fff;
+    color: var(--sk-sun);
 }
+/* Out of flow, so the counter never shifts the title's centring box */
 .sk-kicker {
-    display: block;
-    margin: 0 0 0.9rem;
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    margin-bottom: 1.1rem;
     font: 500 11px/1 var(--sk-mono);
     letter-spacing: 0.16em;
+    white-space: nowrap;
     color: var(--sk-sun);
 }
 .sk-set {
     position: absolute;
     right: var(--sk-pad);
     top: 50%;
-    transform: translateY(-50%);
-    max-width: 27%;
+    transform: translate(0, calc(-50% - var(--sk-sy, 0px)));
     margin: 0;
     padding: 0;
     list-style: none;
     text-align: right;
+    white-space: nowrap;
     font-family: var(--sk-sans);
     font-weight: 400;
-    font-size: clamp(16px, 1.55vw, 26px);
-    line-height: 1.22;
-    letter-spacing: -0.02em;
-    color: rgba(244, 242, 234, 0.86);
+    font-size: clamp(15px, 1.35vw, 24px);
+    line-height: 1.32;
+    letter-spacing: -0.01em;
+    color: var(--sk-sun);
 }
-.sk-set li { display: block; }
+.sk-set li { display: block; margin: 0; padding: 0; }
 
-/* Per-character masks: each word (title) or item (skills) clips its own glyphs so multi-line text never bleeds between lines */
-.sk-mk { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
-.sk-ch { display: inline-block; will-change: transform; }
-.sk-set .sk-mk { white-space: nowrap; }
+/* Per-glyph masks: each word (title) or item (skills) clips its own glyphs. The padding gives ascenders, descenders and
+   side bearings room inside the clip; the equal negative margin keeps every row exactly one line-height tall. */
+.sk-mk {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: top;
+    white-space: nowrap;
+    padding: 0.12em 0.08em 0.2em;
+    margin: -0.12em -0.08em -0.2em;
+}
+.sk-ch { display: inline-block; }
 
-@media (max-width: 900px) {
-    .ll-section--services .sk-title { left: 27%; width: 44%; font-size: clamp(2.2rem, 7vw, 4rem); }
-    .sk-set { max-width: 30%; font-size: 14px; }
+/* Narrow screens: title and skills stack into one block centred on the axis, right of the star's arm */
+@media (max-width: 700px) {
+    .sk-cat {
+        inset: auto;
+        left: var(--sk-tx, 40%);
+        right: var(--sk-pad);
+        top: 50%;
+        transform: translate(0, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .ll-section--services .sk-title,
+    .sk-set {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto;
+        width: auto;
+        transform: none;
+    }
+    .ll-section--services .sk-title { font-size: calc(clamp(1.9rem, 8vw, 3rem) * var(--sk-fit, 1)); }
+    .sk-kicker { margin-bottom: 0.7rem; }
+    .sk-set { text-align: left; font-size: 13px; }
 }
 
-/* Reduced motion: no sticky wheel; the star sits in the slide and every category is listed statically */
+/* Reduced motion: no sticky wheel or stepping; the star sits in the slide and every category is listed statically */
 @media (prefers-reduced-motion: reduce) {
     .sk { height: auto; }
-    .sk__stage { position: relative; height: auto; min-height: 100vh; }
+    .sk__stage { position: relative; height: auto; min-height: var(--sk-h, 100vh); }
     .sk-star { opacity: 1; }
-    .sk-legacy { position: relative; inset: auto; padding: 16vh var(--sk-pad) 10vh 29%; }
+    .sk-rail { display: none; }
+    .sk-legacy { position: relative; inset: auto; padding: 16vh var(--sk-pad) 10vh var(--sk-tx, 29%); }
+    .sk:not(.is-live) .sk-cat + .sk-cat { visibility: visible; }
     .sk-cat {
         position: relative;
         inset: auto;
+        transform: none;
         display: flex;
+        flex-direction: row;
         justify-content: space-between;
         align-items: center;
         gap: 4vw;
-        padding: 3vh 0;
+        padding: 4.5vh 0 3vh;
         border-top: 1px solid var(--sk-hair);
     }
-    .ll-section--services .sk-title, .sk-set { position: static; transform: none; }
+    .ll-section--services .sk-title,
+    .sk-set { position: relative; left: auto; right: auto; top: auto; transform: none; }
     .ll-section--services .sk-title { width: auto; flex: 1 1 55%; font-size: clamp(2rem, 3.6vw, 4rem); }
-    .sk-set { max-width: 40%; }
+    .sk-set { max-width: 40%; white-space: normal; }
 }
