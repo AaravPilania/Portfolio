@@ -10,7 +10,7 @@
     const GW = 24, GH = 30;           // sprite grid, drawn facing up
     const BOX = 32;                   // square hit box in sprite px, centred on the bug
     const FXW = 40, FXH = 56;         // particle canvas, reaches above the box for hearts / Zs
-    const PAL = { k: '#121316', w: '#f4f2ea', s: '#b9b5a8', y: '#FFED29', t: '#ff7a8a', g: 'rgba(150, 160, 172, 0.55)' };
+    const PAL = { k: '#121316', w: '#f4f2ea', s: '#b9b5a8', y: '#FFED29', t: '#ff7a8a', d: '#57585f', o: '#7d6d1c', g: 'rgba(150, 160, 172, 0.55)' };
     const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Left half of the shell, head and pronotum; the right half is its mirror. The outline pass adds the ink edge.
@@ -77,6 +77,47 @@
         wide: [[9, 3], [8, 3], [7, 2], [6, 2], [5, 1]],
         down: [[9, 3], [8, 3], [7, 3], [6, 4]],
     };
+    // SPARK: slim firefly, graphite wing cases, pink-flecked shield and a lantern tail (L) that flashes
+    const FIREFLY = [
+        '............', '............', '............', '............',
+        '..........ww', '.........www', '.........kww', '.........kww', '..........ww',
+        '........ssss', '........sstt', '........sstt', '........ssss', '........kkkk',
+        '........dddk', '.......ddddk', '.......ddddk', '.......ddddk', '.......ddddk', '.......ddddk', '.......ddddk', '........dddk',
+        '........LLLL', '........LLLL', '.........LLL', '..........LL',
+    ];
+    // PINCH: stag beetle, broad graphite shell with a signature-yellow rim and bone mandibles
+    const STAG = [
+        '............', '............', '............', '............',
+        '.........sss', '.......sssss', '......skssss', '......ssssss', '.......sssss', '........ssss',
+        '......dddddd', '.....ddddddd', '.....ddddddd', '......kkkkkk',
+        '......yddddk', '.....ydddddk', '.....ydddddk', '.....ydddddk', '.....ydddddk', '.....ydddddk',
+        '.....ydddddk', '.....ydddddk', '.....ydddddk', '......yddddk', '.......ydddk', '.........yyk',
+    ];
+    const MANDIBLE = [[9, 3], [10, 3], [8, 2], [8, 1], [9, 1], [10, 2]];
+    // DUST: moth, fuzzy segmented body under dithered wings (D) with a yellow eye-spot
+    const MOTH = [
+        '............', '............', '............', '............',
+        '..........ww', '.........www', '.........kww', '..........ww', '.........www', '.........www',
+        '.........www', '.........www', '..........ww', '..........ss', '..........ww', '..........ss',
+        '..........ww', '..........ss', '..........ww', '..........ss', '..........ww', '...........w',
+    ];
+    const MOTH_WING = { y: 7, rows: [
+        '........DD', '......DDDD', '....DDDDDD', '..DDDDDDDD', '.DDDDyyDDD', '.DDDykkyDD', '.DDDDyyDDD', '..DDDDDDDD',
+        '...DDDDDDD', '....DDDDDD', '...DDDDDDD', '..DDDDDDDD', '..DDDDDDDD', '...DDDDDDD', '....DDDDDD', '......DDDD', '........DD',
+    ] };
+    const SKINS = {
+        beetle: { name: 'GLITCH', body: BODY, ant: ANT, legDx: 0, wings: 'membrane',
+            welcome: 'hi. i\'m glitch. every good site ships with one bug. i\'m it.', scroll: 'scroll-jacked.' },
+        firefly: { name: 'SPARK', body: FIREFLY, legDx: 3, wings: 'membrane', lantern: true,
+            ant: { out: [[10, 3], [9, 2], [8, 1], [7, 1]], up: [[11, 3], [11, 2], [10, 1]], wide: [[10, 3], [9, 3], [8, 2], [7, 2], [6, 1]], down: [[10, 3], [9, 3], [8, 4], [7, 5]] },
+            welcome: 'hi. i\'m spark. i light up when you find the good stuff.', scroll: 'my light can\'t keep up with you.' },
+        stag: { name: 'PINCH', body: STAG, legDx: 0, wings: 'membrane', extra: MANDIBLE,
+            ant: { out: [[6, 5], [5, 4], [4, 4], [3, 3]], up: [[6, 5], [6, 4], [5, 3]], wide: [[6, 5], [5, 5], [4, 4], [3, 4], [2, 3]], down: [[5, 6], [4, 7], [3, 8]] },
+            welcome: 'i\'m pinch. i guard the portfolio. mostly by standing here.', scroll: 'easy. these pincers aren\'t seatbelts.' },
+        moth: { name: 'DUST', body: MOTH, legDx: 0, wings: 'moth', noLegs: true,
+            ant: { out: [[10, 3], [9, 2], [8, 2], [8, 1], [7, 1]], up: [[11, 3], [10, 2], [10, 1], [9, 1]], wide: [[10, 3], [9, 3], [8, 2], [7, 2], [7, 1], [6, 1]], down: [[10, 3], [9, 3], [8, 3], [7, 4]] },
+            welcome: 'i\'m dust. came for the glow of your screen, stayed for the work.', scroll: 'wheee. is that a lamp?' },
+    };
     const GLYPH = {
         heart: ['yy.yy', 'yyyyy', '.yyy.', '..y..'],
         z: ['yyyy', '..y.', '.y..', 'yyyy'],
@@ -84,7 +125,7 @@
     };
 
     const LINES = {
-        welcome: ['hi. i\'m glitch. every good site ships with one bug. i\'m it.'],
+        scroll: ['whoa, slow down.', 'wind in my antennae.', 'hold on, i\'m coming.', 'motion sickness is a feature.'],
         hero: ['move your cursor. he watches it. i just try not to get squashed.', 'drag me anywhere. i won\'t file a report.'],
         screen: ['same guy, smaller screen. i live in the gaps between the words.', 'keep it simple, stupid. i\'m the simple part.'],
         projects: ['the good work is down here. hover a row, i\'ll wait on the line.', 'zero bugs in any of these. except me, visiting.'],
@@ -123,33 +164,54 @@
         return 'mid';
     }
 
-    // pose: { legs, antL, antR, fly: 0|1|2, belly, happy }
+    // pose: { skin, legs, antL, antR, fly: 0|1|2, belly, happy, lit }
     const cache = new Map();
     function compose(p) {
         const key = JSON.stringify(p);
         if (cache.has(key)) return cache.get(key);
+        const skin = SKINS[p.skin] || SKINS.beetle;
         const g = blank();
-        if (p.fly) WING[p.fly].rows.forEach((row, ry) => {
-            for (let rx = 0; rx < row.length; rx++) if (row[rx] !== '.') both(g, rx, WING[p.fly].y + ry, 'g', 0);
-        });
-        for (const side of [-1, 1]) {
-            for (const leg of ['front', 'mid', 'rear']) run(g, LEG[leg][legState(p.legs, side, leg)], 's', side);
-            run(g, ANT[side < 0 ? p.antL : p.antR], 's', side, 'y');
+        if (skin.wings === 'moth') {
+            // Wide wings at rest, folded toward the body on the upstroke
+            const fold = p.fly === 2 ? 3 : 0;
+            MOTH_WING.rows.forEach((row, ry) => {
+                for (let rx = 0; rx < row.length; rx++) {
+                    let c = row[rx];
+                    if (c === '.' || rx + fold > 9) continue;
+                    if (c === 'D') c = (rx + ry) % 2 ? 's' : 'w';
+                    both(g, rx + fold, MOTH_WING.y + ry, c, 0);
+                }
+            });
+        } else if (p.fly) {
+            WING[p.fly].rows.forEach((row, ry) => {
+                for (let rx = 0; rx < row.length; rx++) if (row[rx] !== '.') both(g, rx, WING[p.fly].y + ry, 'g', 0);
+            });
         }
-        BODY.forEach((row, y) => {
+        for (const side of [-1, 1]) {
+            if (!skin.noLegs) {
+                for (const leg of ['front', 'mid', 'rear']) {
+                    run(g, LEG[leg][legState(p.legs, side, leg)].map(([lx, ly]) => [lx + skin.legDx, ly]), 's', side);
+                }
+            }
+            run(g, skin.ant[side < 0 ? p.antL : p.antR], 's', side, 'y');
+            if (skin.extra) run(g, skin.extra, 'w', side);
+        }
+        const split = p.fly && skin.wings !== 'moth' ? 1 : 0;
+        skin.body.forEach((row, y) => {
             for (let x = 0; x < 12; x++) {
                 let c = row[x];
                 if (c === '.') continue;
+                if (c === 'L') c = p.lit ? 'y' : 'o';
                 if (p.belly && y >= 14) c = y === 17 || y === 21 ? 'k' : 's';
-                if (p.happy && c === 'k' && (y === 6 || y === 7)) c = 'y';
-                const split = p.fly && y >= 14 ? 1 : 0;
-                put(g, x - split, y, c);
-                put(g, GW - 1 - x + split, y, c);
+                if (p.happy && c === 'k' && y >= 6 && y <= 7) c = 'y';
+                const dx = split && y >= 14 ? 1 : 0;
+                put(g, x - dx, y, c);
+                put(g, GW - 1 - x + dx, y, c);
             }
         });
         // One-pixel ink edge around everything opaque, so the bug reads on the paper hero and the black slides alike
         const out = g.map((r) => r.slice());
-        const solid = (yy, xx) => yy >= 0 && yy < GH && xx >= 0 && xx < GW && 'wsyt'.indexOf(g[yy][xx]) >= 0;
+        const solid = (yy, xx) => yy >= 0 && yy < GH && xx >= 0 && xx < GW && 'wsytdo'.indexOf(g[yy][xx]) >= 0;
         for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
             if (g[y][x] === '.' && (solid(y - 1, x) || solid(y + 1, x) || solid(y, x - 1) || solid(y, x + 1))) out[y][x] = 'k';
         }
@@ -178,8 +240,13 @@
                 will-change: transform; -webkit-tap-highlight-color: transparent; }
             .pb-bug:focus-visible { outline: 1px dashed #FFED29; outline-offset: 2px; }
             .pb-bug canvas { position: absolute; display: block; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
-            .pb-body, .pb-shadow { left: ${(BOX - GW) / 2 * S}px; top: ${(BOX - GH) / 2 * S}px; width: ${GW * S}px; height: ${GH * S}px; will-change: transform; }
-            .pb-shadow { opacity: 0.26; }
+            .pb-rot, .pb-bug .pb-shadow { position: absolute; left: ${(BOX - GW) / 2 * S}px; top: ${(BOX - GH) / 2 * S}px; width: ${GW * S}px; height: ${GH * S}px; will-change: transform; pointer-events: none; }
+            .pb-bug .pb-body { left: 0; top: 0; width: 100%; height: 100%; }
+            .pb-bug .pb-shadow { opacity: 0.26; }
+            .pb-glow { position: absolute; left: ${12 * S - 22}px; top: ${23.5 * S - 22}px; width: 44px; height: 44px; border-radius: 50%; display: none;
+                background: radial-gradient(circle, rgba(255, 237, 41, 0.75) 0%, rgba(255, 237, 41, 0.28) 32%, transparent 70%);
+                mix-blend-mode: screen; opacity: 0; will-change: opacity; }
+            .pb-bug.has-lantern .pb-glow { display: block; }
             .pb-fx { left: ${(BOX - FXW) / 2 * S}px; top: ${(BOX - FXH) * S}px; width: ${FXW * S}px; height: ${FXH * S}px; }
             .pb-bubble { position: fixed; left: 0; top: 0; z-index: 9999991; max-width: 15.5rem; pointer-events: none;
                 padding: 9px 12px 10px; background: #f4f2ea; color: #121316;
@@ -220,14 +287,30 @@
         shadow.height = body.height = GH;
         fx.width = FXW;
         fx.height = FXH;
-        bug.append(shadow, body, fx);
+        const rot = doc.createElement('div');
+        rot.className = 'pb-rot';
+        const glow = doc.createElement('span');
+        glow.className = 'pb-glow';
+        rot.append(glow, body);
+        bug.append(shadow, rot, fx);
         const sctx = shadow.getContext('2d'), bctx = body.getContext('2d'), fctx = fx.getContext('2d');
 
         const bubble = doc.createElement('div');
         bubble.className = 'pb-bubble';
         bubble.setAttribute('role', 'status');
         bubble.setAttribute('aria-live', 'polite');
-        bubble.innerHTML = '<span class="pb-tag">[ GLITCH ]</span><span class="pb-text"><span class="pb-ghost"></span><span class="pb-type"></span></span>';
+        bubble.innerHTML = '<span class="pb-tag"></span><span class="pb-text"><span class="pb-ghost"></span><span class="pb-type"></span></span>';
+        const tag = bubble.querySelector('.pb-tag');
+        let stored = null;
+        try { stored = window.localStorage.getItem('pixelBugSkin'); } catch (e) { /* storage blocked */ }
+        let skinKey = SKINS[window.__pixelBugSkin] ? window.__pixelBugSkin : SKINS[stored] ? stored : 'beetle';
+        let skin = SKINS[skinKey];
+        function applySkin() {
+            tag.textContent = '[ ' + skin.name + ' ]';
+            bug.classList.toggle('has-lantern', !!skin.lantern);
+            bug.setAttribute('aria-label', skin.name.charAt(0) + skin.name.slice(1).toLowerCase() + ', the site guide. Press for a tip.');
+        }
+        applySkin();
         const ghost = bubble.querySelector('.pb-ghost');
         const typed = bubble.querySelector('.pb-type');
         const trail = doc.createElement('div');
@@ -303,7 +386,19 @@
         }, { passive: true });
 
         const scroller = doc.querySelector('.js-scroller');
-        (scroller || window).addEventListener('scroll', wake, { passive: true });
+        const scrollTop = () => (scroller ? scroller.scrollTop : window.scrollY);
+        // Scroll velocity is sampled from the listener (Lenis writes scrollTop each frame) and smoothed in the loop
+        let lastSt = scrollTop(), lastStAt = performance.now(), scrollV = 0, rawV = 0, fastFor = 0;
+        let lastScrollMove = -1e9, lastScrollFly = -1e9, lastScrollSay = -1e9;
+        (scroller || window).addEventListener('scroll', () => {
+            const now = performance.now(), st = scrollTop();
+            const ms = now - lastStAt;
+            if (ms > 0) rawV = (st - lastSt) / ms * 1000;
+            if (Math.abs(st - lastSt) > 0.5) lastScrollMove = now;
+            lastSt = st;
+            lastStAt = now;
+            lastActive = now;
+        }, { passive: true });
 
         function spawn(kind, n) {
             const count = n || 1;
@@ -496,6 +591,26 @@
             const clampY = (v) => Math.max(minY, Math.min(maxY, v));
             let liftTo = 0;
 
+            // Fast scrolling blows it off its feet: a short flight that drifts with the scroll and lands once it settles
+            if (now - lastScrollMove > 90) rawV = 0;
+            scrollV += (rawV - scrollV) * Math.min(1, dt * 14);
+            fastFor = Math.abs(scrollV) > 1800 ? fastFor + dt : 0;
+            if (fastFor > 0.12 && !(act && act.scroll) && now - lastScrollFly > 6000 && state !== 'held' && state !== 'flip' && !reduced) {
+                lastScrollFly = now;
+                if (state === 'sleep') {
+                    state = 'idle';
+                    spawn('bang');
+                }
+                act = { type: 'fly', phase: 'air', scroll: true, dir: Math.sign(scrollV), until: now + 5000,
+                    pts: [{ x: clampX(x + (Math.random() - 0.5) * 220), y }], i: 0 };
+                squash = 0.15;
+                if (!say && !queue.length && now - lastScrollSay > 12000) {
+                    lastScrollSay = now;
+                    const pool = LINES.scroll.concat(skin.scroll);
+                    speak(pool[Math.random() * pool.length | 0], now);
+                }
+            }
+
             if (state === 'held') {
                 x = mouse.x - press.ox;
                 y = mouse.y - press.oy;
@@ -590,6 +705,15 @@
                     if (act.phase === 'warm') {
                         if (now > act.until) act.phase = 'air';
                     } else if (act.phase === 'air') {
+                        if (act.scroll) {
+                            if (now - lastScrollMove < 450 && now < act.until) {
+                                if (Math.abs(scrollV) > 200) act.dir = Math.sign(scrollV);
+                                act.pts[0].y = y + act.dir * 140;
+                            } else {
+                                act.scroll = false;
+                                act.pts[0] = { x: x + Math.cos(heading) * 70, y: y + Math.sin(heading) * 70 };
+                            }
+                        }
                         goal = { x: clampX(act.pts[0].x), y: clampY(act.pts[0].y) };
                         liftTo = 1;
                     } else if (now > act.until) {
@@ -675,13 +799,21 @@
             }
             twitch = Math.max(0, twitch - dt);
 
-            const pose = { legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false };
+            // Firefly lantern: a short flash every couple of seconds, a slow glow while napping, full beam when happy
+            let lantern = 0;
+            if (skin.lantern) {
+                const ph = (clock % 2.2) / 2.2;
+                lantern = state === 'sleep' ? 0.2 + Math.sin(clock * 1.2) * 0.12 : Math.max(0.12, ph < 0.35 ? Math.sin(ph / 0.35 * Math.PI) : 0);
+                if (happy > 0 || state === 'fly') lantern = 1;
+                glow.style.opacity = (lantern * 0.95).toFixed(2);
+            }
+            const pose = { skin: skinKey, legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false, lit: lantern > 0.45 };
             const talking = say && now - say.start < say.text.length * 31;
             if (state === 'walk') {
                 pose.legs = ['a', 'stand', 'b', 'stand'][Math.floor(stride) % 4];
                 if (speed > 180) pose.antL = pose.antR = 'wide';
             } else if (state === 'fly') {
-                pose.fly = Math.floor(clock / 0.035) % 2 ? 1 : 2;
+                pose.fly = Math.floor(clock / (skin.wings === 'moth' ? 0.08 : 0.035)) % 2 ? 1 : 2;
                 pose.legs = act && act.phase === 'warm' ? 'stand' : 'tuck';
                 pose.antL = pose.antR = 'wide';
             } else if (state === 'groom') {
@@ -738,7 +870,7 @@
             if (happy > 1.2 && state === 'idle') deg += Math.floor(clock / 0.12) % 2 ? STEP : -STEP;
             if (state === 'flip') deg += Math.floor(clock / 0.2) % 2 ? STEP : 0;
             const sc = (1 + lift * 0.18) * (1 + squash * 0.4);
-            body.style.transform = 'rotate(' + deg + 'deg) scale(' + sc.toFixed(3) + ')';
+            rot.style.transform = 'rotate(' + deg + 'deg) scale(' + sc.toFixed(3) + ')';
             shadow.style.transform = 'translate3d(' + Math.round(3 + lift * 16) + 'px,' + Math.round(4 + lift * 22) + 'px,0) rotate(' + deg + 'deg)';
             shadow.style.opacity = (0.26 - lift * 0.12).toFixed(3);
 
@@ -766,9 +898,22 @@
         }
         requestAnimationFrame(loop);
 
-        enqueue(LINES.welcome[0]);
-        window.__pixelBugState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed, lift });
-        if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH };
+        enqueue(skin.welcome);
+        window.__pixelBugSetSkin = (key) => {
+            if (!SKINS[key] || key === skinKey) return;
+            skinKey = key;
+            skin = SKINS[key];
+            applySkin();
+            glow.style.opacity = '0';
+            hush();
+            queue.length = 0;
+            wake();
+            spawn('bang');
+            squash = 0.25;
+            speak(skin.welcome, performance.now());
+        };
+        window.__pixelBugState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length, act: act && act.type, speed, lift, skin: skinKey, scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll) });
+        if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH, SKINS: Object.keys(SKINS) };
     }
 
     function ready() {

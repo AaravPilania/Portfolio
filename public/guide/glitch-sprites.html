@@ -9,7 +9,7 @@
         .sheet { display: flex; flex-wrap: wrap; gap: 28px; }
         figure { margin: 0; display: grid; gap: 8px; justify-items: center; }
         figure.dark canvas { background: #000; }
-        .sheet canvas { width: 156px; height: 192px; image-rendering: pixelated; background: #f4f2ea; box-shadow: 0 0 0 1px rgba(18,19,22,0.15); }
+        .sheet canvas { width: 104px; height: 128px; image-rendering: pixelated; background: #f4f2ea; box-shadow: 0 0 0 1px rgba(18,19,22,0.15); }
     </style>
 </head>
 <body class="is-loaded">
@@ -20,7 +20,14 @@
         (function wait() {
             const d = window.__pixelBugDebug;
             if (!d || d === true) return setTimeout(wait, 50);
-            const base = { legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false };
+            const skins = d.SKINS || ['beetle'];
+            const sheet = document.getElementById('sheet');
+            skins.forEach((skin) => {
+            const head = document.createElement('h2');
+            head.textContent = skin;
+            head.style.cssText = 'flex-basis: 100%; margin: 12px 0 0; font-size: 12px; letter-spacing: 0.24em;';
+            sheet.appendChild(head);
+            const base = { skin, legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false, lit: skin === 'firefly' };
             const poses = [
                 ['idle', {}],
                 ['walk a', { legs: 'a' }],
@@ -35,7 +42,6 @@
                 ['idle / dark', {}, true],
                 ['fly / dark', { fly: 1, legs: 'tuck', antL: 'wide', antR: 'wide' }, true],
             ];
-            const sheet = document.getElementById('sheet');
             poses.forEach(([name, p, dark]) => {
                 const fig = document.createElement('figure');
                 if (dark) fig.className = 'dark';
@@ -47,6 +53,7 @@
                 cap.textContent = name;
                 fig.append(c, cap);
                 sheet.appendChild(fig);
+            });
             });
         })();
     </script>

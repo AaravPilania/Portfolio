@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide / Pick your bug</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        @font-face { font-family: 'Brier'; src: url('/fonts/Brier-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+        :root { --void: #000; --ink: #121316; --paper: #f4f2ea; --dim: #8d8a80; --sig: #FFED29; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; background: var(--void); color: var(--paper); }
+        body { font: 500 12px/1.5 'IBM Plex Mono', monospace; letter-spacing: 0.02em; min-height: 100vh; padding: clamp(28px, 4vw, 64px); }
+        .pk-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 24px; margin-bottom: clamp(28px, 4vw, 56px);
+            border-bottom: 1px solid rgba(244, 242, 234, 0.14); padding-bottom: 22px; }
+        .pk-kicker { color: var(--sig); font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; }
+        h1 { font-family: 'Brier', Georgia, serif; font-weight: 700; font-size: clamp(3rem, 7.4vw, 7rem); line-height: 0.9; letter-spacing: -0.03em;
+            text-transform: uppercase; margin: 10px 0 0; }
+        h1 em { font-style: normal; color: transparent; -webkit-text-stroke: 1.4px var(--sig); }
+        .pk-status { text-align: right; color: var(--dim); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; }
+        .pk-status b { display: block; margin-top: 6px; color: var(--paper); font-weight: 500; font-size: 13px; letter-spacing: 0.2em; }
+        .pk-status b span { background: var(--sig); color: var(--ink); padding: 1px 6px; }
+        .pk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(18px, 2vw, 28px); }
+        .pk-card { position: relative; padding: 18px 18px 20px; background: #0b0b0c;
+            box-shadow: 0 -2px 0 0 #2a2b2f, 0 2px 0 0 #2a2b2f, -2px 0 0 0 #2a2b2f, 2px 0 0 0 #2a2b2f;
+            transition: box-shadow 0.2s steps(3), transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .pk-card:hover { transform: translate3d(0, -3px, 0); }
+        .pk-card.is-final { box-shadow: 0 -2px 0 0 var(--sig), 0 2px 0 0 var(--sig), -2px 0 0 0 var(--sig), 2px 0 0 0 var(--sig), 6px 6px 0 0 rgba(255, 237, 41, 0.18); }
+        .pk-index { position: absolute; top: 18px; right: 18px; color: var(--dim); font-size: 10px; letter-spacing: 0.2em; }
+        .pk-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin-bottom: 18px; }
+        .pk-swatch { position: relative; aspect-ratio: 34 / 38; display: grid; place-items: center; overflow: hidden; }
+        .pk-swatch.is-paper { background-color: #eeece5;
+            background-image: linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px),
+                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px; background-position: center; }
+        .pk-swatch.is-void { background: #000; box-shadow: inset 0 0 0 1px #1d1e22; }
+        .pk-swatch canvas { width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+        .pk-pose { position: absolute; left: 8px; bottom: 8px; font-size: 9px; letter-spacing: 0.2em; padding: 1px 5px; }
+        .is-paper .pk-pose { background: var(--ink); color: var(--sig); }
+        .is-void .pk-pose { background: var(--paper); color: var(--ink); }
+        .pk-name { display: flex; align-items: baseline; gap: 10px; margin: 0; font-family: 'Brier', Georgia, serif; font-size: 2.6rem; line-height: 1;
+            letter-spacing: -0.02em; text-transform: uppercase; }
+        .pk-name small { font: 500 10px 'IBM Plex Mono', monospace; letter-spacing: 0.22em; color: var(--dim); }
+        .pk-trait { margin: 8px 0 14px; color: #cfccc2; }
+        .pk-quote { position: relative; margin: 0 0 18px; padding: 9px 12px 10px; background: var(--paper); color: var(--ink); font-size: 11.5px; line-height: 1.45;
+            box-shadow: 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink), -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink), 4px 4px 0 0 rgba(255, 237, 41, 0.22); }
+        .pk-quote::before { content: attr(data-tag); display: inline-block; margin-right: 8px; padding: 0 5px; background: var(--ink); color: var(--sig);
+            font-size: 9px; letter-spacing: 0.18em; vertical-align: 1px; }
+        .pk-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .pk-btn { appearance: none; border: 0; cursor: pointer; padding: 11px 10px; font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: 0.18em;
+            text-transform: uppercase; color: var(--paper); background: transparent; box-shadow: inset 0 0 0 1px rgba(244, 242, 234, 0.32);
+            transition: background 0.15s steps(2), color 0.15s steps(2), box-shadow 0.15s steps(2); }
+        .pk-btn:hover, .pk-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--paper); background: rgba(244, 242, 234, 0.06); }
+        .pk-btn.is-final { background: var(--sig); color: var(--ink); box-shadow: none; }
+        .pk-btn.is-final:hover { background: var(--sig); }
+        .pk-card.is-live .pk-live { color: var(--sig); box-shadow: inset 0 0 0 1px var(--sig); }
+        .pk-foot { margin-top: clamp(28px, 4vw, 48px); color: var(--dim); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+            display: flex; flex-wrap: wrap; gap: 8px 28px; }
+        .pk-foot a { color: var(--paper); }
+        .pb-bug { cursor: grab !important; }
+    </style>
+</head>
+<body class="is-loaded">
+    <header class="pk-head">
+        <div>
+            <div class="pk-kicker">[ guide casting / 04 candidates ]</div>
+            <h1>Pick your <em>bug</em></h1>
+        </div>
+        <div class="pk-status">finalised guide<b id="pkFinal">none yet</b></div>
+    </header>
+    <main class="pk-grid" id="pkGrid"></main>
+    <footer class="pk-foot">
+        <span>try live: the chosen bug roams this page</span>
+        <span>finalise: saved to this browser, used by <a href="/guide/pixel-bug.html">the live-site prototype</a></span>
+    </footer>
+
+    <script>window.__pixelBugDebug = true;</script>
+    <script src="/js/pixel-bug.js"></script>
+    <script>
+        (function () {
+            const CAST = [
+                { key: 'beetle', name: 'Glitch', kind: 'beetle', trait: 'the classic. signature-yellow shell, zero chill, will absolutely crawl on your cursor.',
+                    quote: 'found you. marking as resolved.' },
+                { key: 'firefly', name: 'Spark', kind: 'firefly', trait: 'slim and quiet. flashes its lantern whenever you land on something good.',
+                    quote: 'my light can\'t keep up with you.' },
+                { key: 'stag', name: 'Pinch', kind: 'stag beetle', trait: 'the bodyguard. bone mandibles, graphite armour, a very soft heart.',
+                    quote: 'easy. these pincers aren\'t seatbelts.' },
+                { key: 'moth', name: 'Dust', kind: 'moth', trait: 'dithered paper wings, drawn to the glow of your screen. drifts more than it walks.',
+                    quote: 'wheee. is that a lamp?' },
+            ];
+            const POSES = ['walk', 'groom', 'fly', 'caught', 'flipped'];
+            const SW = 34, SH = 38;
+            const KEY = 'pixelBugSkin';
+            const grid = document.getElementById('pkGrid');
+            const finalEl = document.getElementById('pkFinal');
+            const readFinal = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+            let final = readFinal();
+            let live = null;
+
+            const cards = CAST.map((c, i) => {
+                const card = document.createElement('article');
+                card.className = 'pk-card';
+                card.dataset.skin = c.key;
+                card.innerHTML =
+                    '<span class="pk-index">' + String(i + 1).padStart(2, '0') + ' / ' + c.key + '</span>' +
+                    '<div class="pk-swatches">' +
+                        '<div class="pk-swatch is-paper"><canvas width="' + SW + '" height="' + SH + '"></canvas><span class="pk-pose"></span></div>' +
+                        '<div class="pk-swatch is-void"><canvas width="' + SW + '" height="' + SH + '"></canvas><span class="pk-pose"></span></div>' +
+                    '</div>' +
+                    '<h2 class="pk-name">' + c.name + ' <small>' + c.kind + '</small></h2>' +
+                    '<p class="pk-trait">' + c.trait + '</p>' +
+                    '<p class="pk-quote" data-tag="[ ' + c.name.toUpperCase() + ' ]">' + c.quote + '</p>' +
+                    '<div class="pk-actions">' +
+                        '<button type="button" class="pk-btn pk-live">[ try live ]</button>' +
+                        '<button type="button" class="pk-btn pk-final">[ finalise ]</button>' +
+                    '</div>';
+                grid.appendChild(card);
+                card.querySelector('.pk-live').addEventListener('click', () => tryLive(c.key));
+                card.querySelector('.pk-final').addEventListener('click', () => finalise(c.key));
+                return {
+                    c, card,
+                    ctxs: [...card.querySelectorAll('canvas')].map((cv) => cv.getContext('2d')),
+                    labels: [...card.querySelectorAll('.pk-pose')],
+                    offset: i * 0.37,
+                };
+            });
+
+            function paintState() {
+                cards.forEach(({ c, card }) => {
+                    const isFinal = c.key === final, isLive = c.key === live;
+                    card.classList.toggle('is-final', isFinal);
+                    card.classList.toggle('is-live', isLive);
+                    const fb = card.querySelector('.pk-final');
+                    fb.classList.toggle('is-final', isFinal);
+                    fb.textContent = isFinal ? '[ finalised ]' : '[ finalise ]';
+                    card.querySelector('.pk-live').textContent = isLive ? '[ roaming ]' : '[ try live ]';
+                });
+                const f = CAST.find((c) => c.key === final);
+                finalEl.innerHTML = f ? '<span>' + f.name.toUpperCase() + '</span> / ' + f.key : 'none yet';
+            }
+            function tryLive(key) {
+                live = key;
+                if (window.__pixelBugSetSkin) window.__pixelBugSetSkin(key);
+                paintState();
+            }
+            function finalise(key) {
+                final = key;
+                try { localStorage.setItem(KEY, key); } catch (e) { /* storage blocked */ }
+                tryLive(key);
+            }
+
+            function poseFor(key, name, t) {
+                const p = { skin: key, legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false, lit: false };
+                const f = Math.floor(t * 8);
+                if (name === 'walk') { p.legs = ['a', 'stand', 'b', 'stand'][f % 4]; p.lit = t % 2 < 0.5; }
+                if (name === 'groom') { const l = f % 3 < 2; p.legs = l ? 'groomL' : 'groomR'; if (l) p.antL = 'down'; else p.antR = 'down'; }
+                if (name === 'fly') { p.fly = Math.floor(t * (key === 'moth' ? 12 : 26)) % 2 ? 1 : 2; p.legs = 'tuck'; p.antL = p.antR = 'wide'; p.lit = true; }
+                if (name === 'caught') { p.happy = true; p.antL = p.antR = 'up'; p.lit = true; }
+                if (name === 'flipped') { p.belly = true; p.legs = f % 2 ? 'flail0' : 'flail1'; p.antL = p.antR = 'wide'; }
+                return p;
+            }
+
+            function start(debug) {
+                const SEG = 1.8;
+                function frame(now) {
+                    const t = now / 1000;
+                    cards.forEach((it) => {
+                        const lt = t + it.offset;
+                        const name = POSES[Math.floor(lt / SEG) % POSES.length];
+                        const spr = debug.compose(poseFor(it.c.key, name, lt));
+                        const flying = name === 'fly';
+                        const bob = flying ? Math.round(Math.sin(lt * 6) * 1) - 2 : name === 'walk' && Math.floor(lt * 8) % 2 ? -1 : 0;
+                        const wiggle = name === 'caught' ? (Math.floor(lt * 7) % 2 ? 0.2 : -0.2) : 0;
+                        it.ctxs.forEach((ctx, i) => {
+                            ctx.imageSmoothingEnabled = false;
+                            ctx.clearRect(0, 0, SW, SH);
+                            if (i === 0) {
+                                const so = flying ? 4 : 1;
+                                ctx.globalAlpha = 0.2;
+                                ctx.drawImage(spr.sil, (SW - debug.GW) / 2 + so, (SH - debug.GH) / 2 + so + 1);
+                                ctx.globalAlpha = 1;
+                            }
+                            ctx.save();
+                            ctx.translate(SW / 2, SH / 2 + bob);
+                            if (wiggle) ctx.rotate(wiggle);
+                            ctx.drawImage(spr.img, -debug.GW / 2, -debug.GH / 2);
+                            ctx.restore();
+                        });
+                        it.labels.forEach((l) => { if (l.textContent !== name) l.textContent = name; });
+                    });
+                    requestAnimationFrame(frame);
+                }
+                requestAnimationFrame(frame);
+            }
+
+            (function wait() {
+                const d = window.__pixelBugDebug;
+                if (!d || d === true) return setTimeout(wait, 50);
+                live = final && CAST.some((c) => c.key === final) ? final : 'beetle';
+                paintState();
+                start(d);
+            })();
+        })();
+    </script>
+</body>
+</html>
