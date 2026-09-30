@@ -26,25 +26,25 @@
         </div>
     </section>
 
-    <section class="sk" id="section-skills" aria-label="Skills">
+    <section class="sk ll-section--services" id="section-skills" aria-label="Skills">
+        <video class="sk-video" src="/videos/services-bg.mp4" width="1920" height="1080" preload="auto" autoplay loop muted playsinline aria-hidden="true"></video>
+
         <header class="sk__head">
             <span class="tag">[ 04 ]</span>
             <span class="tag tag--dim">Stack &middot; what the work is made of</span>
         </header>
 
-        <ul class="sk-data" id="skData">
-            <li data-tag="FRONTEND" data-tone="sun">React 19, Vite, Tailwind CSS v4, Framer Motion, GSAP, Three.js, React Three Fiber, PWA</li>
-            <li data-tag="BACKEND" data-tone="ultra">FastAPI, Node.js, REST APIs, asyncio, PostgreSQL, SQLite, ChromaDB</li>
-            <li data-tag="AI / ML" data-tone="paper">PyTorch, scikit-learn, SHAP, Sentence Transformers, RAG, LLM Orchestration, Multi-Agent Pipelines</li>
-            <li data-tag="LANGUAGES" data-tone="peri">Python, Java, JavaScript, TypeScript, C, C++, SQL</li>
-            <li data-tag="TOOLS &amp; TECH" data-tone="bone">Git, GitHub, Docker, Whisper STT, Ollama, Chrome DevTools Protocol, Tesseract OCR</li>
-        </ul>
-
         <div class="sk__orbit" aria-hidden="true">
             <div class="sk-star" id="bigStar"></div>
         </div>
 
-        <div class="sk__ribbons" id="skRibbons" aria-hidden="true"></div>
+        <ol class="sk__rows" id="skRows">
+            <li class="sk-row"><span class="sk-idx">01</span><h3 class="sk-head">Frontend</h3><p class="sk-skills">React 19, Vite, Tailwind CSS v4, Framer Motion, GSAP, Three.js, React Three Fiber, PWA</p></li>
+            <li class="sk-row"><span class="sk-idx">02</span><h3 class="sk-head">Backend</h3><p class="sk-skills">FastAPI, Node.js, REST APIs, asyncio, PostgreSQL, SQLite, ChromaDB</p></li>
+            <li class="sk-row"><span class="sk-idx">03</span><h3 class="sk-head">AI / ML</h3><p class="sk-skills">PyTorch, scikit-learn, SHAP, Sentence Transformers, RAG, LLM Orchestration, Multi-Agent Pipelines</p></li>
+            <li class="sk-row"><span class="sk-idx">04</span><h3 class="sk-head">Languages</h3><p class="sk-skills">Python, Java, JavaScript, TypeScript, C, C++, SQL</p></li>
+            <li class="sk-row"><span class="sk-idx">05</span><h3 class="sk-head">Tools &amp; Technologies</h3><p class="sk-skills">Git, GitHub, Docker, Whisper STT, Ollama, Chrome DevTools Protocol, Tesseract OCR</p></li>
+        </ol>
 
         <div class="sk__fly" aria-hidden="true">
             <div class="sk-bug" id="skBug"><canvas width="24" height="30"></canvas></div>
@@ -58,6 +58,7 @@
 
     <script>window.__pixelBugSkin = 'beetle'; window.__pixelBugSpriteOnly = true;</script>
     <script src="/js/pixel-bug.js"></script>
+    <script src="/js/lamalama-authentic-gl.js"></script>
     <script src="/js/gsap.min.js"></script>
     <script src="/js/ScrollTrigger.min.js"></script>
     <script src="/guide/skills-slide/skills-slide.js"></script>
