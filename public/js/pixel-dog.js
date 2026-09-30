@@ -1,4 +1,4 @@
-// BYTE: pixel office dog that tags along the bottom of the viewport and narrates each section.
+// BYTE: front-facing pixel office dog that chases the cursor anywhere on screen and narrates each section.
 // Self-mounting once the intro has handed over (body.is-loaded). Pet (click), drag, or leave it to nap.
 (function () {
     'use strict';
@@ -6,39 +6,77 @@
     window.__pixelDog = true;
 
     const doc = document;
-    const S = 3;                      // CSS px per sprite pixel
-    const CW = 32, CH = 29;           // canvas in sprite px: dog + headroom for hearts / Zs
-    const OX = 5, OY = 12;            // dog sprite origin inside the canvas
-    const DW = 22;                    // dog sprite width
+    const S = 2;                      // CSS px per sprite pixel
+    const CW = 40, CH = 44;           // canvas in sprite px: dog + headroom for hearts / Zs
+    const OX = 6, OY = 15;            // dog sprite origin inside the canvas
+    const DW = 28, DH = 28;           // dog sprite size
     const PAL = { k: '#121316', w: '#f4f2ea', s: '#b9b5a8', y: '#FFED29', t: '#ff7a8a' };
     const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const BASE = [
-        '......................',
-        '..............kkkk....',
-        '.............kwwwwk...',
-        '............kwwwwwwk..',
-        '............kswwwkwwk.',
-        '............ksswwwwwkk',
-        '............ksswwwwwkk',
-        '.............kswwwkkk.',
-        '....kkkkkkkkkkyyyykk..',
-        '...kwwwwwwwwwwyyyk....',
-        '...kwwwwwwwwwwwwk.....',
-        '...kwwwsswwwwwwwk.....',
-        '...kwwssswwwwwwwk.....',
-        '....kkwwwwwwwwkk......',
+    // Left half of the face-on sprite; the right half is its mirror
+    const HEAD = [
+        '..............',
+        '........kkkkkk',
+        '......kkwwwwww',
+        '.....kwwwwwwww',
+        '..kkkwwwwwwwww',
+        '.kssskwwwwwwww',
+        'ksssskwwwwwwww',
+        'ksssskwwwwwwww',
+        'ksssskwwwwwwww',
+        'ksssskwwwwwwww',
+        'ksssskwwwwwwww',
+        'ksssskwwwwwwww',
+        '.kssskwwwwwwww',
+        '..kkk.kwwwwwww',
+        '......kwwwwwww',
+        '.......kwwwwww',
+        '........kkwwww',
     ];
-    const LEGS = {
-        stand: ['....kw.kw....kw.kw....', '....kk.kk....kk.kk....'],
-        walkA: ['...kw...kw..kw...kw...', '...kk...kk..kk...kk...'],
-        walkB: ['.....kwkw......kwkw...', '.....kkkk......kkkk...'],
-        dangle: ['....kw.kw....kw.kw....', '....kw.kw....kw.kw....'],
+    const BODY = [
+        '.......kkkkkkk',
+        '.......kyyyyyy',
+        '.......kwwwwww',
+        '......kwwwwwww',
+        '......kwwwwwww',
+    ];
+    const LEG = {
+        down: [
+            '......kwwkwwws',
+            '......kwwkwwws',
+            '.....kwwwkwwws',
+            '.....kwwwkwwwk',
+            '.....kkkkkwkwk',
+            '.........kkkkk',
+        ],
+        up: [
+            '......kwwkwwws',
+            '......kwwkwwws',
+            '.....kwwwkwwwk',
+            '.....kwwwkwkwk',
+            '.....kkkkkkkkk',
+            '..............',
+        ],
+        tuck: [
+            '..............',
+            '..............',
+            '.......kkkkkk.',
+            '.......kwkwwk.',
+            '.......kkkkkk.',
+            '..............',
+        ],
     };
+    const PATCH = [[17, 7, 19], [16, 8, 20], [16, 9, 20], [16, 10, 20], [17, 11, 19]];
     const TAIL = {
-        up: ['k...', 'kw..', '.kw.', '..kw', '...k', '....'],
-        mid: ['....', '....', '....', 'kkk.', 'kwwk', '.kkk'],
-        down: ['....', '....', '....', '...k', '..kw', '.kw.'],
+        a: ['....k.', '...kwk', '...kwk', '..kwk.', '..kwk.', '.kwk..', 'kwk...', 'kk....'],
+        b: ['......', '....kk', '...kwk', '..kwk.', '..kwk.', '.kwk..', 'kwk...', 'kk....'],
+        down: ['......', '......', '......', '......', 'k.....', 'wk....', 'kwk...', '.kk...'],
+    };
+    const EYE = {
+        open: ['.kk', 'kkk', 'kkk'],
+        shut: ['...', 'kkk', '...'],
+        happy: ['.k.', 'k.k', '...'],
+        wide: ['kkk', 'kwk', 'kkk'],
     };
     const GLYPH = {
         heart: ['yy.yy', 'yyyyy', '.yyy.', '..y..'],
@@ -55,42 +93,71 @@
         services: ['how he pays rent. and my kibble.', 'party tricks, he calls them. i call them fetch.'],
         logos: ['people he\'s worked with. i\'ve barked at all of them.', 'nice people. excellent snacks.'],
         pet: ['good human.', 'again. do it again.', '*tail intensifies*', 'you smell like coffee and deadlines.'],
+        caught: ['got you.', 'caught it. what\'s my prize?', 'tag. you\'re it.', '*pant pant* again?', 'fast, huh?', 'that cursor never stood a chance.'],
     };
 
-    function grid() {
+    function blank() {
         const g = [];
-        for (let y = 0; y < 16; y++) g.push(new Array(DW).fill('.'));
+        for (let y = 0; y < DH; y++) g.push(new Array(DW).fill('.'));
         return g;
+    }
+    function put(g, x, y, c) {
+        if (y >= 0 && y < DH && x >= 0 && x < DW) g[y][x] = c;
     }
     function stamp(g, rows, ox, oy) {
         rows.forEach((row, y) => {
-            for (let x = 0; x < row.length; x++) {
+            for (let x = 0; x < row.length; x++) if (row[x] !== '.') put(g, ox + x, oy + y, row[x]);
+        });
+    }
+    function half(g, rows, oy, side) {
+        rows.forEach((row, y) => {
+            for (let x = 0; x < 14; x++) {
                 const c = row[x];
-                if (c !== '.' && g[oy + y] && x + ox < DW) g[oy + y][x + ox] = c;
+                if (c === '.') continue;
+                if (side <= 0) put(g, x, oy + y, c);
+                if (side >= 0) put(g, DW - 1 - x, oy + y, c);
             }
         });
     }
+
+    // pose: { legs: 'stand'|'walkL'|'walkR'|'tuck', tail, eyes, lookX, lookY, tongue, blush, lie }
     const cache = new Map();
-    function compose(legs, tail, eyes, tongue, lie) {
-        const key = [legs, tail, eyes, tongue, lie].join('|');
+    function compose(p) {
+        const key = JSON.stringify(p);
         if (cache.has(key)) return cache.get(key);
-        const g = grid();
-        const dy = lie ? 2 : 0;
-        stamp(g, BASE, 0, dy);
-        if (lie) stamp(g, ['.................kkkkk', '.................kwwwk'], 0, 14);
-        else stamp(g, LEGS[legs], 0, 14);
-        stamp(g, TAIL[tail], 0, 3 + dy);
-        if (eyes) {
-            g[3 + dy][17] = 'k';
+        const g = blank();
+        const dy = p.lie ? 4 : 0;
+        stamp(g, TAIL[p.tail], 20, 13 + dy);
+        half(g, HEAD, dy, 0);
+        half(g, BODY, 17 + dy, 0);
+        if (p.lie) {
+            half(g, LEG.tuck, 20, 0);
         } else {
-            g[4 + dy][17] = 'w';
-            g[5 + dy][16] = 'k';
-            g[5 + dy][17] = 'k';
+            half(g, p.legs === 'walkL' ? LEG.up : LEG.down, 22, -1);
+            half(g, p.legs === 'walkR' ? LEG.up : LEG.down, 22, 1);
         }
-        if (tongue) {
-            g[8 + dy][18] = 't';
-            g[9 + dy][18] = 't';
+        PATCH.forEach(([x0, y, x1]) => {
+            for (let x = x0; x <= x1; x++) if (g[y + dy][x] === 'w') g[y + dy][x] = 's';
+        });
+        const eye = EYE[p.eyes];
+        const lx = p.lookX || 0, ly = p.lookY || 0;
+        [[8, 8], [17, 8]].forEach(([ex, ey]) => {
+            for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+                const c = eye[y][x];
+                if (c !== '.') put(g, ex + x + lx, ey + y + ly + dy, c);
+            }
+        });
+        stamp(g, ['kkkk', '.kk.'], 12, 12 + dy);
+        if (p.tongue) {
+            stamp(g, ['.kk.', 'kttk', 'kttk', 'kttk', '.kk.'], 12, 14 + dy);
+        } else {
+            stamp(g, ['..kk..', 'kk..kk'], 11, 14 + dy);
         }
+        if (p.blush) {
+            put(g, 7, 13 + dy, 't');
+            put(g, 20, 13 + dy, 't');
+        }
+        stamp(g, ['yy', 'yy'], 13, 19 + dy);
         cache.set(key, g);
         return g;
     }
@@ -106,11 +173,12 @@
             .pd-bubble { position: fixed; left: 0; top: 0; z-index: 9999991; max-width: 15.5rem; pointer-events: none;
                 padding: 9px 12px 10px; background: #f4f2ea; color: #121316;
                 font: 500 11.5px/1.45 'IBM Plex Mono', 'Sometype Mono', monospace; letter-spacing: 0.01em;
-                box-shadow: 0 -3px 0 0 #121316, 0 3px 0 0 #121316, -3px 0 0 0 #121316, 3px 0 0 0 #121316, 6px 6px 0 0 rgba(18,19,22,0.28);
+                box-shadow: 0 -2px 0 0 #121316, 0 2px 0 0 #121316, -2px 0 0 0 #121316, 2px 0 0 0 #121316, 5px 5px 0 0 rgba(18,19,22,0.28);
                 opacity: 0; transition: opacity 0.18s steps(3); will-change: transform, opacity; }
             .pd-bubble.is-on { opacity: 1; }
-            .pd-bubble::after { content: ''; position: absolute; left: var(--tail, 24px); bottom: -9px; width: 9px; height: 6px; background: #121316;
+            .pd-bubble::after { content: ''; position: absolute; left: var(--tail, 24px); bottom: -8px; width: 8px; height: 6px; background: #121316;
                 clip-path: polygon(0 0, 100% 0, 100% 33%, 66% 33%, 66% 66%, 33% 66%, 33% 100%, 0 100%); }
+            .pd-bubble.is-below::after { bottom: auto; top: -8px; transform: scaleY(-1); }
             .pd-tag { display: inline-block; margin: 0 0 5px; padding: 1px 5px; background: #121316; color: #FFED29;
                 font-size: 9px; letter-spacing: 0.18em; }
             .pd-body { position: relative; display: block; }
@@ -160,26 +228,28 @@
 
         let vw = window.innerWidth, vh = window.innerHeight;
         const W = CW * S, H = CH * S;
-        const floorY = () => vh - H - 10;
-        let x = 28, y = floorY(), v = 0, vy = 0, facing = 1;
-        let state = reduced ? 'idle' : 'fall';
-        if (state === 'fall') y = -H;
+        // Sprite-space anchors in CSS px from the canvas top-left
+        const BODY_CX = (OX + DW / 2) * S, BODY_CY = (OY + DH / 2) * S;
+        const home = () => ({ x: 24, y: vh - H - 8 });
+        let x = home().x, y = -H, vx = 0, vy = 0;
+        let state = reduced ? 'idle' : 'enter';
+        if (reduced) y = home().y;
         let hover = false, happy = 0, squash = 0, hop = 0, rot = 0;
         let lastActive = performance.now(), nextBlink = 2, blink = 0, clock = 0;
-        const mouse = { x: -1, y: -1, t: 0, vx: 0 };
+        let travelled = 0, lastCaughtSay = -1e9;
+        const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false };
         const parts = [];
 
         window.addEventListener('resize', () => {
             vw = window.innerWidth;
             vh = window.innerHeight;
-            if (state !== 'held' && state !== 'fall') y = floorY();
         }, { passive: true });
 
         function wake() {
             lastActive = performance.now();
             if (state === 'sleep') {
                 state = 'idle';
-                spawn('bang', 0);
+                spawn('bang');
             }
         }
 
@@ -189,21 +259,21 @@
             mouse.x = e.clientX;
             mouse.y = e.clientY;
             mouse.t = now;
-            if (Math.hypot(e.clientX - (x + W / 2), e.clientY - (y + H / 2)) < 260) wake();
-            else if (state !== 'sleep') lastActive = now;
+            mouse.seen = true;
+            wake();
         }, { passive: true });
 
         const scroller = doc.querySelector('.js-scroller');
         (scroller || window).addEventListener('scroll', wake, { passive: true });
 
-        // --- Particles: hearts on pets, Zs while napping, a bang when startled
+        // --- Particles: hearts on pets and catches, Zs while napping, a bang when startled
         function spawn(kind, n) {
             const count = n || 1;
             for (let i = 0; i < count; i++) {
                 parts.push({
                     kind,
-                    x: OX + (facing > 0 ? 15 : 2) + (Math.random() * 6 - 3) | 0,
-                    y: OY + (kind === 'z' ? 2 : 0),
+                    x: OX + 10 + (Math.random() * 8 | 0),
+                    y: OY + (kind === 'z' ? 4 : 0),
                     age: -i * 0.18,
                     life: kind === 'bang' ? 0.7 : kind === 'z' ? 2.2 : 1.3,
                     drift: Math.random() < 0.5 ? -1 : 1,
@@ -261,11 +331,11 @@
             if (key !== section) {
                 section = key;
                 sectionSince = now;
-            } else if (key && !seen[key] && now - sectionSince > 700 && state !== 'held' && state !== 'fall') {
+            } else if (key && !seen[key] && now - sectionSince > 700 && state !== 'held' && state !== 'enter') {
                 seen[key] = true;
                 told[key] = 1;
                 if (state === 'sleep') wake();
-                spawn('bang', 0);
+                spawn('bang');
                 hop = 1;
                 enqueue(LINES[key][0]);
             }
@@ -285,14 +355,14 @@
                 state = 'held';
                 hush();
                 label('[ WHEE ]');
-                wake();
             }
         });
         function release(e) {
             if (!press) return;
             if (state === 'held') {
-                state = 'fall';
-                vy = 0;
+                state = 'idle';
+                vx = vy = 0;
+                squash = 0.2;
                 label(hover ? '[ PET ]' : '');
             } else {
                 pet(performance.now());
@@ -326,18 +396,31 @@
             }
         }
 
+        function caught(now) {
+            happy = 2.2;
+            hop = 1;
+            spawn('heart');
+            if (!say && !queue.length && now - lastCaughtSay > 7000) {
+                lastCaughtSay = now;
+                speak(LINES.caught[Math.random() * LINES.caught.length | 0], now);
+            }
+        }
+
         // --- Render
         function draw(g, bob) {
             ctx.clearRect(0, 0, CW, CH);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-            if (state !== 'held' && state !== 'fall') ctx.fillRect(OX + 3, CH - 1, 15, 1);
-            for (let gy = 0; gy < 16; gy++) {
+            if (state !== 'held') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(OX + 6, CH - 1, 16, 1);
+                ctx.fillRect(OX + 8, CH - 2, 12, 1);
+            }
+            for (let gy = 0; gy < DH; gy++) {
                 const row = g[gy];
                 for (let gx = 0; gx < DW; gx++) {
                     const c = row[gx];
                     if (c === '.') continue;
                     ctx.fillStyle = PAL[c];
-                    ctx.fillRect(OX + (facing > 0 ? gx : DW - 1 - gx), OY + gy + bob, 1, 1);
+                    ctx.fillRect(OX + gx, OY + gy + bob, 1, 1);
                 }
             }
             for (const p of parts) {
@@ -360,7 +443,7 @@
             }
         }
 
-        let last = performance.now(), nextDetect = 0, nextZ = 0;
+        let last = performance.now(), nextDetect = 0, nextZ = 0, stride = 0;
         const mountedAt = last;
         function loop(now) {
             const dt = Math.min(0.05, (now - last) / 1000);
@@ -378,47 +461,53 @@
             if (state === 'idle' || state === 'walk') {
                 if (now - lastActive > 18000 && !say && !queue.length) {
                     state = 'sleep';
-                    v = 0;
+                    vx = vy = 0;
                     hush();
                 }
             }
 
-            const cx = x + W / 2;
+            const cx = x + BODY_CX, cy = y + BODY_CY;
             if (state === 'held') {
                 x = mouse.x - press.ox;
                 y = mouse.y - press.oy;
                 rot += (Math.max(-18, Math.min(18, -mouse.vx * 0.02)) - rot) * Math.min(1, dt * 10);
                 mouse.vx *= 0.9;
-            } else if (state === 'fall') {
+            } else if (state === 'enter') {
                 vy += 2600 * dt;
                 y += vy * dt;
-                rot *= 0.85;
-                if (y >= floorY()) {
-                    y = floorY();
+                if (y >= home().y) {
+                    y = home().y;
                     vy = 0;
                     squash = 0.2;
                     state = 'idle';
                     lastActive = now;
                 }
             } else if (state !== 'sleep' && !reduced) {
-                const recent = now - mouse.t < 1500 && mouse.y > vh * 0.68;
-                let target = cx;
-                if (recent) {
-                    const side = mouse.x > cx ? 1 : -1;
-                    target = mouse.x - side * 58;
+                // Settles just below-right of the cursor; stands still once the cursor comes in to pet it
+                let tx = cx, ty = cy;
+                const near = Math.hypot(mouse.x - cx, mouse.y - cy) < 52;
+                if (mouse.seen && !near && !hover) {
+                    tx = mouse.x + 44;
+                    ty = mouse.y + 40;
                 }
-                target = Math.max(W / 2 + 12, Math.min(vw - W / 2 - 12, target));
-                const dx = target - cx;
-                const want = Math.abs(dx) < 6 ? 0 : Math.max(-240, Math.min(240, dx * 4));
-                v += (want - v) * Math.min(1, dt * 7);
-                x += v * dt;
-                state = Math.abs(v) > 18 ? 'walk' : 'idle';
-                rot *= 0.8;
+                tx = Math.max(BODY_CX - OX * S, Math.min(vw - (W - BODY_CX) + OX * S, tx));
+                ty = Math.max(BODY_CY - OY * S + 8, Math.min(vh - (H - BODY_CY), ty));
+                const k = 70, c = 15;
+                vx += ((tx - cx) * k - vx * c) * dt;
+                vy += ((ty - cy) * k - vy * c) * dt;
+                const sp = Math.hypot(vx, vy);
+                if (sp > 2600) { vx *= 2600 / sp; vy *= 2600 / sp; }
+                x += vx * dt;
+                y += vy * dt;
+                travelled += sp * dt;
+                const moving = sp > 40;
+                if (!moving && state === 'walk' && travelled > 140 && Math.hypot(tx - cx, ty - cy) < 14) {
+                    travelled = 0;
+                    caught(now);
+                }
+                state = moving ? 'walk' : 'idle';
+                rot += (Math.max(-8, Math.min(8, vx * 0.006)) - rot) * Math.min(1, dt * 8);
             }
-            x = Math.max(-W * 0.3, Math.min(vw - W * 0.7, x));
-
-            if (state === 'walk') facing = v > 0 ? 1 : -1;
-            else if ((state === 'idle') && now - mouse.t < 3000 && Math.abs(mouse.x - cx) > 30) facing = mouse.x > cx ? 1 : -1;
 
             nextBlink -= dt;
             if (nextBlink <= 0) {
@@ -427,31 +516,50 @@
             }
             blink = Math.max(0, blink - dt);
 
-            let legs = 'stand', tail = 'up', eyes = blink <= 0, tongue = false, lie = false, bob = 0;
+            let lookX = 0, lookY = 0;
+            if (state === 'walk') {
+                lookX = Math.abs(vx) > 60 ? Math.sign(vx) : 0;
+                lookY = Math.abs(vy) > 60 ? Math.sign(vy) : 0;
+            } else if (mouse.seen) {
+                const dx = mouse.x - (x + BODY_CX), dy = mouse.y - (y + BODY_CY * 0.6);
+                lookX = Math.abs(dx) > 24 ? Math.sign(dx) : 0;
+                lookY = Math.abs(dy) > 24 ? Math.sign(dy) : 0;
+            }
+
+            const pose = { legs: 'stand', tail: 'a', eyes: blink > 0 ? 'shut' : 'open', lookX, lookY, tongue: false, blush: false, lie: false };
+            let bob = 0;
             const talking = say && now - say.start < say.text.length * 31;
             if (state === 'walk') {
-                const f = Math.floor(clock * 10) % 4;
-                legs = ['walkA', 'stand', 'walkB', 'stand'][f];
-                tail = f < 2 ? 'mid' : 'up';
-                bob = f % 2;
-                tongue = Math.abs(v) > 150;
+                stride += Math.min(18, Math.hypot(vx, vy) / 40) * dt;
+                const f = Math.floor(stride) % 4;
+                pose.legs = ['walkL', 'stand', 'walkR', 'stand'][f];
+                pose.tail = f < 2 ? 'a' : 'b';
+                bob = f % 2 ? 0 : -1;
+                pose.tongue = Math.hypot(vx, vy) > 700;
             } else if (state === 'sleep') {
-                lie = true;
-                eyes = false;
-                tail = 'down';
+                pose.lie = true;
+                pose.eyes = 'shut';
+                pose.tail = 'down';
+                pose.lookX = pose.lookY = 0;
                 bob = Math.floor(clock / 1.4) % 2;
                 if (clock > nextZ) {
                     spawn('z');
                     nextZ = clock + 1.7;
                 }
-            } else if (state === 'held' || state === 'fall') {
-                legs = 'dangle';
-                tail = 'down';
-                tongue = state === 'held';
+            } else if (state === 'held') {
+                pose.tail = 'down';
+                pose.eyes = 'wide';
+                pose.lookX = pose.lookY = 0;
             } else {
                 const wag = happy > 0 || hover ? 0.1 : 0.34;
-                tail = Math.floor(clock / wag) % 2 ? 'mid' : 'up';
-                tongue = happy > 0 || (talking && Math.floor(clock * 8) % 2 === 0);
+                pose.tail = Math.floor(clock / wag) % 2 ? 'b' : 'a';
+                pose.tongue = talking ? Math.floor(clock * 8) % 2 === 0 : false;
+            }
+            if (happy > 0 && state !== 'sleep' && state !== 'held') {
+                pose.eyes = 'happy';
+                pose.tongue = true;
+                pose.blush = true;
+                pose.lookX = pose.lookY = 0;
             }
 
             for (let i = parts.length - 1; i >= 0; i--) {
@@ -459,23 +567,26 @@
                 if (parts[i].age > parts[i].life) parts.splice(i, 1);
             }
 
-            draw(compose(legs, tail, eyes, tongue, lie), bob);
+            draw(compose(pose), bob);
 
-            const lift = hop > 0 ? Math.sin(hop * Math.PI) * 14 : 0;
+            const lift = hop > 0 ? Math.sin(hop * Math.PI) * 10 : 0;
             const sx = squash > 0 ? 1 + squash * 0.6 : 1;
             const sy = squash > 0 ? 1 - squash * 0.7 : 1;
             const tx = Math.round(x / S) * S;
             const ty = Math.round((y - lift) / S) * S;
             dog.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) rotate(' + rot.toFixed(2) + 'deg) scale(' + sx + ',' + sy + ')';
 
-            if (!say && queue.length && now - mountedAt > 1100 && state !== 'held' && state !== 'fall' && state !== 'sleep') speak(queue.shift(), now);
+            if (!say && queue.length && now - mountedAt > 1100 && state !== 'held' && state !== 'enter' && state !== 'sleep') speak(queue.shift(), now);
             if (say) {
                 const n = Math.min(say.text.length, Math.floor((now - say.start) / 31));
                 if (typed.textContent.length !== n) typed.textContent = say.text.slice(0, n);
                 if (n >= say.text.length) bubble.classList.add('is-done');
-                const headX = tx + (OX + (facing > 0 ? 16 : DW - 17)) * S;
+                const headX = tx + BODY_CX;
                 const bx = Math.max(12, Math.min(vw - say.bw - 12, headX - 30));
-                const by = Math.max(12, ty + (OY - 3) * S - say.bh - 10);
+                let by = ty + (OY - 2) * S - say.bh - 8;
+                const below = by < 12;
+                if (below) by = ty + H + 8;
+                bubble.classList.toggle('is-below', below);
                 bubble.style.transform = 'translate3d(' + bx + 'px,' + by + 'px,0)';
                 bubble.style.setProperty('--tail', Math.max(8, Math.min(say.bw - 20, headX - bx - 4)) + 'px');
                 if (now - say.start > say.hold) hush();
@@ -487,6 +598,7 @@
 
         enqueue(LINES.welcome[0]);
         window.__pixelDogState = () => ({ state, x, y, section, say: say && say.text, parts: parts.length });
+        if (window.__pixelDogDebug) window.__pixelDogDebug = { compose, PAL, DW, DH };
     }
 
     function ready() {

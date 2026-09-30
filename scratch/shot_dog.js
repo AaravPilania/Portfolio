@@ -56,14 +56,21 @@ fs.mkdirSync(outDir, { recursive: true });
   await shot('01_welcome_zoom', true);
   console.log('after mount:', JSON.stringify(await st()));
 
-  for (let i = 0; i <= 12; i++) { await mouse('mouseMoved', 200 + i * 45, 820); await wait(60); }
-  await wait(300);
+  await wait(4000);
+  for (let i = 0; i <= 12; i++) { await mouse('mouseMoved', 200 + i * 60, 800 - i * 45); await wait(60); }
+  await wait(400);
   await shot('02_walk_zoom', true);
-  await wait(2500);
+  await wait(3500);
+  await shot('02_caught_zoom', true);
+  await shot('02_caught_full');
   let s = await st();
-  console.log('after follow:', JSON.stringify(s));
+  console.log('after chase to (920,260):', JSON.stringify(s));
+  for (let i = 0; i <= 10; i++) { await mouse('mouseMoved', 920 - i * 50, 260 + i * 30); await wait(60); }
+  await wait(4000);
+  s = await st();
+  console.log('after chase to (420,560):', JSON.stringify(s));
 
-  const dx = s.x + 48, dy = s.y + 60;
+  const dx = s.x + 56, dy = s.y + 58;
   await mouse('mouseMoved', dx, dy);
   await wait(200);
   await mouse('mousePressed', dx, dy);
@@ -73,7 +80,7 @@ fs.mkdirSync(outDir, { recursive: true });
   console.log('after pet:', JSON.stringify(await st()));
 
   s = await st();
-  const gx = s.x + 48, gy = s.y + 60;
+  const gx = s.x + 56, gy = s.y + 58;
   await mouse('mouseMoved', gx, gy);
   await mouse('mousePressed', gx, gy);
   for (let i = 1; i <= 8; i++) { await mouse('mouseMoved', gx + i * 30, gy - i * 45); await wait(40); }

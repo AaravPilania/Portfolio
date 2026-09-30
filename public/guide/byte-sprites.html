@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guide / BYTE sprite sheet</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 32px; background: #eeece5; color: #121316; font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: 0.12em; text-transform: uppercase; }
+        .sheet { display: flex; flex-wrap: wrap; gap: 28px; }
+        figure { margin: 0; display: grid; gap: 8px; justify-items: center; }
+        figure.dark canvas { background: #121316; }
+        canvas { width: 168px; height: 168px; image-rendering: pixelated; background: #f4f2ea; box-shadow: 0 0 0 1px rgba(18,19,22,0.15); }
+    </style>
+</head>
+<body class="is-loaded">
+    <div class="sheet" id="sheet"></div>
+    <script>window.__pixelDogDebug = true;</script>
+    <script src="/js/pixel-dog.js"></script>
+    <script>
+        (function wait() {
+            const d = window.__pixelDogDebug;
+            if (!d || d === true) return setTimeout(wait, 50);
+            const base = { legs: 'stand', tail: 'a', eyes: 'open', lookX: 0, lookY: 0, tongue: false, blush: false, lie: false };
+            const poses = [
+                ['idle', {}],
+                ['look left', { lookX: -1 }],
+                ['look up-right', { lookX: 1, lookY: -1 }],
+                ['blink', { eyes: 'shut' }],
+                ['walk L', { legs: 'walkL', tail: 'b' }],
+                ['walk R', { legs: 'walkR' }],
+                ['caught', { eyes: 'happy', tongue: true, blush: true, tail: 'b' }],
+                ['held', { eyes: 'wide', tail: 'down' }],
+                ['sleep', { lie: true, eyes: 'shut', tail: 'down' }],
+                ['idle / dark', {}, true],
+                ['caught / dark', { eyes: 'happy', tongue: true, blush: true }, true],
+            ];
+            const sheet = document.getElementById('sheet');
+            poses.forEach(([name, p, dark]) => {
+                const fig = document.createElement('figure');
+                if (dark) fig.className = 'dark';
+                const c = document.createElement('canvas');
+                c.width = c.height = 30;
+                const ctx = c.getContext('2d');
+                const g = d.compose(Object.assign({}, base, p));
+                g.forEach((row, y) => row.forEach((ch, x) => {
+                    if (ch === '.') return;
+                    ctx.fillStyle = d.PAL[ch];
+                    ctx.fillRect(x + 1, y + 1, 1, 1);
+                }));
+                const cap = document.createElement('figcaption');
+                cap.textContent = name;
+                fig.append(c, cap);
+                sheet.appendChild(fig);
+            });
+        })();
+    </script>
+</body>
+</html>
