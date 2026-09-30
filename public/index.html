@@ -884,9 +884,32 @@
             pointer-events: none;
             opacity: 0;
             visibility: hidden;
-            filter: grayscale(100%) contrast(1.1) brightness(0.6) blur(7px);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.16) 40%, transparent 78%);
-            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.16) 40%, transparent 78%);
+            filter: grayscale(100%) contrast(1.1) brightness(0.62) blur(4px);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.26) 45%, rgba(0, 0, 0, 0.08) 80%, transparent 100%);
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.26) 45%, rgba(0, 0, 0, 0.08) 80%, transparent 100%);
+        }
+
+        /* Wet-floor plane under the shrunk screen: a light pool cast by the card and a faint horizon where it meets the floor */
+        .hero-floor-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: 50% 0;
+            z-index: 8;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            background: radial-gradient(ellipse 50% 60% at 50% 0%, rgba(236, 234, 226, 0.13) 0%, rgba(236, 234, 226, 0.045) 45%, transparent 100%);
+        }
+
+        .hero-floor-glow::before {
+            content: '';
+            position: absolute;
+            left: 12%;
+            right: 12%;
+            top: 0;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.22) 30%, rgba(255, 255, 255, 0.22) 70%, transparent);
         }
 
         /* Dark Gradient & Vignette on the card */
@@ -3025,6 +3048,7 @@
                     <div class="hero-marquee-outline-clip" id="heroMarqueeOutlineClip" aria-hidden="true"></div>
 
                     <!-- SLIDE 2: HAZY FLOOR REFLECTION OF THE SHRUNK SCREEN (redrawn flipped from the card canvas) -->
+                    <div class="hero-floor-glow" id="heroFloorGlow" aria-hidden="true"></div>
                     <canvas class="hero-shrink-reflection" id="heroShrinkReflection" width="420" height="236" aria-hidden="true"></canvas>
 
                     <!-- SLIDE 1: SHRINKING HERO CARD (LIGHT BLUE BACKGROUND IN SLIDE 1 -> SHRINKS INTO DARK GREY SLIDE 2) -->
@@ -4026,16 +4050,30 @@
             let winH = window.innerHeight;
             let targetW = 0;
             let targetH = 0;
+            let reflGap = 0, reflLift = 0;
+            const floorGlow = document.getElementById('heroFloorGlow');
 
             function updateViewportCache() {
                 winW = window.innerWidth;
                 winH = window.innerHeight;
                 const remBase = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-                targetW = Math.min(35.375 * remBase, winW * 0.92);
-                targetH = Math.min(22.875 * remBase, winH * 0.62);
+                // Card + gap + a true-proportion mirror must fit between the navbar and the viewport floor,
+                // so short viewports get a slightly smaller screen instead of a squashed reflection
+                const navSafe = 88;
+                const fitH = (winH - navSafe - 10) / 2.035;
+                targetH = Math.min(22.875 * remBase, winH * 0.62, fitH);
+                targetW = Math.min(35.375 * remBase, winW * 0.92, targetH * (35.375 / 22.875));
+                reflGap = Math.max(10, targetH * 0.035);
+                const stackH = targetH * 2 + reflGap;
+                const cardTop = navSafe + Math.max(0, (winH - navSafe - stackH) / 2);
+                reflLift = Math.max(0, winH / 2 - (cardTop + targetH / 2));
                 if (reflectionCanvas) {
                     reflectionCanvas.style.width = targetW + 'px';
                     reflectionCanvas.style.height = targetH + 'px';
+                }
+                if (floorGlow) {
+                    floorGlow.style.width = targetW * 1.6 + 'px';
+                    floorGlow.style.height = targetH * 0.9 + 'px';
                 }
             }
             updateViewportCache();
@@ -4084,19 +4122,30 @@
                 const curW = winW - ((winW - targetW) * shrinkP);
                 const curH = winH - ((winH - targetH) * shrinkP);
 
+                // Card, both marquee layers and the floor rise together; `translate` composes with their CSS transforms
+                const lift = reflLift * shrinkP;
+                const liftY = '0 ' + (-lift).toFixed(2) + 'px';
                 card.style.width = curW + 'px';
                 card.style.height = curH + 'px';
+                card.style.translate = liftY;
+                if (marqueeBg) marqueeBg.style.translate = liftY;
+                if (marqueeOutline) marqueeOutline.style.translate = liftY;
 
                 if (outlineClip) {
-                    outlineClip.style.clipPath = 'inset(' + ((winH - curH) / 2) + 'px ' + ((winW - curW) / 2) + 'px)';
+                    const insetY = (winH - curH) / 2;
+                    outlineClip.style.clipPath = 'inset(' + (insetY - lift) + 'px ' + ((winW - curW) / 2) + 'px ' + (insetY + lift) + 'px)';
                 }
 
+                const reflectAlpha = Math.max(0, Math.min(1, (shrinkP - 0.6) / 0.4));
                 if (reflectionCanvas) {
-                    const reflectAlpha = Math.max(0, Math.min(1, (shrinkP - 0.6) / 0.4));
-                    const gap = Math.max(10, targetH * 0.035);
-                    reflectionCanvas.style.transform = 'translate3d(' + (-targetW / 2) + 'px, ' + (curH / 2 + gap) + 'px, 0) scale(' + (curW / targetW) + ', ' + (curH / targetH) + ')';
+                    reflectionCanvas.style.transform = 'translate3d(' + (-targetW / 2) + 'px, ' + (curH / 2 + reflGap - lift) + 'px, 0) scale(' + (curW / targetW) + ', ' + (curH / targetH) + ')';
                     reflectionCanvas.style.opacity = reflectAlpha;
                     reflectionCanvas.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
+                }
+                if (floorGlow) {
+                    floorGlow.style.transform = 'translate3d(' + (-targetW * 0.8) + 'px, ' + (curH / 2 + reflGap * 0.5 - lift) + 'px, 0) scale(' + (curW / targetW) + ', 1)';
+                    floorGlow.style.opacity = reflectAlpha;
+                    floorGlow.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
                 }
 
                 if (shrinkP > 0.4) {
