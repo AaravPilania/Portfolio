@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Skills slide — Projects to Stack transition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/guide/skills-slide/skills-slide.css">
+</head>
+<body>
+    <a class="back" href="/guide/projects-lab.html">&larr; guide</a>
+
+    <section class="pj" id="section-projects" aria-label="Selected work (tail)">
+        <header class="pj__head">
+            <span class="tag">[ 03 ]</span>
+            <span class="tag tag--dim">Selected work &middot; 12&ndash;16 of 16</span>
+        </header>
+        <div class="pj__list">
+            <div class="projects__entry main-grid"><div class="projects__entry-index">12</div><div class="projects__entry-title">Power of Procurement</div></div>
+            <div class="projects__entry main-grid"><div class="projects__entry-index">13</div><div class="projects__entry-title">Learn Metamask</div></div>
+            <div class="projects__entry main-grid"><div class="projects__entry-index">14</div><div class="projects__entry-title">AV0LVE</div></div>
+            <div class="projects__entry main-grid"><div class="projects__entry-index">15</div><div class="projects__entry-title">FAIR</div></div>
+            <div class="projects__entry main-grid"><div class="projects__entry-index" id="sourceStar">16</div><div class="projects__entry-title">Hypnotica</div></div>
+        </div>
+    </section>
+
+    <section class="sk" id="section-skills" aria-label="Skills">
+        <header class="sk__head">
+            <span class="tag">[ 04 ]</span>
+            <span class="tag tag--dim">Stack &middot; what the work is made of</span>
+        </header>
+
+        <div class="sk__stage">
+            <ul class="sk__list" id="skList">
+                <li class="sk-row"><span class="sk-tag">[ FRONTEND ]</span><p class="sk-text">React 19, Vite, Tailwind CSS v4, Framer Motion, GSAP, Three.js, React Three Fiber, PWA</p></li>
+                <li class="sk-row"><span class="sk-tag">[ BACKEND ]</span><p class="sk-text">FastAPI, Node.js, REST APIs, asyncio, PostgreSQL, SQLite, ChromaDB</p></li>
+                <li class="sk-row"><span class="sk-tag">[ AI / ML ]</span><p class="sk-text">PyTorch, scikit-learn, SHAP, Sentence Transformers, RAG, LLM Orchestration, Multi-Agent Pipelines</p></li>
+                <li class="sk-row"><span class="sk-tag">[ LANGUAGES ]</span><p class="sk-text">Python, Java, JavaScript, TypeScript, C, C++, SQL</p></li>
+                <li class="sk-row"><span class="sk-tag">[ TOOLS &amp; TECH ]</span><p class="sk-text">Git, GitHub, Docker, Whisper STT, Ollama, Chrome DevTools Protocol, Tesseract OCR</p></li>
+            </ul>
+        </div>
+
+        <div class="sk__orbit" aria-hidden="true">
+            <div class="sk-star" id="bigStar"><div class="sk-star__ink" id="starInk"></div></div>
+            <div class="sk-bug" id="skBug"><canvas width="24" height="30"></canvas></div>
+            <div class="pb-bubble" id="skBubble"><span class="pb-tag">[ GLITCH ]</span><span class="pb-text"><span class="pb-ghost"></span><span class="pb-type"></span></span></div>
+        </div>
+    </section>
+
+    <section class="after" aria-label="End of prototype">
+        <span class="tag tag--dim">[ 05 ] &mdash; next slide goes here</span>
+    </section>
+
+    <script>window.__pixelBugSkin = 'beetle'; window.__pixelBugSpriteOnly = true;</script>
+    <script src="/js/pixel-bug.js"></script>
+    <script src="/js/gsap.min.js"></script>
+    <script src="/js/ScrollTrigger.min.js"></script>
+    <script src="/guide/skills-slide/skills-slide.js"></script>
+</body>
+</html>

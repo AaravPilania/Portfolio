@@ -244,6 +244,10 @@
         return res;
     }
 
+    // Sprite access for guide pages that stage their own GLITCH; __pixelBugSpriteOnly skips the wandering bug entirely
+    window.__pixelBugSprite = (pose) => compose(Object.assign({ skin: 'beetle', legs: 'mid', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false, lit: false }, pose)).img;
+    if (window.__pixelBugSpriteOnly) return;
+
     function mount() {
         const style = doc.createElement('style');
         style.textContent = `

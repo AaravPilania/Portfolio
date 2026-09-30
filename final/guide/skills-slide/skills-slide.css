@@ -1,0 +1,187 @@
+@font-face {
+    font-display: swap;
+    font-family: 'PP-Mori';
+    src: url('/fonts/PPMori-SemiBold.woff') format('woff');
+}
+
+:root {
+    --rem: clamp(7px, 0.6944vw, 12px);
+    --void: #000;
+    --ink: #121316;
+    --paper: #f4f2ea;
+    --sun: #FFED29;
+    --hair: rgba(244, 242, 234, 0.22);
+    --mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
+    --sans: 'PP-Mori', 'Suisse Intl', sans-serif;
+    --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='%23000' stroke-width='3.2' stroke-linecap='square'%3E%3Cpath d='M3 12h18'/%3E%3Cpath d='M7.5 4.2l9 15.6'/%3E%3Cpath d='M16.5 4.2l-9 15.6'/%3E%3C/g%3E%3C/svg%3E");
+    --pad: clamp(18px, 3.2vw, 56px);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; background: var(--void); color: var(--paper); }
+body { font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+.back {
+    position: fixed; top: 16px; right: var(--pad); z-index: 50;
+    font: 500 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--paper); text-decoration: none; opacity: 0.6;
+}
+.back:hover { opacity: 1; }
+
+.tag { font: 500 11px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--sun); }
+.tag--dim { color: rgba(244, 242, 234, 0.5); }
+
+/* ---------- Slide 03 tail: faithful copy of #section-projects rows ---------- */
+.pj {
+    position: relative; min-height: 100vh; padding: 0 var(--pad) 14vh;
+    display: flex; flex-direction: column; justify-content: flex-end; background: var(--void);
+}
+.pj__head, .sk__head {
+    position: absolute; top: 18px; left: var(--pad); display: flex; gap: 18px; align-items: baseline;
+}
+
+.main-grid { display: grid; grid-column-gap: calc(2 * var(--rem)); grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (min-width: 650px) {
+    .main-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-column-gap: calc(4.8 * var(--rem)); }
+}
+
+.projects__entry {
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    margin-top: -1px;
+    padding: calc(2.2 * var(--rem)) 0;
+    position: relative;
+    font-family: var(--sans);
+    font-size: calc(1.4 * var(--rem));
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.5;
+    color: #fff;
+}
+@media (min-width: 650px) {
+    .projects__entry { padding: calc(2 * var(--rem)) 0; font-size: calc(1.6 * var(--rem)); }
+}
+
+.projects__entry-index {
+    display: flex; align-items: center;
+    grid-column: 1 / span 1;
+    font-family: var(--mono); font-weight: 400; color: #fff; letter-spacing: 0;
+    font-size: 0.8em; font-variant-numeric: tabular-nums;
+}
+.projects__entry-index::before {
+    content: '';
+    flex: none;
+    width: 0.8em;
+    height: 0.8em;
+    margin-right: 0.4em;
+    background-color: var(--sun);
+    -webkit-mask: var(--star) center / contain no-repeat;
+    mask: var(--star) center / contain no-repeat;
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.projects__entry:hover .projects__entry-index::before { transform: rotate(60deg); }
+.projects__entry-index.is-detached::before { opacity: 0; transition: none; }
+
+.projects__entry-title {
+    grid-column: 2 / span 4; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: inherit; letter-spacing: -0.02em; color: #fff;
+}
+@media (max-width: 649px) {
+    .projects__entry-title { grid-column: 2 / span 5; }
+}
+
+/* ---------- Slide 04: skills ---------- */
+.sk {
+    position: relative; z-index: 2; height: 100vh; overflow: visible;
+    background: var(--void);
+}
+.sk__stage {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    padding: 64px var(--pad) 40px;
+}
+.sk__list, .sk-star__ink .sk__list {
+    list-style: none; margin: 0; padding: 0; width: 100%;
+}
+.sk-row {
+    position: relative; display: grid; grid-template-columns: minmax(9rem, 2fr) 10fr; column-gap: calc(4.8 * var(--rem));
+    align-items: baseline; padding: clamp(10px, 1.5vh, 20px) 0;
+}
+.sk-row::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hair);
+    transform-origin: 0 50%; transform: scaleX(var(--rule, 1));
+}
+.sk-row:first-child::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--hair);
+    transform-origin: 0 50%; transform: scaleX(var(--rule, 1));
+}
+.sk-tag { display: block; overflow: hidden; font: 500 11px/1.4 var(--mono); letter-spacing: 0.16em; color: var(--sun); white-space: nowrap; }
+.sk-tag > span { display: inline-block; will-change: transform; }
+.sk-text {
+    margin: 0; font-family: var(--sans); font-weight: 400;
+    font-size: clamp(22px, 2.9vw, 52px); line-height: 1.02; letter-spacing: -0.035em; color: var(--paper);
+}
+.sk-text .w { display: inline; }
+.sk-text .sep { color: rgba(244, 242, 234, 0.32); }
+.ln-mask { display: block; overflow: hidden; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+.ln { display: block; white-space: nowrap; transform-origin: 0 0; will-change: transform; }
+
+@media (max-width: 649px) {
+    .sk-row { grid-template-columns: 1fr; row-gap: 6px; }
+}
+
+/* Orbit layer: star + bug live inside the section so they leave with it once the pin releases */
+.sk__orbit { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.sk__stage { z-index: 2; }
+.sk-star {
+    position: absolute; left: 50%; top: 50%;
+    width: var(--S, 48vmin); height: var(--S, 48vmin);
+    margin: calc(var(--S, 48vmin) / -2) 0 0 calc(var(--S, 48vmin) / -2);
+    background: var(--sun);
+    -webkit-mask: var(--star) center / contain no-repeat;
+    mask: var(--star) center / contain no-repeat;
+    transform-origin: 50% 50%; will-change: transform; opacity: 0;
+}
+/* Dark duplicate of the list clipped by the star mask, counter-rotated so it stays registered with the real list */
+.sk-star__ink {
+    position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; will-change: transform;
+}
+.sk-star__ink .sk__stage { z-index: auto; }
+.sk-star__ink .sk-text, .sk-star__ink .sk-text .sep { color: var(--ink); }
+.sk-star__ink .sk-tag { color: var(--ink); }
+.sk-star__ink .sk-row::after, .sk-star__ink .sk-row:first-child::before { background: rgba(18, 19, 22, 0.35); }
+
+.sk-bug {
+    position: absolute; left: 0; top: 0; z-index: 3; width: 48px; height: 60px; margin: -30px 0 0 -24px;
+    opacity: 0; will-change: transform, opacity;
+}
+.sk-bug canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* GLITCH speech bubble, same styling as pixel-bug.js */
+.pb-bubble { position: absolute; left: 0; top: 0; z-index: 4; max-width: 15.5rem; pointer-events: none;
+    padding: 9px 12px 10px; background: #f4f2ea; color: #121316;
+    font: 500 11.5px/1.45 'IBM Plex Mono', 'Sometype Mono', monospace; letter-spacing: 0.01em;
+    box-shadow: 0 -2px 0 0 #121316, 0 2px 0 0 #121316, -2px 0 0 0 #121316, 2px 0 0 0 #121316, 5px 5px 0 0 rgba(18,19,22,0.28);
+    opacity: 0; transition: opacity 0.18s steps(3); will-change: transform, opacity; }
+.pb-bubble.is-on { opacity: 1; }
+.pb-bubble::after { content: ''; position: absolute; left: var(--tail, 24px); bottom: -8px; width: 8px; height: 6px; background: #121316;
+    clip-path: polygon(0 0, 100% 0, 100% 33%, 66% 33%, 66% 66%, 33% 66%, 33% 100%, 0 100%); }
+.pb-bubble.is-below::after { bottom: auto; top: -8px; transform: scaleY(-1); }
+.pb-tag { display: inline-block; margin: 0 0 5px; padding: 1px 5px; background: #121316; color: #FFED29; font-size: 9px; letter-spacing: 0.18em; }
+.pb-text { position: relative; display: block; }
+.pb-ghost { visibility: hidden; }
+.pb-type { position: absolute; inset: 0; }
+.pb-type::after { content: ''; display: inline-block; width: 6px; height: 11px; margin-left: 2px; vertical-align: -1px; background: #121316; animation: pbCaret 0.8s steps(1) infinite; }
+.pb-bubble.is-done .pb-type::after { display: none; }
+@keyframes pbCaret { 50% { opacity: 0; } }
+
+.after {
+    position: relative; z-index: 3; min-height: 70vh; padding: 18px var(--pad);
+    background: var(--ink); border-top: 1px solid var(--hair);
+}
+
+/* Reduced motion: the star simply sits in slide 04, lines visible, no orbit */
+.is-reduced .sk-star { opacity: 1; }
+.is-reduced .sk-bug { opacity: 1; }
+.is-reduced .projects__entry-index::before { transition: none; }
