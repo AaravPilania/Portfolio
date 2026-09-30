@@ -873,20 +873,35 @@
             filter: grayscale(100%) contrast(1.15) brightness(0.65);
         }
 
+        /* Floor stops are viewport px set on resize, so the mirror dissolves before the viewport edge at any scale */
+        .hero-reflection-floor {
+            position: absolute;
+            inset: 0;
+            z-index: 9;
+            pointer-events: none;
+            -webkit-mask: linear-gradient(to bottom, #000 0, #000 var(--floor-top, 62%), rgba(0, 0, 0, 0.42) var(--floor-mid, 76%), rgba(0, 0, 0, 0.1) var(--floor-low, 86%), transparent var(--floor-end, 95%)) no-repeat;
+            mask: linear-gradient(to bottom, #000 0, #000 var(--floor-top, 62%), rgba(0, 0, 0, 0.42) var(--floor-mid, 76%), rgba(0, 0, 0, 0.1) var(--floor-low, 86%), transparent var(--floor-end, 95%)) no-repeat;
+        }
+
         /* Sized to the shrunk card in JS; only transform/opacity change while scrolling */
         .hero-shrink-reflection {
             position: absolute;
             top: 50%;
             left: 50%;
             transform-origin: 50% 0;
-            z-index: 9;
-            object-fit: cover;
             pointer-events: none;
             opacity: 0;
             visibility: hidden;
-            filter: grayscale(100%) contrast(1.1) brightness(0.62) blur(4px);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.26) 45%, rgba(0, 0, 0, 0.08) 80%, transparent 100%);
-            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.26) 45%, rgba(0, 0, 0, 0.08) 80%, transparent 100%);
+            filter: grayscale(100%) contrast(1.1) brightness(0.62) blur(2.5px);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.3) 16%, rgba(0, 0, 0, 0.08) 34%, transparent 50%);
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.3) 16%, rgba(0, 0, 0, 0.08) 34%, transparent 50%);
+        }
+
+        /* Low-res copy of the mirror: canvas upscaling plus blur turns it to haze further down the floor */
+        .hero-shrink-reflection--haze {
+            filter: grayscale(100%) brightness(0.55) blur(7px);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.32) 20%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.06) 78%, transparent 100%);
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.32) 20%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.06) 78%, transparent 100%);
         }
 
         /* Wet-floor plane under the shrunk screen: a light pool cast by the card and a faint horizon where it meets the floor */
@@ -3048,8 +3063,11 @@
                     <div class="hero-marquee-outline-clip" id="heroMarqueeOutlineClip" aria-hidden="true"></div>
 
                     <!-- SLIDE 2: HAZY FLOOR REFLECTION OF THE SHRUNK SCREEN (redrawn flipped from the card canvas) -->
-                    <div class="hero-floor-glow" id="heroFloorGlow" aria-hidden="true"></div>
-                    <canvas class="hero-shrink-reflection" id="heroShrinkReflection" width="420" height="236" aria-hidden="true"></canvas>
+                    <div class="hero-reflection-floor" id="heroReflectionFloor" aria-hidden="true">
+                        <div class="hero-floor-glow" id="heroFloorGlow"></div>
+                        <canvas class="hero-shrink-reflection hero-shrink-reflection--haze" id="heroShrinkReflectionHaze" width="140" height="79"></canvas>
+                        <canvas class="hero-shrink-reflection" id="heroShrinkReflection" width="420" height="236"></canvas>
+                    </div>
 
                     <!-- SLIDE 1: SHRINKING HERO CARD (LIGHT BLUE BACKGROUND IN SLIDE 1 -> SHRINKS INTO DARK GREY SLIDE 2) -->
                     <div class="hero-shrink-card" id="heroShrinkCard">
@@ -3845,6 +3863,8 @@
             const cardCanvas = document.getElementById('heroPortraitCanvas');
             const reflectionCanvas = document.getElementById('heroShrinkReflection');
             const reflectionCtx = reflectionCanvas && reflectionCanvas.getContext('2d');
+            const reflectionHaze = document.getElementById('heroShrinkReflectionHaze');
+            const reflectionHazeCtx = reflectionHaze && reflectionHaze.getContext('2d');
             const reflectionShade = reflectionCtx && reflectionCtx.createLinearGradient(0, 0, 0, reflectionCanvas.height);
             if (reflectionShade) {
                 reflectionShade.addColorStop(0, 'rgba(18, 19, 22, 0.5)');
@@ -3865,6 +3885,10 @@
                                 reflectionCtx.setTransform(1, 0, 0, 1, 0, 0);
                                 reflectionCtx.fillStyle = reflectionShade;
                                 reflectionCtx.fillRect(0, 0, rw, rh);
+                                if (reflectionHazeCtx) {
+                                    reflectionHazeCtx.clearRect(0, 0, reflectionHaze.width, reflectionHaze.height);
+                                    reflectionHazeCtx.drawImage(reflectionCanvas, 0, 0, reflectionHaze.width, reflectionHaze.height);
+                                }
                             }
                         }
                     }
@@ -4050,27 +4074,32 @@
             let winH = window.innerHeight;
             let targetW = 0;
             let targetH = 0;
-            let reflGap = 0, reflLift = 0;
+            let reflGap = 0;
             const floorGlow = document.getElementById('heroFloorGlow');
+            const reflectionFloor = document.getElementById('heroReflectionFloor');
 
             function updateViewportCache() {
                 winW = window.innerWidth;
                 winH = window.innerHeight;
                 const remBase = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-                // Card + gap + a true-proportion mirror must fit between the navbar and the viewport floor,
-                // so short viewports get a slightly smaller screen instead of a squashed reflection
-                const navSafe = 88;
-                const fitH = (winH - navSafe - 10) / 2.035;
-                targetH = Math.min(22.875 * remBase, winH * 0.62, fitH);
-                targetW = Math.min(35.375 * remBase, winW * 0.92, targetH * (35.375 / 22.875));
+                targetW = Math.min(35.375 * remBase, winW * 0.92);
+                targetH = Math.min(22.875 * remBase, winH * 0.62);
                 reflGap = Math.max(10, targetH * 0.035);
-                const stackH = targetH * 2 + reflGap;
-                const cardTop = navSafe + Math.max(0, (winH - navSafe - stackH) / 2);
-                reflLift = Math.max(0, winH / 2 - (cardTop + targetH / 2));
-                if (reflectionCanvas) {
-                    reflectionCanvas.style.width = targetW + 'px';
-                    reflectionCanvas.style.height = targetH + 'px';
+                // The mirror is full-height but only the floor between the card and the viewport edge shows it
+                if (reflectionFloor) {
+                    const top = winH / 2 + targetH / 2 + reflGap;
+                    const end = winH - Math.max(20, winH * 0.035);
+                    const span = Math.max(40, end - top);
+                    reflectionFloor.style.setProperty('--floor-top', top.toFixed(1) + 'px');
+                    reflectionFloor.style.setProperty('--floor-mid', (top + span * 0.35).toFixed(1) + 'px');
+                    reflectionFloor.style.setProperty('--floor-low', (top + span * 0.7).toFixed(1) + 'px');
+                    reflectionFloor.style.setProperty('--floor-end', (top + span).toFixed(1) + 'px');
                 }
+                [reflectionCanvas, reflectionHaze].forEach((c) => {
+                    if (!c) return;
+                    c.style.width = targetW + 'px';
+                    c.style.height = targetH + 'px';
+                });
                 if (floorGlow) {
                     floorGlow.style.width = targetW * 1.6 + 'px';
                     floorGlow.style.height = targetH * 0.9 + 'px';
@@ -4122,28 +4151,23 @@
                 const curW = winW - ((winW - targetW) * shrinkP);
                 const curH = winH - ((winH - targetH) * shrinkP);
 
-                // Card, both marquee layers and the floor rise together; `translate` composes with their CSS transforms
-                const lift = reflLift * shrinkP;
-                const liftY = '0 ' + (-lift).toFixed(2) + 'px';
                 card.style.width = curW + 'px';
                 card.style.height = curH + 'px';
-                card.style.translate = liftY;
-                if (marqueeBg) marqueeBg.style.translate = liftY;
-                if (marqueeOutline) marqueeOutline.style.translate = liftY;
 
                 if (outlineClip) {
-                    const insetY = (winH - curH) / 2;
-                    outlineClip.style.clipPath = 'inset(' + (insetY - lift) + 'px ' + ((winW - curW) / 2) + 'px ' + (insetY + lift) + 'px)';
+                    outlineClip.style.clipPath = 'inset(' + ((winH - curH) / 2) + 'px ' + ((winW - curW) / 2) + 'px)';
                 }
 
                 const reflectAlpha = Math.max(0, Math.min(1, (shrinkP - 0.6) / 0.4));
-                if (reflectionCanvas) {
-                    reflectionCanvas.style.transform = 'translate3d(' + (-targetW / 2) + 'px, ' + (curH / 2 + reflGap - lift) + 'px, 0) scale(' + (curW / targetW) + ', ' + (curH / targetH) + ')';
-                    reflectionCanvas.style.opacity = reflectAlpha;
-                    reflectionCanvas.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
-                }
+                const reflectTransform = 'translate3d(' + (-targetW / 2) + 'px, ' + (curH / 2 + reflGap) + 'px, 0) scale(' + (curW / targetW) + ', ' + (curH / targetH) + ')';
+                [reflectionCanvas, reflectionHaze].forEach((c) => {
+                    if (!c) return;
+                    c.style.transform = reflectTransform;
+                    c.style.opacity = reflectAlpha;
+                    c.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
+                });
                 if (floorGlow) {
-                    floorGlow.style.transform = 'translate3d(' + (-targetW * 0.8) + 'px, ' + (curH / 2 + reflGap * 0.5 - lift) + 'px, 0) scale(' + (curW / targetW) + ', 1)';
+                    floorGlow.style.transform = 'translate3d(' + (-targetW * 0.8) + 'px, ' + (curH / 2 + reflGap * 0.5) + 'px, 0) scale(' + (curW / targetW) + ', 1)';
                     floorGlow.style.opacity = reflectAlpha;
                     floorGlow.style.visibility = reflectAlpha > 0 ? 'visible' : 'hidden';
                 }
@@ -4641,6 +4665,8 @@
     <script src="/js/lamalama-interactive.js?v=8.0"></script>
     <script src="/js/matter.min.js"></script>
     <script src="/js/falling-letters-textloop.js?v=9.0"></script>
+    <script>window.__pixelBugSkin = 'beetle';</script>
+    <script src="/js/pixel-bug.js"></script>
     
 
     <!-- =======================================================
