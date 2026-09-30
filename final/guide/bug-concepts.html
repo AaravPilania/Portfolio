@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide / Field guide, plate II: twenty bugs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/bug-concepts.css">
+</head>
+<body>
+    <header class="tb">
+        <span class="tb-mark">Field guide / plate II</span>
+        <div class="tb-slot"><span>finalised</span><div class="tb-chips" id="tbFinal"></div></div>
+        <div class="tb-slot"><span>shortlist</span><div class="tb-chips" id="tbShort"></div></div>
+        <a class="tb-link" href="/guide/bug-picker.html">[ plate I: the pixel set, 04 sprites &rarr; ]</a>
+    </header>
+
+    <section class="hd">
+        <div class="hd-kicker">[ insecta debuggae / twenty specimens / not all of them pixels ]</div>
+        <h1>Field guide <i>to the</i> <em>bugs</em></h1>
+        <div class="hd-cols">
+            <p class="hd-lede">Twenty candidates for the site guide, each caught in a different medium: marker, plotter, dither, thread, neon, goo. They walk, stop, do <b>one thing only they do</b>, and move on. Release one to watch it roam, then pin your favourite.</p>
+            <dl class="hd-legend">
+                <dt>Collected</dt><dd>30.09.2026, /final/guide</dd>
+                <dt>Mounted on</dt><dd>graph paper, void, felt, blueprint</dd>
+                <dt>Handling</dt><dd>click a specimen to release it</dd>
+                <dt>Finalise</dt><dd>saved to this browser, one at a time</dd>
+            </dl>
+        </div>
+    </section>
+
+    <main class="plate" id="plate" aria-label="Twenty bug specimens"></main>
+
+    <footer class="ft">
+        <span>plate II of the guide casting</span>
+        <span>pick is stored as <b>localStorage.pixelBugConcept</b></span>
+        <span><a href="/guide/bug-picker.html">plate I: pixel set</a></span>
+    </footer>
+
+    <div class="fx" id="fx" hidden role="dialog" aria-modal="true" aria-labelledby="fxName">
+        <div class="fx-stage-wrap">
+            <div class="fx-stage" id="fxStage"></div>
+            <div class="fx-bubble" id="fxBubble" aria-live="polite"></div>
+            <span class="fx-hint">move your cursor in here: it comes to say hi</span>
+        </div>
+        <aside class="fx-info">
+            <div class="fx-top"><span id="fxNo"></span><button type="button" class="fx-close" id="fxClose">[ esc ] close</button></div>
+            <h2 id="fxName"></h2>
+            <p class="fx-latin" id="fxLatin"></p>
+            <p class="fx-tech" id="fxTech"></p>
+            <p class="fx-trait" id="fxTrait"></p>
+            <p class="fx-quote" id="fxQuote"></p>
+            <div class="fx-actions">
+                <button type="button" class="sp-btn" data-act="final">[ finalise ]</button>
+                <button type="button" class="sp-btn" data-act="short">[ shortlist ]</button>
+            </div>
+            <div class="fx-nav">
+                <button type="button" id="fxPrev">[ &larr; prev ]</button>
+                <button type="button" id="fxNext">[ next &rarr; ]</button>
+            </div>
+            <p class="fx-keys">arrow keys to flip through, esc to put it back</p>
+        </aside>
+    </div>
+
+    <script src="/js/bug-concepts.js"></script>
+</body>
+</html>
