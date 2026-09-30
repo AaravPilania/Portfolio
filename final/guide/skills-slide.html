@@ -32,18 +32,21 @@
             <span class="tag tag--dim">Stack &middot; what the work is made of</span>
         </header>
 
-        <div class="sk__stage">
-            <ul class="sk__list" id="skList">
-                <li class="sk-row"><span class="sk-tag">[ FRONTEND ]</span><p class="sk-text">React 19, Vite, Tailwind CSS v4, Framer Motion, GSAP, Three.js, React Three Fiber, PWA</p></li>
-                <li class="sk-row"><span class="sk-tag">[ BACKEND ]</span><p class="sk-text">FastAPI, Node.js, REST APIs, asyncio, PostgreSQL, SQLite, ChromaDB</p></li>
-                <li class="sk-row"><span class="sk-tag">[ AI / ML ]</span><p class="sk-text">PyTorch, scikit-learn, SHAP, Sentence Transformers, RAG, LLM Orchestration, Multi-Agent Pipelines</p></li>
-                <li class="sk-row"><span class="sk-tag">[ LANGUAGES ]</span><p class="sk-text">Python, Java, JavaScript, TypeScript, C, C++, SQL</p></li>
-                <li class="sk-row"><span class="sk-tag">[ TOOLS &amp; TECH ]</span><p class="sk-text">Git, GitHub, Docker, Whisper STT, Ollama, Chrome DevTools Protocol, Tesseract OCR</p></li>
-            </ul>
-        </div>
+        <ul class="sk-data" id="skData">
+            <li data-tag="FRONTEND" data-tone="sun">React 19, Vite, Tailwind CSS v4, Framer Motion, GSAP, Three.js, React Three Fiber, PWA</li>
+            <li data-tag="BACKEND" data-tone="ultra">FastAPI, Node.js, REST APIs, asyncio, PostgreSQL, SQLite, ChromaDB</li>
+            <li data-tag="AI / ML" data-tone="paper">PyTorch, scikit-learn, SHAP, Sentence Transformers, RAG, LLM Orchestration, Multi-Agent Pipelines</li>
+            <li data-tag="LANGUAGES" data-tone="peri">Python, Java, JavaScript, TypeScript, C, C++, SQL</li>
+            <li data-tag="TOOLS &amp; TECH" data-tone="bone">Git, GitHub, Docker, Whisper STT, Ollama, Chrome DevTools Protocol, Tesseract OCR</li>
+        </ul>
 
         <div class="sk__orbit" aria-hidden="true">
-            <div class="sk-star" id="bigStar"><div class="sk-star__ink" id="starInk"></div></div>
+            <div class="sk-star" id="bigStar"></div>
+        </div>
+
+        <div class="sk__ribbons" id="skRibbons" aria-hidden="true"></div>
+
+        <div class="sk__fly" aria-hidden="true">
             <div class="sk-bug" id="skBug"><canvas width="24" height="30"></canvas></div>
             <div class="pb-bubble" id="skBubble"><span class="pb-tag">[ GLITCH ]</span><span class="pb-text"><span class="pb-ghost"></span><span class="pb-type"></span></span></div>
         </div>
