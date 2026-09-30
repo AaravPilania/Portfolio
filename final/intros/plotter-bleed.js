@@ -9,8 +9,20 @@ window.AP_PLOTTER_BLEED = {
         uniform float uSolid;
         uniform float uReveal;
         uniform float uStartScale;
+        uniform float uGridS;
 
         float hair(float d) { return clamp(1.0 - d * uDpr, 0.0, 1.0); }
+
+        // Screen-locked copy of the hero canvas graph paper (1672x941, lines at 20k+0.5 and 100k+0.5,
+        // widths 1 and 1.25, object-fit: cover) so every intro line lands on a slide 1 line
+        float heroGrid(vec2 px) {
+            vec2 c = px / uGridS + vec2(836.0, 470.5) - 0.5;
+            vec2 m1 = abs(c - floor(c / 20.0 + 0.5) * 20.0) * uGridS;
+            vec2 m2 = abs(c - floor(c / 100.0 + 0.5) * 100.0) * uGridS;
+            float minor = clamp((0.5 * uGridS - min(m1.x, m1.y)) * uDpr + 0.5, 0.0, 1.0);
+            float major = clamp((0.625 * uGridS - min(m2.x, m2.y)) * uDpr + 0.5, 0.0, 1.0);
+            return max(minor * 0.075, major * 0.16);
+        }
 
         float tA;
 
@@ -28,17 +40,8 @@ window.AP_PLOTTER_BLEED = {
             float outline = clamp(0.5 - (abs(sd) - 0.6 * ups) / aa, 0.0, 1.0);
             float zoom = uScale / uStartScale;
 
-            vec3 rgb = vec3(0.0);
-            float paper = uPaper * (1.0 - clamp(uGrow * 1.6, 0.0, 1.0));
-            if (paper > 0.0) {
-                float s1 = 24.0 / uStartScale;
-                float s2 = 120.0 / uStartScale;
-                vec2 g1 = abs(fract(w / s1 + 0.5) - 0.5) * s1 * uScale;
-                vec2 g2 = abs(fract(w / s2 + 0.5) - 0.5) * s2 * uScale;
-                float minor = hair(min(g1.x, g1.y)) * smoothstep(6.0, 14.0, s1 * uScale);
-                float major = hair(min(g2.x, g2.y) - 0.25);
-                rgb = vec3(max(minor * 0.075, major * 0.16)) * paper;
-            }
+            float paper = uPaper;
+            vec3 rgb = vec3(heroGrid(px)) * paper;
 
             if (idx.x == 0.0 && idx.y == 0.0) {
                 vec2 corner = vec2(u.x < 401.5 ? -48.0 : 851.0, u.y < 322.0 ? -48.0 : 692.0);
@@ -115,6 +118,8 @@ window.AP_PLOTTER_BLEED = {
         g.u.uSolid = s.since >= 0 ? E.inOutCubic(c(s.since / 0.35)) : 0;
         g.u.uStartScale = s.startScale;
         g.u.uReveal = E.inOutSine(r);
-        return { u: g.u, hero: 'scale(' + (1.06 - 0.06 * E.outExpo(r)) + ')' };
+        const heroZoom = 1.06 - 0.06 * E.outExpo(r);
+        g.u.uGridS = Math.max(s.vw / 1672, s.vh / 941) * (s.framed ? heroZoom : 1);
+        return { u: g.u, hero: 'scale(' + heroZoom + ')' };
     }
 };

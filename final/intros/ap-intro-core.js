@@ -303,7 +303,7 @@
             const out = opts.frame({
                 t: elapsed,
                 since: fullAt >= 0 ? elapsed - fullAt : -1,
-                fill, vw, vh, bigH, startScale,
+                fill, vw, vh, bigH, startScale, framed: !!frame,
             }) || {};
 
             if (out.done) {
