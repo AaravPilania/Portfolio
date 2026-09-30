@@ -683,6 +683,7 @@
         }
 
         let last = performance.now(), nextDetect = 0, nextZ = 0, lastKey = '';
+        let hoverX = 0, hoverY = 0, hoverTilt = 0;
 
         function land(now) {
             act = { type: 'fly', phase: 'land', until: now + 340, pts: [], i: 0 };
@@ -718,23 +719,24 @@
             const clampY = (v) => Math.max(minY, Math.min(maxY, v));
             let liftTo = 0;
 
-            // Fast scrolling blows it off its feet: a short flight that drifts with the scroll and lands once it settles
+            // Fast scrolling startles it into buzzing on the spot until the scroll settles, then it drops back down
             if (now - lastScrollMove > 200) scrollV *= Math.exp(-dt * 10);
-            // Every fast stretch launches a flight, in either direction; only the line that goes with it is rationed
+            // Every fast stretch sets it hovering, in either direction; only the line that goes with it is rationed
             const armed = scrollArmed;
             scrollArmed = 0;
             if (armed && act && act.scroll) {
                 act.dir = armed;
-                act.until = Math.max(act.until, now + 1500);
+                act.until = Math.min(act.t0 + 4000, Math.max(act.until, now + 1200));
             } else if (armed && (now - lastScrollFly > 900 || (act && act.type === 'fly')) && state !== 'held' && state !== 'flip' && !reduced && !entering()) {
                 lastScrollFly = now;
                 scrollFlights++;
                 wake(now, true);
-                act = { type: 'fly', phase: 'air', scroll: true, dir: armed, until: now + 5000,
-                    pts: [{ x: clampX(x + (Math.random() - 0.5) * 220), y }], i: 0 };
+                act = { type: 'fly', phase: 'hover', scroll: true, dir: armed, t0: now, until: now + 1200 + Math.random() * 600 };
+                speed = 0;
                 squash = 0.15;
                 react('scroll', now);
             }
+            hoverX = hoverY = hoverTilt = 0;
 
             if (state === 'held') {
                 x = mouse.x - press.ox;
@@ -837,18 +839,22 @@
                         heading = Math.atan2(u * (c.y - p0.y) + e * (p1.y - c.y), u * (c.x - p0.x) + e * (p1.x - c.x));
                         liftTo = 1;
                         if (k >= 1) land(now);
+                    } else if (act.phase === 'hover') {
+                        speed = 0;
+                        liftTo = 0.8;
+                        const k = Math.min(1, (now - act.t0) / 200);
+                        hoverX = (Math.sin(clock * 23) * 1.5 + Math.sin(clock * 37) * 1) * k;
+                        hoverY = (Math.sin(clock * 11) * 3 - 3 + Math.sin(clock * 41) * 0.8) * k;
+                        hoverTilt = Math.sin(clock * 7) > 0.55 ? 1 : Math.sin(clock * 7) < -0.55 ? -1 : 0;
+                        if (Math.abs(scrollV) > 200) act.dir = Math.sign(scrollV);
+                        if (now > act.until && now - lastScrollMove > 250) {
+                            act.phase = 'land';
+                            act.until = now + 340;
+                            squash = 0.2;
+                        }
                     } else if (act.phase === 'warm') {
                         if (now > act.until) act.phase = 'air';
                     } else if (act.phase === 'air') {
-                        if (act.scroll) {
-                            if (now - lastScrollMove < 450 && now < act.until) {
-                                if (Math.abs(scrollV) > 200) act.dir = Math.sign(scrollV);
-                                act.pts[0].y = y + act.dir * 140;
-                            } else {
-                                act.scroll = false;
-                                act.pts[0] = { x: x + Math.cos(heading) * 70, y: y + Math.sin(heading) * 70 };
-                            }
-                        }
                         goal = { x: clampX(act.pts[0].x), y: clampY(act.pts[0].y) };
                         liftTo = 1;
                     } else if (now > act.until) {
@@ -1008,6 +1014,7 @@
             deg += Math.round(wob / STEP) * STEP;
             if (happy > 1.2 && state === 'idle') deg += Math.floor(clock / 0.12) % 2 ? STEP : -STEP;
             if (state === 'flip') deg += Math.floor(clock / 0.2) % 2 ? STEP : 0;
+            deg += hoverTilt * STEP;
             const sc = (1 + lift * 0.18) * (1 + squash * 0.4);
             rot.style.transform = 'rotate(' + deg + 'deg) scale(' + sc.toFixed(3) + ')';
             shadow.style.transform = 'translate3d(' + Math.round(3 + lift * 16) + 'px,' + Math.round(4 + lift * 22) + 'px,0) rotate(' + deg + 'deg)';
@@ -1015,7 +1022,8 @@
 
             const tx = Math.round((x - HALF) / S) * S;
             const ty = Math.round((y - HALF) / S) * S;
-            bug.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0)';
+            const hx = Math.round(hoverX / S) * S, hy = Math.round(hoverY / S) * S;
+            bug.style.transform = 'translate3d(' + (tx + hx) + 'px,' + (ty + hy) + 'px,0)';
             if (!shown) {
                 shown = true;
                 bug.style.visibility = '';
