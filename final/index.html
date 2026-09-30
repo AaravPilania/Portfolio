@@ -694,7 +694,7 @@
         .sticky-hero-track {
             height: 250vh;
             position: relative;
-            background-color: var(--color--dark-bg, #121316);
+            background-color: transparent;
             width: 100%;
         }
 
@@ -707,7 +707,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background-color: var(--color--dark-bg, #121316);
+            /* stays transparent so the fixed .js-canvas pixel-grid cursor reads continuously into #section-projects */
+            background-color: transparent;
         }
 
         /* 2. RUNNING MARQUEE BEHIND THE SHRINKING CARD (TWO SEAMLESS CIRCULAR LOOP LINES IN WHITE) */
