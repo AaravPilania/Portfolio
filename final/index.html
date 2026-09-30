@@ -312,8 +312,26 @@
 
     @media (min-width: 650px) {
         #section-projects .projects__entry-index {
-            display: block;
+            display: flex;
+            align-items: center;
         }
+    }
+
+    #section-projects .projects__entry-index::before {
+        content: '';
+        flex: none;
+        width: 0.8em;
+        height: 0.8em;
+        margin-right: 0.4em;
+        background-color: #FFED29;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='%23000' stroke-width='3.2' stroke-linecap='square'%3E%3Cpath d='M3 12h18'/%3E%3Cpath d='M7.5 4.2l9 15.6'/%3E%3Cpath d='M16.5 4.2l-9 15.6'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='%23000' stroke-width='3.2' stroke-linecap='square'%3E%3Cpath d='M3 12h18'/%3E%3Cpath d='M7.5 4.2l9 15.6'/%3E%3Cpath d='M16.5 4.2l-9 15.6'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+        transform: rotate(0deg);
+        transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #section-projects .projects__entry:hover .projects__entry-index::before {
+        transform: rotate(60deg);
     }
 
     #section-projects .projects__entry-title {
