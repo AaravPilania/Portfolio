@@ -1,8 +1,9 @@
 // Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, then turns like a wheel.
 // While the stage is stuck, one gesture (wheel flick, trackpad swipe, touch swipe, key) is one 60° detent and one
 // category swap; the first detent up and the last detent down hand the page back to normal scrolling.
-// GLITCH (pixel-bug.js) is leashed to Lusion's ribbon route while the stage is stuck, travelling a quarter of it per
-// detent and leaving dead pixels behind it until reverse steps eat them back; then it's handed back to wandering.
+// GLITCH (pixel-bug.js) is leashed to a ribbon route planned around the words while the stage is stuck: it flies in to
+// the route's start, travels a quarter of it per detent and leaves dead pixels behind it until reverse steps eat them
+// back; then it's handed back to wandering.
 (function (root) {
     'use strict';
 
@@ -154,44 +155,34 @@
         return z;
     }
 
-    // Lusion's section-2 ribbon, traced from lusion.co (1024x504 frames) in the prototype (cea88f4), as stage fractions.
-    // It is never drawn: it is GLITCH's route, and the damage trail it leaves.
-    const RIBBON = [[-0.06, 0.14], [0.12, 0.1], [0.27, 0.22], [0.31, 0.46], [0.26, 0.68], [0.12, 0.74], [0.05, 0.6], [0.12, 0.42],
-        [0.3, 0.3], [0.46, 0.1], [0.56, 0.06], [0.68, 0.24], [0.8, 0.27], [0.91, 0.25], [0.96, 0.45], [0.97, 0.72], [1.04, 1.06]];
+    // Segment i of a uniform Catmull-Rom through P (the prototype's bezier controls), at t in [0, 1]
+    function crPoint(P, i, t) {
+        const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+        const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+        const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+        const u = 1 - t;
+        return [
+            u * u * u * p1[0] + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * p2[0],
+            u * u * u * p1[1] + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * p2[1],
+        ];
+    }
 
-    // Uniform Catmull-Rom through the points (the prototype's bezier controls), mapped into the stage inset by `margin`
-    // so the bug is never clamped off its own trail, sampled densely, cut to the on-screen stretch (the ribbon enters
-    // off the left edge and leaves off the bottom-right corner), then parameterised by arc length.
-    function createRoute(pts, w, h, margin) {
-        const P = pts.map((q) => [margin + q[0] * (w - 2 * margin), margin + q[1] * (h - 2 * margin)]);
-        const SEG = 64;
-        const raw = [];
-        for (let i = 0; i < P.length - 1; i++) {
-            const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
-            const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-            const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-            for (let j = i ? 1 : 0; j <= SEG; j++) {
-                const t = j / SEG, u = 1 - t;
-                raw.push([
-                    u * u * u * p1[0] + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * p2[0],
-                    u * u * u * p1[1] + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * p2[1],
-                ]);
-            }
-        }
-        const inb = (q) => q[0] >= margin && q[0] <= w - margin && q[1] >= margin && q[1] <= h - margin;
-        let a = raw.findIndex(inb), b = -1;
-        for (let i = raw.length - 1; i >= 0; i--) if (inb(raw[i])) { b = i; break; }
-        if (a < 0 || b <= a) {
-            a = 0;
-            b = raw.length - 1;
-        }
+    const rectDist = (x, y, r) => Math.hypot(Math.max(r.l - x, 0, x - r.r), Math.max(r.t - y, 0, y - r.b));
+    const unite = (a, b) => (!a ? b : !b ? a : { l: Math.min(a.l, b.l), t: Math.min(a.t, b.t), r: Math.max(a.r, b.r), b: Math.max(a.b, b.b) });
+
+    // The curve through stage-pixel control points, sampled densely and parameterised by arc length
+    function createRoute(P) {
+        const SEG = 48;
         const xs = [], ys = [], cum = [];
         let L = 0;
-        for (let i = a; i <= b; i++) {
-            if (xs.length) L += Math.hypot(raw[i][0] - xs[xs.length - 1], raw[i][1] - ys[ys.length - 1]);
-            xs.push(raw[i][0]);
-            ys.push(raw[i][1]);
-            cum.push(L);
+        for (let i = 0; i < P.length - 1; i++) {
+            for (let j = i ? 1 : 0; j <= SEG; j++) {
+                const q = crPoint(P, i, j / SEG);
+                if (xs.length) L += Math.hypot(q[0] - xs[xs.length - 1], q[1] - ys[ys.length - 1]);
+                xs.push(q[0]);
+                ys.push(q[1]);
+                cum.push(L);
+            }
         }
         const n = xs.length;
         const pos = (s) => {
@@ -210,7 +201,127 @@
             const p = pos(s), q0 = pos(s - 6), q1 = pos(s + 6);
             return { x: p[0], y: p[1], a: Math.atan2(q1[1] - q0[1], q1[0] - q0[0]) };
         };
-        return { L, atS, at: (t) => atS(t * L) };
+        return { L, atS, at: (t) => atS(t * L), xs, ys };
+    }
+
+    // A cursive loop (prolate trochoid) at xc travelling `dir`; vs -1 throws its bowl upward, +1 downward
+    function curl(xc, yc, b, dir, vs) {
+        const a = b * 0.32, out = [];
+        for (let k = 0; k <= 8; k++) {
+            const u = -Math.PI + k * Math.PI / 4;
+            out.push([xc + dir * (a * u - b * Math.sin(u)), yc + vs * b * Math.cos(u)]);
+        }
+        return out;
+    }
+
+    // A wave along a horizontal corridor yr = [top, bottom] of centre-line positions, with curls at fractions `curls`
+    function sweep(yr, xa, xb, curls, vs, w) {
+        const yc = (yr[0] + yr[1]) / 2, hh = (yr[1] - yr[0]) / 2;
+        const span = Math.abs(xb - xa), dir = xb >= xa ? 1 : -1;
+        const rho = Math.min(hh * 0.7, Math.max(w * 0.055, 34) * (w < 700 ? 1.5 : 1), span * 0.16);
+        const amp = hh * 0.58;
+        const n = Math.max(1, Math.round(span / Math.max(150, w * 0.13)));
+        const loops = rho >= 16 ? curls.map((f) => xa + (xb - xa) * f) : [];
+        const pts = [];
+        let li = 0;
+        for (let i = 0; i <= n; i++) {
+            const x = xa + (xb - xa) * i / n;
+            while (li < loops.length && dir * (x - loops[li]) > 0) pts.push(...curl(loops[li++], yc, rho, dir, vs));
+            if (i === 0 || i === n || loops.every((lx) => Math.abs(x - lx) > rho * 1.9)) pts.push([x, yc + amp * Math.sin(i * 2.2 + (vs > 0 ? 1.1 : 0))]);
+        }
+        return pts;
+    }
+
+    // Pushes control points out of any rect the curve comes within `m` of, and back inside the stage edge `e`
+    function settle(P, rects, w, h, e, m) {
+        for (let it = 0; it < 32; it++) {
+            const push = P.map(() => [0, 0]);
+            let bad = false;
+            const want = (i, vx, vy) => {
+                if (Math.hypot(vx, vy) > Math.hypot(push[i][0], push[i][1])) push[i] = [vx, vy];
+            };
+            for (let i = 0; i < P.length - 1; i++) {
+                for (let j = 0; j <= 16; j++) {
+                    const q = crPoint(P, i, j / 16);
+                    let vx = 0, vy = 0;
+                    rects.forEach((r) => {
+                        const d = rectDist(q[0], q[1], r);
+                        if (d >= m) return;
+                        let nx = q[0] - Math.max(r.l, Math.min(r.r, q[0])), ny = q[1] - Math.max(r.t, Math.min(r.b, q[1]));
+                        if (!nx && !ny) {
+                            const dl = q[0] - r.l, dr = r.r - q[0], dt = q[1] - r.t, db = r.b - q[1], mn = Math.min(dl, dr, dt, db);
+                            if (mn === dl) nx = -1; else if (mn === dr) nx = 1; else if (mn === dt) ny = -1; else ny = 1;
+                        }
+                        const nl = Math.hypot(nx, ny), need = m - d + 2;
+                        vx += nx / nl * need;
+                        vy += ny / nl * need;
+                    });
+                    if (q[0] < e) vx += e - q[0] + 1;
+                    if (q[0] > w - e) vx -= q[0] - (w - e) + 1;
+                    if (q[1] < e) vy += e - q[1] + 1;
+                    if (q[1] > h - e) vy -= q[1] - (h - e) + 1;
+                    if (!vx && !vy) continue;
+                    bad = true;
+                    want(i, vx, vy);
+                    want(i + 1, vx, vy);
+                }
+            }
+            if (!bad) return;
+            P.forEach((p, i) => {
+                p[0] = Math.max(e, Math.min(w - e, p[0] + push[i][0]));
+                p[1] = Math.max(e, Math.min(h - e, p[1] + push[i][1]));
+            });
+        }
+    }
+
+    // GLITCH's route, drawn around the words rather than over them. The union of every category's title, counter and
+    // skills boxes, grown by `clear`, leaves three free zones: the band above it, the band below it, and the lane between
+    // it and the asterisk. The full route wraps the words (top band right to left with a curl, down the lane, bottom band
+    // left to right with a curl); the lane is dropped when its centre line would cross the asterisk's arm sweep, a band
+    // when it's thinner than nothing. Each candidate is settled, then checked densely; the first that holds wins.
+    function planRoute(o) {
+        const w = o.w, h = o.h, e = o.edge, m = o.clear;
+        const rects = (o.rects || []).filter((r) => r && r.r > r.l && r.b > r.t);
+        const T = rects.reduce((a, r) => unite(a, r), null) || { l: w * 0.3, t: h * 0.45, r: w - e, b: h * 0.55 };
+        const E = { l: T.l - m, t: T.t - m, r: T.r + m, b: T.b + m };
+        const s = o.star;
+        const x0 = Math.max(e, w * 0.07), x1 = w - x0;
+        const top = E.t >= e ? [e, E.t] : null;
+        const bot = E.b <= h - e ? [E.b, h - e] : null;
+        const laneX = Math.min(E.l, x1);
+        const laneOk = laneX >= e && (!s || laneX >= s.x + s.r);
+        const room = s ? laneX - (s.x + s.r + (o.starPad || 0)) : laneX - e;
+        const bulge = Math.max(0, Math.min(room * 0.5, w * 0.04));
+        const lx = laneX - bulge * 0.2, lm = laneX - bulge;
+        const turnT = top ? Math.max(24, (top[1] - top[0]) * 0.4) : 0, turnB = bot ? Math.max(24, (bot[1] - bot[0]) * 0.4) : 0;
+        const cands = [];
+        if (top && bot && laneOk) {
+            cands.push(['wrap', sweep(top, x1, Math.min(x1 - 1, laneX + turnT), [0.42], -1, w)
+                .concat([[lx, E.t], [lm, (E.t + E.b) / 2], [lx, E.b]], sweep(bot, Math.min(x1 - 1, laneX + turnB), x1, [0.58], 1, w))]);
+        }
+        if (top && laneOk) cands.push(['top-lane', sweep(top, x1, Math.min(x1 - 1, laneX + turnT), [0.45], -1, w).concat([[lx, E.t], [lm, (E.t + h - e) / 2], [lx, h - e]])]);
+        if (bot && laneOk) cands.push(['lane-bottom', [[lx, e], [lm, (e + E.b) / 2], [lx, E.b]].concat(sweep(bot, Math.min(x1 - 1, laneX + turnB), x1, [0.55], 1, w))]);
+        const bands = [[top, -1, 'top'], [bot, 1, 'bottom']].filter((b) => b[0]).sort((a, b) => (b[0][1] - b[0][0]) - (a[0][1] - a[0][0]));
+        bands.forEach((b) => cands.push([b[2], sweep(b[0], x0, x1, [0.3, 0.68], b[1], w)]));
+        if (laneX >= e) cands.push(['lane', [[lx, e], [lm, h / 2], [lx, h - e]]]);
+        if (!cands.length) cands.push(['edge', sweep([e, e], x0, x1, [], -1, w)]);
+
+        let best = null;
+        for (const [kind, P] of cands) {
+            settle(P, rects, w, h, e, m);
+            const route = createRoute(P);
+            let minClear = Infinity, starClear = Infinity, inside = true;
+            for (let i = 0; i < route.xs.length; i++) {
+                const x = route.xs[i], y = route.ys[i];
+                rects.forEach((r) => { minClear = Math.min(minClear, rectDist(x, y, r)); });
+                if (s) starClear = Math.min(starClear, Math.hypot(x - s.x, y - s.y) - s.r);
+                if (x < e - 1 || x > w - e + 1 || y < e - 1 || y > h - e + 1) inside = false;
+            }
+            const plan = { kind, pts: P, route, box: T, clear: m, minClear, starClear, ok: inside && minClear >= m - 1 };
+            if (plan.ok) return plan;
+            if (!best || plan.minClear > best.minClear) best = plan;
+        }
+        return best;
     }
 
     function mulberry32(seed) {
@@ -243,8 +354,12 @@
             for (let i = 0; i < weights.length; i++) if ((r -= weights[i]) < 0) return i;
             return 0;
         };
+        // Nothing is stamped within `gap` of a kept-out box (the words), whatever the band's ragged edge does
+        const avoid = o.avoid || [], gap = o.gap || 0;
+        const clearOf = (x0, y0, x1, y1) => avoid.every((r) => Math.hypot(Math.max(r.l - x1, 0, x0 - r.r), Math.max(r.t - y1, 0, y0 - r.b)) >= gap);
         // Dead clusters overwrite whatever kind already owns a cell (keeping its s), so they punch through the band
         const put = (gx, gy, s, k, over) => {
+            if (avoid.length && !clearOf(gx * c, gy * c, gx * c + c, gy * c + c)) return;
             const key = (gx + 4096) * 8192 + (gy + 4096);
             const had = owned.get(key);
             if (had) {
@@ -281,22 +396,26 @@
                 for (let i = 0; i < w; i++) for (let j = 0; j < hh; j++) put(gx + i, gy + j, s, 0, true);
             }
             if (rnd() < 0.016) {
-                tears.push({
+                const len = 4 + Math.floor(rnd() * 12);
+                const t = {
                     s,
-                    gx: Math.floor((p.x - rnd() * hw * 2) / c),
+                    gx: Math.floor((p.x - len * c / 2 + (rnd() - 0.5) * hw) / c),
                     gy: Math.floor((p.y + (rnd() - 0.5) * hw * 2) / c),
-                    len: 4 + Math.floor(rnd() * 22),
-                    dx: (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 3)),
+                    len,
+                    dx: (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 2)),
                     h: rnd() < 0.55 ? 0.5 : 1,
                     k: rnd() < 0.6 ? 7 : 2 + Math.floor(rnd() * 3),
-                });
+                };
+                // Its whole sweep: the displacement, a flicker jolt of two more, and the red/cyan split either side
+                const reach = Math.abs(t.dx) * 3 * c + 3;
+                if (!avoid.length || clearOf(t.gx * c - reach, t.gy * c, (t.gx + len) * c + reach, (t.gy + 1) * c)) tears.push(t);
             }
         }
         return { cells, tears };
     }
 
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, buildDamage, RIBBON };
+        module.exports = { createIntent, createZone, createRoute, planRoute, buildDamage };
         return;
     }
 
@@ -333,6 +452,9 @@
     const SETTLE = 0.45;              // s to settle onto a detent after the page carries into the stage
     // Detents sit 0.3 viewports apart: under pixel-bug's 1200px/s fast-scroll threshold at this ease and LOCK
     const STEP_VH = 0.3;
+    const BUG_HALF = 32;              // half of pixel-bug's 64px hit box
+    const ROUTE_EDGE = 36;            // inside pixel-bug's viewport clamp (24 / 30px), so it's never pushed off its route
+    const APPROACH_MAX = 2600;        // ms a detent's travel waits for GLITCH to land on the route before going anyway
     const APP_URL = '/wp-content/themes/lamalama2025/dist/assets/app-DjHRamTc.js';
 
     const st = { travel: 0, travelT: 0, wheel: 0, angle: 0 };
@@ -341,8 +463,9 @@
     const path = { t: 0 };
     const dmgCanvas = track.querySelector('.sk-damage');
     const dmgCtx = dmgCanvas ? dmgCanvas.getContext('2d') : null;
-    let route = null, damage = null, buckets = null, fringe = null, routeKey = '';
-    let cellDev = 5, dmgScale = 1, pathTween = null, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
+    let route = null, plan = null, keepOut = [], damage = null, buckets = null, fringe = null, routeKey = '';
+    let cellDev = 5, dmgScale = 1, pathTween = null, pathGoal = 0, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
+    let arrived = false, approachSince = 0, pendingT = null;
     let flickerOff = null, tearJolt = null, nextFlicker = 0;
     let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03, A = 0, B = 0, gapPx = 18;
     let geo = [];
@@ -476,13 +599,30 @@
         if (fill) fill.kill();
         const g = geo[Math.max(k, 0)];
         fill = gsap.to(rail, Object.assign({ p: (k + 1) / N, duration: 0.9, ease: 'power3.out', onUpdate: () => { railDirty = true; } }, g || {}));
-        const pt = Math.max(k, 0) / (N - 1);
-        if (pt !== path.t) {
-            pathDir = pt > path.t ? 1 : -1;
-            if (pathTween) pathTween.kill();
-            pathTween = gsap.to(path, { t: pt, duration: LOCK, ease: 'power2.inOut' });
-        }
+        travelTo(Math.max(k, 0) / (N - 1));
         if (k >= 0 && leashed) say(CAT_LINES[k]);
+    }
+
+    // A detent that lands while GLITCH is still flying in is queued until it touches down on the route, so the trail
+    // never runs ahead of it; a jump of several detents takes a little longer than one.
+    function travelTo(pt) {
+        if (leashed && !arrived && now() - approachSince < APPROACH_MAX) {
+            pendingT = pt;
+            return;
+        }
+        pendingT = null;
+        if (pt === pathGoal && (pathTween || pt === path.t)) return;
+        pathGoal = pt;
+        if (pt === path.t) return;
+        pathDir = pt > path.t ? 1 : -1;
+        if (pathTween) pathTween.kill();
+        const q = Math.max(1, Math.abs(pt - path.t) * (N - 1));
+        pathTween = gsap.to(path, { t: pt, duration: LOCK * Math.sqrt(q), ease: 'power2.inOut', onComplete: () => { pathTween = null; } });
+    }
+
+    function onArrive() {
+        arrived = true;
+        if (pendingT !== null) travelTo(pendingT);
     }
 
     // ---------- geometry
@@ -508,6 +648,17 @@
             b = Math.max(b, r.right - left);
         });
         return a < b ? [a, b] : [0, 0];
+    }
+
+    function boxOf(els, sr) {
+        let box = null;
+        els.forEach((el) => {
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return;
+            box = unite(box, { l: r.left - sr.left, t: r.top - sr.top, r: r.right - sr.left, b: r.bottom - sr.top });
+        });
+        return box;
     }
 
     // --sk-h drives the track's scroll length, so it changes only on resize, ahead of ScrollTrigger's debounced refresh
@@ -589,6 +740,16 @@
         Object.assign(rail, geo[Math.max(shown, 0)], { p: (shown + 1) / N });
         railDirty = true;
 
+        // What GLITCH and its trail keep out of: the furthest extents of every category's counter, title and skills,
+        // in stage pixels (masks, so ascenders and descenders count; the glyphs' own swap transforms don't)
+        let kick = null, title = null, set = null;
+        parts.forEach((p) => {
+            kick = unite(kick, boxOf([p.titleEl.querySelector('.sk-kicker')], sr));
+            title = unite(title, boxOf(p.titleEl.querySelectorAll(':scope > .sk-mk'), sr));
+            set = unite(set, boxOf(p.setEl.querySelectorAll('.sk-mk'), sr));
+        });
+        keepOut = [kick, title, set].filter(Boolean);
+
         const tr = track.getBoundingClientRect();
         const scr = scroller.getBoundingClientRect();
         A = Math.round(tr.top - scr.top + scroller.scrollTop);
@@ -645,19 +806,28 @@
 
     // ---------- the route and the damage GLITCH leaves on it
 
-    // The route maps the ribbon onto the stage box; the damage grid is snapped to whole backing pixels (5 CSS px cells
-    // at 1x, 10 device px at 2x), and the backing store is capped at 2x since the look is deliberately coarse.
+    // The route is planned around the kept-out boxes with a clearance of 2.5vw, plus the trail's ragged half-width
+    // (its scatter reaches 0.8 of the widest band, plus a cell), plus half the bug; the damage grid is snapped to whole
+    // backing pixels (5 CSS px cells at 1x, 10 device px at 2x), and the backing store is capped at 2x since the look is
+    // deliberately coarse.
     function buildTrail() {
         const w = stage.clientWidth, h = stage.clientHeight;
         if (!w || !h) return;
         const scale = Math.min(2, root.devicePixelRatio || 1);
-        const key = w + 'x' + h + '@' + scale;
+        const key = [w, h, scale, Math.round(cx), S].concat(...keepOut.map((r) => [r.l, r.t, r.r, r.b].map(Math.round))).join(',');
         if (key === routeKey) return;
         routeKey = key;
         dmgScale = scale;
         cellDev = Math.max(3, Math.round(5 * scale));
-        route = createRoute(RIBBON, w, h, 36);
-        damage = buildDamage(route, { cell: cellDev / scale, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04 });
+        const cell = cellDev / scale;
+        const bandMin = Math.max(14, w * 0.015), bandMax = Math.max(26, w * 0.03);
+        const reach = bandMax * 0.8 + cell, gap = w * 0.025;
+        plan = planRoute({
+            w, h, rects: keepOut, edge: ROUTE_EDGE, clear: gap + reach + BUG_HALF, starPad: reach + BUG_HALF,
+            star: S ? { x: cx, y: h / 2, r: S * 10.6 / 24 } : null,
+        });
+        route = plan.route;
+        damage = buildDamage(route, { cell, bandMin, bandMax, seed: 0x5ced04, avoid: keepOut, gap });
         buckets = Array.from({ length: 9 }, () => []);
         fringe = [];
         damage.cells.forEach((c) => {
@@ -756,19 +926,33 @@
 
     // GLITCH rides the route at the live path progress, facing along the tangent in the direction it's travelling.
     // Viewport coordinates, read per bug frame so it stays glued to the stage; it flies while a detent is moving it.
+    // `avoid` is the words' box, so its approach flight bends around them rather than across.
     function routeTarget() {
         if (!route) return null;
         const r = stage.getBoundingClientRect();
         const p = route.at(path.t);
         const moving = !!(pathTween && pathTween.isActive());
-        return { x: r.left + p.x, y: r.top + p.y, heading: pathDir > 0 ? p.a : p.a + Math.PI, lift: moving ? 1 : 0 };
+        const T = plan && plan.box;
+        return {
+            x: r.left + p.x, y: r.top + p.y, heading: pathDir > 0 ? p.a : p.a + Math.PI, lift: moving ? 1 : 0,
+            avoid: T ? { l: r.left + T.l, t: r.top + T.t, r: r.left + T.r, b: r.top + T.b } : null,
+        };
+    }
+
+    function leashOn() {
+        arrived = false;
+        approachSince = now();
+        root.__pixelBugLeash(routeTarget, { onArrive });
+        leashed = true;
     }
 
     function leashOff() {
         wantLeash = false;
         if (leashed && typeof root.__pixelBugLeash === 'function') root.__pixelBugLeash(null);
         leashed = false;
+        arrived = false;
         say('');
+        if (pendingT !== null) travelTo(pendingT);
     }
 
     // ---------- stepping
@@ -922,16 +1106,16 @@
         }
         // pixel-bug mounts after the intro, so the hand-over waits for its API rather than racing it
         if (wantLeash && !leashed && typeof root.__pixelBugLeash === 'function') {
-            root.__pixelBugLeash(routeTarget);
-            leashed = true;
+            leashOn();
             if (shown >= 0) say(CAT_LINES[shown]);
         }
+        if (pendingT !== null && now() - approachSince >= APPROACH_MAX) travelTo(pendingT);
     }
 
     // Reduced motion: no stepping, so the trail is drawn whole and still, and GLITCH is parked on the route's end
     // whenever that point is on screen (pixel-bug places a leashed bug without animating it under reduced motion).
     function reducedTrail() {
-        path.t = 1;
+        path.t = pathGoal = 1;
         if (dmgCtx && damage) drawTrail(route.L);
         const sync = () => {
             if (!route || typeof root.__pixelBugLeash !== 'function') return;
@@ -940,8 +1124,7 @@
             const y = r.top + e.y;
             const on = y > 0 && y < scroller.clientHeight;
             if (on && !leashed) {
-                root.__pixelBugLeash(routeTarget);
-                leashed = true;
+                leashOn();
             } else if (!on && leashed) {
                 leashOff();
             }

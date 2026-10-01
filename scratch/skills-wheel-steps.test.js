@@ -263,25 +263,101 @@ test('input is ignored when free or when the classifier said no', () => {
 
 // ---------- route + damage
 
-const { createRoute, buildDamage, RIBBON } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
-const SIZES = [[1920, 1080], [1366, 768], [390, 844]];
+const { planRoute, buildDamage } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
-test('route stays inside the stage margin and runs the ribbon\'s direction', () => {
-    SIZES.forEach(([w, h]) => {
-        const r = createRoute(RIBBON, w, h, 36);
-        for (let i = 0; i <= 200; i++) {
-            const p = r.at(i / 200);
-            assert.ok(p.x >= 35.5 && p.x <= w - 35.5 && p.y >= 35.5 && p.y <= h - 35.5, w + 'x' + h + ' t=' + i / 200 + ' -> ' + p.x.toFixed(1) + ',' + p.y.toFixed(1));
+// Synthetic slide 04 layouts, following measure()'s formulas: star centre cx at the index column, title column from
+// max(29vw, star arm + 3 gaps), the longest title on two lines, the longest skills list right-aligned on the axis.
+// Narrow (<=700px) stacks counter, title and skills into one block right of the star.
+const LAYOUTS = {
+    '1920x1080': { w: 1920, h: 1080, cx: 115, S: 626, rects: [
+        { l: 557, t: 400, r: 700, b: 411 },     // [ 0N / 05 ] counter
+        { l: 557, t: 428, r: 1496, b: 652 },    // title, two lines at 100px
+        { l: 1574, t: 413, r: 1864, b: 667 },   // skills, 8 x 31.7px
+    ] },
+    '1366x768': { w: 1366, h: 768, cx: 82, S: 445, rects: [
+        { l: 396, t: 281, r: 520, b: 292 },
+        { l: 396, t: 300, r: 1044, b: 470 },
+        { l: 1101, t: 287, r: 1322, b: 481 },
+    ] },
+    '390x844': { w: 390, h: 844, cx: 18, S: 273, rects: [
+        { l: 162, t: 307, r: 290, b: 318 },
+        { l: 162, t: 329, r: 372, b: 383 },
+        { l: 162, t: 399, r: 330, b: 537 },
+    ] },
+};
+const BUG_HALF = 32;
+function planFor(key) {
+    const L = LAYOUTS[key];
+    const bandMax = Math.max(26, L.w * 0.03), reach = bandMax * 0.8 + 5, gap = L.w * 0.025;
+    const star = { x: L.cx, y: L.h / 2, r: L.S * 10.6 / 24 };
+    const plan = planRoute({ w: L.w, h: L.h, rects: L.rects, star, edge: 36, clear: gap + reach + BUG_HALF, starPad: reach + BUG_HALF });
+    return { L, plan, gap, reach, star, bandMax };
+}
+const createRouteFor = (w, h) => planFor(w + 'x' + h).plan.route;
+
+test('route never comes within the safety margin of any text box (dense check)', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { L, plan } = planFor(key);
+        assert.ok(plan.ok, key + ' plan failed: ' + plan.kind + ' minClear ' + plan.minClear.toFixed(1) + ' < ' + plan.clear.toFixed(1));
+        const r = plan.route;
+        let worst = Infinity;
+        for (let s = 0; s <= r.L; s += 1) {
+            const p = r.atS(s);
+            L.rects.forEach((b) => {
+                worst = Math.min(worst, Math.hypot(Math.max(b.l - p.x, 0, p.x - b.r), Math.max(b.t - p.y, 0, p.y - b.b)));
+            });
+            assert.ok(p.x >= 35 && p.x <= L.w - 35 && p.y >= 35 && p.y <= L.h - 35, key + ' out of stage at s=' + s);
         }
-        const a = r.at(0), b = r.at(1);
-        assert.ok(a.x < w * 0.1 && a.y < h * 0.25, 'starts top-left: ' + a.x.toFixed(0) + ',' + a.y.toFixed(0));
-        assert.ok(b.x > w * 0.85 && b.y > h * 0.6, 'ends bottom-right: ' + b.x.toFixed(0) + ',' + b.y.toFixed(0));
-        assert.ok(r.L > (w + h), 'long enough: ' + r.L.toFixed(0));
+        assert.ok(worst >= plan.clear - 1, key + ' worst clearance ' + worst.toFixed(1) + ' < ' + plan.clear.toFixed(1));
+        console.log('     ' + key + ': ' + plan.kind + ', L ' + r.L.toFixed(0) + 'px, text clearance ' + worst.toFixed(0) + 'px (needs ' +
+            plan.clear.toFixed(0) + '), asterisk ' + plan.starClear.toFixed(0) + 'px, ' + plan.pts.length + ' control points');
     });
 });
 
+test('route keeps its centre line off the asterisk\'s arm sweep, and wraps the words where the lane fits', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { plan } = planFor(key);
+        assert.ok(plan.starClear >= 0, key + ' asterisk clearance ' + plan.starClear.toFixed(1));
+    });
+    assert.strictEqual(planFor('1920x1080').plan.kind, 'wrap');
+    assert.strictEqual(planFor('1366x768').plan.kind, 'wrap');
+});
+
+test('route flows like a ribbon: long, with loops (self-crossings), start and end apart', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { L, plan } = planFor(key);
+        const r = plan.route;
+        assert.ok(r.L > L.w * 1.1, key + ' length ' + r.L.toFixed(0));
+        const a = r.at(0), b = r.at(1);
+        assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > Math.min(L.w, L.h) * 0.3, key + ' start/end too close');
+        // Count self-crossings of the polyline: each curl crosses itself once
+        const pts = [];
+        for (let i = 0; i <= 600; i++) pts.push(r.at(i / 600));
+        const cross = (p, q, u, v) => {
+            const d = (q.x - p.x) * (v.y - u.y) - (q.y - p.y) * (v.x - u.x);
+            if (!d) return false;
+            const s = ((u.x - p.x) * (v.y - u.y) - (u.y - p.y) * (v.x - u.x)) / d, t = ((u.x - p.x) * (q.y - p.y) - (u.y - p.y) * (q.x - p.x)) / d;
+            return s > 0 && s < 1 && t > 0 && t < 1;
+        };
+        let loops = 0;
+        for (let i = 0; i < pts.length - 1; i++) for (let j = i + 2; j < pts.length - 1; j++) if (cross(pts[i], pts[i + 1], pts[j], pts[j + 1])) loops++;
+        assert.ok(loops >= 1, key + ' has no loops');
+    });
+});
+
+test('planner adapts: a cramped viewport falls back to a simpler route that still clears the text', () => {
+    // 1280x560: the text block leaves no band above it; the planner must still find a clear route
+    const w = 1280, h = 560;
+    const rects = [{ l: 371, t: 110, r: 480, b: 121 }, { l: 371, t: 130, r: 960, b: 330 }, { l: 1030, t: 125, r: 1240, b: 340 }];
+    const bandMax = Math.max(26, w * 0.03), reach = bandMax * 0.8 + 5, clear = w * 0.025 + reach + BUG_HALF;
+    const plan = planRoute({ w, h, rects, star: { x: 77, y: h / 2, r: 0.58 * h * 10.6 / 24 }, edge: 36, clear, starPad: reach + BUG_HALF });
+    assert.ok(plan.ok, plan.kind + ' minClear ' + plan.minClear.toFixed(1));
+    assert.notStrictEqual(plan.kind, 'wrap');
+    console.log('     1280x560: ' + plan.kind + ', clearance ' + plan.minClear.toFixed(0) + 'px');
+});
+
 test('route is arc-length parameterised: equal t steps are equal distances along it', () => {
-    const r = createRoute(RIBBON, 1920, 1080, 36);
+    const r = createRouteFor(1920, 1080);
     const K = 400;
     let worst = 0;
     for (let i = 0; i < K; i++) {
@@ -292,7 +368,7 @@ test('route is arc-length parameterised: equal t steps are equal distances along
 });
 
 test('route tangent points along the direction of travel', () => {
-    const r = createRoute(RIBBON, 1920, 1080, 36);
+    const r = createRouteFor(1920, 1080);
     for (let i = 1; i < 100; i++) {
         const p = r.at(i / 100), q = r.at(i / 100 + 0.002);
         const d = Math.atan2(q.y - p.y, q.x - p.x);
@@ -302,9 +378,25 @@ test('route tangent points along the direction of travel', () => {
 });
 
 function dmgFor(w, h) {
-    const r = createRoute(RIBBON, w, h, 36);
-    return { r, d: buildDamage(r, { cell: 5, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04 }) };
+    const { L, plan, gap } = planFor(w + 'x' + h);
+    const r = plan.route;
+    return { r, L, gap, d: buildDamage(r, { cell: 5, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04, avoid: L.rects, gap }) };
 }
+
+test('no damage cell or tear (with its jolt and RGB split) lands within the gap of any text box', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const [w, h] = key.split('x').map(Number);
+        const { L, d, gap } = dmgFor(w, h);
+        const dist = (x0, y0, x1, y1) => Math.min(...L.rects.map((b) => Math.hypot(Math.max(b.l - x1, 0, x0 - b.r), Math.max(b.t - y1, 0, y0 - b.b))));
+        let worst = Infinity;
+        d.cells.forEach((c) => { worst = Math.min(worst, dist(c.gx * 5, c.gy * 5, c.gx * 5 + 5, c.gy * 5 + 5)); });
+        d.tears.forEach((t) => {
+            const reach = Math.abs(t.dx) * 15 + 3;
+            worst = Math.min(worst, dist(t.gx * 5 - reach, t.gy * 5, (t.gx + t.len) * 5 + reach, t.gy * 5 + 5));
+        });
+        assert.ok(worst >= gap, key + ' damage ' + worst.toFixed(1) + 'px from text, gap ' + gap.toFixed(1));
+    });
+});
 
 test('damage is deterministic: same stage, same dead pixels', () => {
     const a = dmgFor(1920, 1080).d, b = dmgFor(1920, 1080).d;

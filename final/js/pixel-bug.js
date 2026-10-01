@@ -375,7 +375,6 @@
         let twitch = 0, twitchSide = 'L', nextTwitch = 1.5;
         const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false, travel: 0 };
         const parts = [];
-        const LEASH_MS = 700;
         let leash = null, sceneLine = '';
         const entering = () => !!(act && act.phase === 'entry');
 
@@ -715,6 +714,55 @@
             return 0.8;
         }
 
+        // Leash approach: a glance toward the target, then a cubic arc from where it stands to the live target. It leaves
+        // along a launch angle bent off the straight line (to whichever side keeps the arc clear of the scene's `avoid`
+        // box and needs the least turning) and lands moving along the target's heading; duration scales with distance.
+        function glance(now) {
+            twitch = 0.35;
+            twitchSide = Math.random() < 0.5 ? 'L' : 'R';
+            return { phase: 'glance', until: now + 160 + Math.random() * 180 };
+        }
+        function arc(ap, px, py, ha, u) {
+            const v = 1 - u, x0 = ap.x0, y0 = ap.y0;
+            const c1x = x0 + Math.cos(ap.h0) * ap.k1, c1y = y0 + Math.sin(ap.h0) * ap.k1;
+            const c2x = px - Math.cos(ha) * ap.k2, c2y = py - Math.sin(ha) * ap.k2;
+            return [
+                v * v * v * x0 + 3 * v * v * u * c1x + 3 * v * u * u * c2x + u * u * u * px,
+                v * v * v * y0 + 3 * v * v * u * c1y + 3 * v * u * u * c2y + u * u * u * py,
+            ];
+        }
+        function launch(ap, now, px, py, p) {
+            const d = Math.hypot(px - x, py - y), base = Math.atan2(py - y, px - x);
+            const bend = Math.min(0.55, 0.22 + d / 1800);
+            Object.assign(ap, { phase: 'fly', t0: now, x0: x, y0: y, d, k1: Math.min(d * 0.36, 260), k2: Math.min(d * 0.3, 150),
+                nx: -Math.sin(base), ny: Math.cos(base), air: d > 90, ph: Math.random() * 6.283 });
+            let best = -Infinity, side = 1;
+            for (const s of [-1, 1]) {
+                ap.h0 = base + s * bend;
+                const m = arc(ap, px, py, p.heading, 0.5);
+                const a = p.avoid;
+                const room = a ? Math.hypot(Math.max(a.l - m[0], 0, m[0] - a.r), Math.max(a.t - m[1], 0, m[1] - a.b)) : 0;
+                const turn = Math.abs(Math.atan2(Math.sin(ap.h0 - heading), Math.cos(ap.h0 - heading)));
+                const score = Math.min(room, 160) - turn * 40;
+                if (score > best) {
+                    best = score;
+                    side = s;
+                }
+            }
+            ap.h0 = base + side * bend;
+            ap.dur = d < 14 ? 1 : Math.max(600, Math.min(1400, 380 + d * 0.6));
+            ap.amp = ap.air ? Math.min(6, d * 0.012) : 0;
+        }
+        // Back to wandering: a beat with the wings up, then a curved hop off along roughly where it was heading
+        function depart(now) {
+            const d = 150 + Math.random() * 130, a = heading + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.5);
+            const spot = { x: Math.max(60, Math.min(vw - 60, x + Math.cos(a) * d)), y: Math.max(60, Math.min(vh - 60, y + Math.sin(a) * d)) };
+            twitch = 0.35;
+            return lift > 0.5
+                ? { type: 'fly', phase: 'air', pts: [spot], i: 0 }
+                : { type: 'fly', phase: 'warm', until: now + 240 + Math.random() * 200, pts: [spot], i: 0 };
+        }
+
         // Six feet, one pair of track dots per step, only while it's on the ground
         function footsteps(dt) {
             if (speed > 20 && lift < 0.1) {
@@ -775,7 +823,7 @@
             hoverX = hoverY = hoverTilt = 0;
 
             // A drag or a flip always wins over a leash; the leash then re-approaches from wherever it was dropped
-            if (leash && (state === 'held' || state === 'flip')) leash.t0 = now;
+            if (leash && (state === 'held' || state === 'flip')) leash.ap = null;
             if (state === 'held') {
                 x = mouse.x - press.ox;
                 y = mouse.y - press.oy;
@@ -790,36 +838,62 @@
                     pauseUntil = now + 500;
                 }
             } else if (leash && !reduced) {
-                // A scene steers it (the slide 04 skills wheel): it chases the target loosely, then locks on by LEASH_MS.
-                // Scroll hovers and speech still play on top; it flies while the target is far or the scene asks (lift), and walks once it's close.
+                // A scene steers it (the slide 04 skills wheel): glance, approach arc (flown, or walked when it's close),
+                // then it rides the target, flying whenever the scene asks (lift). Scroll hovers and speech play on top.
                 wob *= 0.8;
                 lastActive = now;
+                let hovering = false;
                 if (act && act.type === 'fly' && act.scroll) {
-                    if (act.phase === 'hover') liftTo = hoverStep(now);
-                    else if (now > act.until) act = null;
+                    if (act.phase === 'hover') {
+                        liftTo = hoverStep(now);
+                        hovering = true;
+                    } else if (now > act.until) {
+                        act = null;
+                    }
                 } else {
                     act = null;
                 }
                 const p = leash.target(now);
                 speed = 0;
                 if (p) {
-                    const k = Math.min(1, (now - leash.t0) / LEASH_MS);
-                    const px = clampX(p.x), py = clampY(p.y);
-                    let nx = px, ny = py;
-                    if (k < 1) {
-                        const f = 1 - Math.exp(-dt * (4 + 26 * k * k));
-                        nx = x + (px - x) * f;
-                        ny = y + (py - y) * f;
-                        if (Math.hypot(px - x, py - y) > 90) liftTo = 1;
+                    const px = clampX(p.x), py = clampY(p.y), ox = x, oy = y;
+                    const ap = leash.ap || (leash.ap = glance(now));
+                    let want = p.heading, rate = 14;
+                    if (ap.phase === 'glance') {
+                        want = Math.atan2(py - y, px - x);
+                        rate = 6;
+                        const off = Math.abs(Math.atan2(Math.sin(want - heading), Math.cos(want - heading)));
+                        if (now >= ap.until && (off < 1 || now >= ap.until + 400)) launch(ap, now, px, py, p);
                     }
-                    const moved = Math.hypot(nx - x, ny - y);
-                    const want = k < 1 && moved > 1 ? Math.atan2(ny - y, nx - x) : p.heading;
+                    if (ap.phase === 'fly') {
+                        const k = Math.min(1, (now - ap.t0) / ap.dur), u = k * k * (3 - 2 * k);
+                        const at = arc(ap, px, py, p.heading, u);
+                        const fwd = arc(ap, px, py, p.heading, Math.min(1, u + 0.015)), back = arc(ap, px, py, p.heading, Math.max(0, u - 0.015));
+                        const wv = ap.amp * Math.sin(Math.PI * u) * Math.sin(3 * Math.PI * u + ap.ph);
+                        x = clampX(at[0] + ap.nx * wv);
+                        y = clampY(at[1] + ap.ny * wv);
+                        want = k >= 1 ? p.heading : Math.atan2(fwd[1] - back[1], fwd[0] - back[0]);
+                        rate = 10;
+                        if (ap.air) {
+                            liftTo = Math.max(liftTo, u < 0.8 ? 1 : (1 - u) / 0.2);
+                            if (!hovering) hoverY = Math.sin(clock * 9) * 2 * Math.sin(Math.PI * u);
+                        }
+                        if (k >= 1) {
+                            ap.phase = 'ride';
+                            squash = Math.max(squash, ap.air ? 0.18 : 0.08);
+                            if (!leash.arrived) {
+                                leash.arrived = true;
+                                if (leash.onArrive) leash.onArrive();
+                            }
+                        }
+                    } else if (ap.phase === 'ride') {
+                        x = px;
+                        y = py;
+                        if (p.lift) liftTo = Math.max(liftTo, p.lift);
+                    }
                     const da = Math.atan2(Math.sin(want - heading), Math.cos(want - heading));
-                    heading += Math.max(-14 * dt, Math.min(14 * dt, da));
-                    x = nx;
-                    y = ny;
-                    if (dt > 0) speed = moved / dt;
-                    if (p.lift) liftTo = Math.max(liftTo, p.lift);
+                    heading += Math.max(-rate * dt, Math.min(rate * dt, da));
+                    if (dt > 0) speed = Math.hypot(x - ox, y - oy) / dt;
                 }
                 footsteps(dt);
                 state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
@@ -831,6 +905,10 @@
                     heading = p.heading;
                 }
                 speed = 0;
+                if (!leash.arrived) {
+                    leash.arrived = true;
+                    if (leash.onArrive) leash.onArrive();
+                }
             } else if (state !== 'sleep' && !reduced) {
                 wob *= 0.8;
                 const near = Math.hypot(mouse.x - x, mouse.y - y) < 26;
@@ -1119,19 +1197,19 @@
             squash = 0.25;
             speak(skin.welcome, now, 'skin', USER);
         };
-        // Scenes can take GLITCH over: target(now) returns { x, y, heading, lift? } in viewport px every frame (heading 0 =
-        // right, lift 1 = fly).
-        // Passing null hands it back to wandering from wherever the scene left it.
-        window.__pixelBugLeash = (target) => {
+        // Scenes can take GLITCH over: target(now) returns { x, y, heading, lift?, avoid? } in viewport px every frame
+        // (heading 0 = right, lift 1 = fly, avoid = { l, t, r, b } its approach arc bends away from). It flies in and calls
+        // opts.onArrive once it first lands on the target. Passing null hands it back to wandering with a curved hop off.
+        window.__pixelBugLeash = (target, opts) => {
             const now = performance.now();
             if (target) {
-                leash = { target, t0: now };
+                leash = { target, ap: null, arrived: false, onArrive: opts && opts.onArrive };
                 wake(now, true);
                 entered = true;
                 if (act && !(act.type === 'fly' && act.scroll)) act = null;
             } else if (leash) {
                 leash = null;
-                if (act && !(act.type === 'fly' && act.scroll)) act = null;
+                if (!(act && act.type === 'fly' && act.scroll)) act = reduced || state === 'held' || state === 'flip' ? null : depart(now);
                 pauseUntil = now + 600;
             }
         };
@@ -1150,7 +1228,7 @@
             if (say && say.pri >= USER) queue.unshift(text);
             else speak(text, now, 'scene', SECTION);
         };
-        window.__pixelBugState = () => ({ live, state, x, y, section, leash: !!leash, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
+        window.__pixelBugState = () => ({ live, state, x, y, section, leash: !!leash, leashPhase: leash && leash.ap ? leash.ap.phase : null, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
             entering: entering(), parts: parts.length, act: act && act.type, phase: act && act.phase, speed, lift, skin: skinKey,
             scrollV: Math.round(scrollV), scrollFly: !!(act && act.scroll), scrollDir: act && act.scroll ? act.dir : 0, scrollFlights, spot: !!(act && act.spot) });
         if (window.__pixelBugDebug) window.__pixelBugDebug = { compose, PAL, GW, GH, SKINS: Object.keys(SKINS) };
