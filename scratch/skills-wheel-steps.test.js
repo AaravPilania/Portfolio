@@ -138,17 +138,17 @@ test('keys respect the lock', () => {
 
 // ---------- zone
 
-const A = 5000, B = 6296; // 1080px viewport, 4 detents 0.3 * 1080 apart
+const A = 5000, B = 6620; // 1080px viewport, the intro + 5 categories: 5 detents 0.3 * 1080 apart
 
 function zoneAt(y) {
-    const z = createZone(5);
+    const z = createZone(6);
     z.frame(y, A, B, false, false);
     return z;
 }
 
 test('offsets are evenly spaced detents from A to B', () => {
     const z = zoneAt(0);
-    assert.deepStrictEqual([0, 1, 2, 3, 4].map(z.offset), [5000, 5324, 5648, 5972, 6296]);
+    assert.deepStrictEqual([0, 1, 2, 3, 4, 5].map(z.offset), [5000, 5324, 5648, 5972, 6296, 6620]);
 });
 
 test('crossing A from above engages detent 0, even with overshoot', () => {
@@ -159,46 +159,46 @@ test('crossing A from above engages detent 0, even with overshoot', () => {
 });
 
 test('crossing B from below engages the last detent', () => {
-    const z = zoneAt(6500);
-    const act = z.frame(6250, A, B, false, false);
-    assert.deepStrictEqual(act, { type: 'engage', step: 4, y: 6296 });
+    const z = zoneAt(6800);
+    const act = z.frame(6580, A, B, false, false);
+    assert.deepStrictEqual(act, { type: 'engage', step: 5, y: 6620 });
 });
 
 test('loading inside the zone engages the nearest detent', () => {
-    const z = createZone(5);
+    const z = createZone(6);
     const act = z.frame(5700, A, B, false, false);
     assert.deepStrictEqual(act, { type: 'engage', step: 2, y: 5648 });
 });
 
-test('steps walk 0..4, then down releases at B', () => {
+test('steps walk the intro (0) and the categories 1..5, then down releases at B', () => {
     const z = zoneAt(4900);
     z.frame(5000, A, B, false, false);
     const seen = [];
-    for (let i = 0; i < 4; i++) seen.push(z.input(1));
-    assert.deepStrictEqual(seen.map((a) => a.step), [1, 2, 3, 4]);
+    for (let i = 0; i < 5; i++) seen.push(z.input(1));
+    assert.deepStrictEqual(seen.map((a) => a.step), [1, 2, 3, 4, 5]);
     const rel = z.input(1);
     assert.deepStrictEqual(rel, { type: 'release', dir: 1, y: B });
     assert.strictEqual(z.pinned, false);
-    assert.strictEqual(z.desired(B), 4, 'the last category stays up while the stage scrolls away');
+    assert.strictEqual(z.desired(B), 5, 'the last category stays up while the stage scrolls away');
 });
 
-test('up at detent 0 releases at A and hides the text', () => {
+test('up at the intro releases at A and hides the text', () => {
     const z = zoneAt(4900);
     z.frame(5000, A, B, false, false);
     assert.deepStrictEqual(z.input(-1), { type: 'release', dir: -1, y: A });
     assert.strictEqual(z.desired(A), -1);
 });
 
-test('after releasing down, the page scrolls on without re-engaging; coming back re-engages at 4', () => {
-    const z = zoneAt(6296);
+test('after releasing down, the page scrolls on without re-engaging; coming back re-engages at 5', () => {
+    const z = zoneAt(6620);
     z.pinned = true;
-    z.step = 4;
+    z.step = 5;
     z.input(1);
-    assert.strictEqual(z.frame(6296, A, B, false, false), null);
-    assert.strictEqual(z.frame(6400, A, B, false, false), null);
-    assert.strictEqual(z.frame(6900, A, B, false, false), null);
-    const back = z.frame(6280, A, B, false, false);
-    assert.deepStrictEqual(back, { type: 'engage', step: 4, y: 6296 });
+    assert.strictEqual(z.frame(6620, A, B, false, false), null);
+    assert.strictEqual(z.frame(6700, A, B, false, false), null);
+    assert.strictEqual(z.frame(7200, A, B, false, false), null);
+    const back = z.frame(6600, A, B, false, false);
+    assert.deepStrictEqual(back, { type: 'engage', step: 5, y: 6620 });
 });
 
 test('after releasing up, scrolling away does not re-engage; reversing does', () => {
@@ -213,7 +213,7 @@ test('after releasing up, scrolling away does not re-engage; reversing does', ()
 test('a jump clean over the zone does not engage', () => {
     const z = zoneAt(4000);
     assert.strictEqual(z.frame(8000, A, B, false, false), null);
-    assert.strictEqual(z.desired(8000), 4);
+    assert.strictEqual(z.desired(8000), 5);
 });
 
 test('external movement while pinned releases, and stays free until the page leaves the zone', () => {
@@ -350,6 +350,21 @@ test('one leg per detent: loop 1 done at step 2, loop 2 at step 3, touchdown at 
         // legS walks the marks
         [0, 0.25, 0.5, 0.75, 1].forEach((t, i) => assert.ok(Math.abs(legS(m, t) - m[i]) < 1e-9, key + ' legS ' + t));
         assert.ok(Math.abs(legS(m, 0.125) - (m[0] + m[1]) / 2) < 1e-9 && legS(m, -1) === m[0] && legS(m, 2) === m[4]);
+    });
+});
+
+test('six detents on the flight: the intro rests on the take-off with nothing drawn, the categories fly one leg each', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { plan } = planFor(key);
+        const st = plan.steps, m = plan.marks;
+        assert.strictEqual(st.length, 6);
+        assert.strictEqual(st[0], 0, key + ' intro at the take-off: empty trail');
+        assert.ok(st[1] > 20 && st[1] <= plan.calm[0], key + ' Frontend climbs past the asterisk to loop 1 entry, ' + st[1].toFixed(0));
+        assert.ok(st[1] < m[1] - 20, key + ' loop 1 still to fly after Frontend');
+        assert.deepStrictEqual(st.slice(2), m.slice(1), key + ' Backend closes loop 1, AI / ML loop 2, Languages touches down, Tools stops');
+        // Detent k of the six sits at t = k / 5
+        st.forEach((s, k) => assert.ok(Math.abs(legS(st, k / 5) - s) < 1e-9, key + ' legS step ' + k));
+        assert.ok(legS(st, 0.1) > 0 && legS(st, 0.1) < st[1], key + ' halfway to Frontend is on the climb');
     });
 });
 
@@ -563,57 +578,6 @@ test('nav state has 40px of hysteresis at both edges, the same scrolling either 
     const walk = (ys) => ys.reduce((acc, y) => { acc.h = navHide(acc.h, y, span); acc.seen.push(acc.h); return acc; }, { h: false, seen: [] }).seen;
     assert.deepStrictEqual(walk([990, 1010, 1019, 1021, 1000, 981, 979]), [false, false, false, true, true, true, false]);
     assert.deepStrictEqual(walk([1021, 4990, 5010, 5019, 5021, 5000, 4981, 4979]), [true, true, true, true, false, false, false, true]);
-});
-
-const { starFill, wordFlip, ARM_DIRS } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
-// Brier 700, measured in headless Chrome: EXPERTISE's advance and the cap height, in ems
-const ADV = 5.033, CAP = 0.703;
-
-test('EXPERTISE fill: an even 4-6 rows per arm, packed edge to edge across the 3.2-unit band, none on the axis', () => {
-    [[273, 4], [445, 4], [626, 6], [835, 6], [1200, 6]].forEach(([S, n]) => {
-        const f = starFill(S, ADV, CAP);
-        assert.strictEqual(f.n, n, 'S ' + S);
-        assert.ok(Math.abs(f.rows[0].y - f.pitch / 2 + 1.6) < 1e-9 && Math.abs(f.rows[n - 1].y + f.pitch / 2 - 1.6) < 1e-9);
-        assert.ok(f.rows.every((r) => Math.abs(r.y) >= f.pitch / 2 - 1e-9), 'a row rides the rail');
-        assert.ok(f.cap * S / 24 >= 6, 'caps ' + (f.cap * S / 24).toFixed(1) + 'px');
-    });
-});
-
-test('EXPERTISE fill: each row covers its arm from the hub ring to the tip at any drift, either way up', () => {
-    [273, 445, 626, 835].forEach((S) => {
-        const f = starFill(S, ADV, CAP);
-        const x0 = f.from, x1 = f.from + (f.words - 1) * f.P + ADV * f.fs;
-        for (let ph = 0; ph < f.P; ph += f.P / 37) {
-            assert.ok(x0 + ph <= f.armIn && x1 + ph >= f.tip, 'upright at ' + ph);
-            assert.ok(2 * f.mid - x1 + ph <= f.armIn && 2 * f.mid - x0 + ph >= f.tip, 'flipped at ' + ph);
-        }
-    });
-});
-
-test('EXPERTISE fill: the arm clip is the band beyond the hub, square at the tip; the hub sits inside the silhouette', () => {
-    const f = starFill(626, ADV, CAP);
-    const m = f.clip.match(/-?[\d.]+/g).map(Number);
-    assert.deepStrictEqual([m[0], m[1]], [10.6, -1.6]);
-    assert.ok(Math.abs(Math.hypot(m[2], 1.6) - f.armIn) < 1e-9, 'arc meets the band edge on the ring');
-    // the star's inner corners (where neighbouring arms' edges meet) are 3.2 from the centre: the hub stays inside them
-    assert.ok(f.hubIn < 3.2 && f.armIn > 3.2 && Math.abs(f.armIn - f.hubIn - 0.38) < 1e-9);
-    // its two centre rows each hold one whole word, centred
-    f.hub.rows.slice(0, 2).forEach((r) => {
-        const j = Math.round((-ADV * f.hub.fs / 2 - r.x0) / f.hub.P);
-        const l = r.x0 + j * f.hub.P;
-        assert.ok(Math.abs(l + ADV * f.hub.fs / 2) < 1e-9);
-        assert.ok(Math.hypot(l, Math.abs(r.y) + f.hub.base) < f.hubIn, 'centre word inside the hub');
-    });
-});
-
-test('EXPERTISE fill: an arm reads outward unless that would be upside down on screen, at every detent', () => {
-    for (let T = 0; T <= 360; T += 60) {
-        ARM_DIRS.forEach((d) => {
-            const read = ((d + T + 180 * wordFlip(d + T)) % 360 + 360) % 360;
-            assert.ok(read < 90 || read > 270, 'arm ' + d + ' at ' + T + ' reads at ' + read);
-        });
-    }
-    assert.deepStrictEqual(ARM_DIRS.map((d) => wordFlip(d + 120)), [1, 1, 1, 0, 0, 0]);
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));

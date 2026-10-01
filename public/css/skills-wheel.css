@@ -105,27 +105,11 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
     width: var(--sk-S, 55vmin);
     height: var(--sk-S, 55vmin);
     margin-top: calc(var(--sk-S, 55vmin) / -2);
-    transform-origin: 50% 50%;
-    will-change: transform;
-    opacity: 0;
-}
-/* The flying glyph, solid; skills-wheel.js crossfades it into the word construction as it reaches full size */
-.sk-star__solid {
-    position: absolute;
-    inset: 0;
     background: var(--sk-sun);
     -webkit-mask: var(--sk-star) center / contain no-repeat;
     mask: var(--sk-star) center / contain no-repeat;
-}
-/* The same silhouette filled with rows of small EXPERTISE; the viewBox is the glyph's 24-unit box at 100 units each,
-   centred. Font and clip paths are set by skills-wheel.js. */
-.sk-star__word {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    fill: var(--sk-sun);
+    transform-origin: 50% 50%;
+    will-change: transform;
     opacity: 0;
 }
 
@@ -243,4 +227,6 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
     .sk-set { position: relative; left: auto; right: auto; top: auto; transform: none; }
     .ll-section--services .sk-title { width: auto; flex: 1 1 55%; font-size: clamp(2rem, 3.6vw, 4rem); }
     .sk-set { max-width: 40%; white-space: normal; }
+    .sk-cat--intro { border-top: 0; padding-top: 0; }
+    .sk-cat--intro .sk-set { display: none; }
 }
