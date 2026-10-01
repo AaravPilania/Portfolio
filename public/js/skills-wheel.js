@@ -227,6 +227,25 @@
         return { eyes: PORTRAIT.eyes.map((e) => ({ x: ox + e[0] * k, y: oy + e[1] * k })), r: PORTRAIT.lens * k, k };
     }
 
+    // The scroll range (scroller px) over which the fixed nav is lifted away: from the services section's top edge
+    // reaching NAV_ENTER of the viewport (or the stage engaging, if that's sooner) until the portrait's exit wipe has
+    // erased the eyes' loops. The portrait is a fixed backdrop; the bundle's section shader (backdrop_theme) wipes it
+    // upward, scrubbed by u_bottomProgress (the section bottom's rise through the viewport, 0 at its bottom edge, 1 at
+    // its top), erasing a row at GL height v once u_bottomProgress >= 0.8 * (0.7 v + 0.15 + n) + 0.2, n <= 0.075 noise.
+    // The section's bottom only reaches the viewport top at the page's end, under the footer.
+    const NAV_ENTER = 0.85, NAV_HYST = 40;
+    function navSpan(o) {
+        const v = 1 - Math.max(0, o.eyeTop) / o.H;
+        const gone = Math.min(1, 0.8 * (0.7 * v + 0.225) + 0.2);
+        return [Math.min(o.A, o.sTop - o.H * NAV_ENTER), Math.max(o.B, o.sBot - o.H * (1 - gone))];
+    }
+    // Whether the nav should be hidden at scroll y, given whether it is now: each edge flips NAV_HYST / 2 past the
+    // line in the direction of travel, so a scroll resting on a boundary can't flicker it
+    function navHide(hidden, y, span) {
+        const h = hidden ? -NAV_HYST / 2 : NAV_HYST / 2;
+        return y > span[0] + h && y < span[1] - h;
+    }
+
     // A paper plane's inside loop, design 10's prolate cycloid: x = drift * (q - PI) + sin q, y = cos q, out of level
     // flight to the right, up, over the top and back down. Stretched across so its closed part (from the top down to
     // where the path crosses itself) is round; cy and rad place that circle against the cycloid's axis, per unit radius.
@@ -488,7 +507,7 @@
     }
 
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, PORTRAIT };
+        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, navSpan, navHide, PORTRAIT };
         return;
     }
 
@@ -546,7 +565,7 @@
     let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03, A = 0, B = 0, gapPx = 18;
     let geo = [];
     let visible = false, drawn = -1, detached = false, railDirty = true;
-    let wantLeash = false, leashed = false, navHidden = false;
+    let wantLeash = false, leashed = false, navHidden = false, navRange = [0, 0];
     let shown = -1, swap = null, spin = null, fill = null;
     let appMod = null, nativeTween = null, animUntil = 0, dragging = false, nudgeAfterTouch = 0;
 
@@ -835,6 +854,16 @@
         starAt = { x: cx, y: stage.clientHeight / 2, r: S * 0.375 };
         A = Math.round(tr.top - scr.top + scroller.scrollTop);
         B = A + Math.round(track.offsetHeight - scroller.clientHeight);
+        const sec = track.closest('.ll-section--services');
+        if (sec) {
+            const r = sec.getBoundingClientRect(), y = scroller.scrollTop;
+            navRange = navSpan({
+                A, B, H: scroller.clientHeight, sTop: r.top - scr.top + y, sBot: r.bottom - scr.top + y,
+                eyeTop: Math.min(...spot.eyes.map((e) => e.y)) - spot.r - scr.top,
+            });
+        } else {
+            navRange = [A, B];
+        }
         buildTrail();
 
         if (reduced) return;
@@ -1227,9 +1256,10 @@
         const held = zone.pinned || (y > A && y < B);
         if (held && !wantLeash) wantLeash = true;
         else if (!held && wantLeash) leashOff();
-        if (held !== navHidden) {
-            navHidden = held;
-            document.body.classList.toggle('sk-nav-hidden', held);
+        const hide = held || navHide(navHidden, y, navRange);
+        if (hide !== navHidden) {
+            navHidden = hide;
+            document.body.classList.toggle('sk-nav-hidden', hide);
         }
 
         st.travel += (st.travelT - st.travel) * (1 - Math.exp(-s * 14));

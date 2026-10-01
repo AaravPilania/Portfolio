@@ -535,4 +535,34 @@ test('the eye loops ring the sockets: centreline at 62 video px, so a narrowed b
     });
 });
 
+const { navSpan, navHide } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+
+test('nav lifts as slide 04 starts entering and returns once the portrait wipe has erased the eyes', () => {
+    // 1920x1080 as measured live: section 4577..7360, detents 4717..6013, eye loops' tops at 86.7
+    const eyeTop = Math.min(...eyeSpots(1920, 1080).eyes.map((e) => e.y)) - eyeSpots(1920, 1080).r;
+    const span = navSpan({ sTop: 4577, sBot: 7360, A: 4717, B: 6013, H: 1080, eyeTop });
+    assert.strictEqual(span[0], 4577 - 1080 * 0.85);
+    // the bundle's shader: the loops' top row (GL height v) is gone at u_bottomProgress 0.8 (0.7 v + 0.225) + 0.2,
+    // with the wipe's noise at its worst; no row of the loops survives past it
+    const bp = (span[1] - (7360 - 1080)) / 1080;
+    for (let y = eyeTop; y <= eyeTop + 300; y += 4) {
+        for (let n = 0; n <= 0.075; n += 0.015) {
+            const v = 1 - y / 1080, row = v * 0.7 + 0.15 + n;
+            assert.ok(bp - 0.2 >= row * 0.8 - 1e-9, 'row ' + y + ' still showing at bp ' + bp.toFixed(3));
+        }
+    }
+    assert.ok(span[1] > 6013 && span[1] < 7360, 'end ' + span[1]);
+    console.log('     section bottom ' + (7360 - span[1]).toFixed(1) + 'px from the viewport top when the nav returns');
+    // a stage that engages before the section's top would reach the line still starts it
+    assert.strictEqual(navSpan({ sTop: 1000, sBot: 3000, A: 50, B: 900, H: 800, eyeTop: 10 })[0], 50);
+    console.log('     1920x1080: hidden from scroll ' + span[0] + ' to ' + span[1].toFixed(0) + ' (eye loops top ' + eyeTop.toFixed(1) + ')');
+});
+
+test('nav state has 40px of hysteresis at both edges, the same scrolling either way', () => {
+    const span = [1000, 5000];
+    const walk = (ys) => ys.reduce((acc, y) => { acc.h = navHide(acc.h, y, span); acc.seen.push(acc.h); return acc; }, { h: false, seen: [] }).seen;
+    assert.deepStrictEqual(walk([990, 1010, 1019, 1021, 1000, 981, 979]), [false, false, false, true, true, true, false]);
+    assert.deepStrictEqual(walk([1021, 4990, 5010, 5019, 5021, 5000, 4981, 4979]), [true, true, true, true, false, false, false, true]);
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));
