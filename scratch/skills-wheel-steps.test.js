@@ -261,104 +261,87 @@ test('input is ignored when free or when the classifier said no', () => {
     assert.strictEqual(z.step, 0);
 });
 
-// ---------- route + damage
+// ---------- route (the designer's drawn red line) + ribbon
 
-const { planRoute, buildDamage } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+const { planRoute, ribbonCells, DRAWN } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
-// Synthetic slide 04 layouts, following measure()'s formulas: star centre cx at the index column, title column from
-// max(29vw, star arm + 3 gaps), the longest title on two lines, the longest skills list right-aligned on the axis.
-// Narrow (<=700px) stacks counter, title and skills into one block right of the star.
+// Synthetic slide 04 layouts following measure()'s formulas. `words` is the union of every category's counter and title
+// (the longest, "TOOLS & TECHNOLOGIES", wraps to two lines and sets the width), `list` of every skills list (the
+// longest list and widest item). 1024x515 is the view the line was drawn on. Narrow screens stack it all in one column.
 const LAYOUTS = {
-    '1920x1080': { w: 1920, h: 1080, cx: 115, S: 626, rects: [
-        { l: 557, t: 400, r: 700, b: 411 },     // [ 0N / 05 ] counter
-        { l: 557, t: 428, r: 1496, b: 652 },    // title, two lines at 100px
-        { l: 1574, t: 413, r: 1864, b: 667 },   // skills, 8 x 31.7px
-    ] },
-    '1366x768': { w: 1366, h: 768, cx: 82, S: 445, rects: [
-        { l: 396, t: 281, r: 520, b: 292 },
-        { l: 396, t: 300, r: 1044, b: 470 },
-        { l: 1101, t: 287, r: 1322, b: 481 },
-    ] },
-    '390x844': { w: 390, h: 844, cx: 18, S: 273, rects: [
-        { l: 162, t: 307, r: 290, b: 318 },
-        { l: 162, t: 329, r: 372, b: 383 },
-        { l: 162, t: 399, r: 330, b: 537 },
-    ] },
+    '1024x515': { w: 1024, h: 515, words: { l: 297, t: 173, r: 746, b: 318 }, list: { l: 811, t: 178, r: 991, b: 336 } },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 557, t: 383, r: 1380, b: 652 }, list: { l: 1574, t: 413, r: 1864, b: 667 } },
+    '1366x768': { w: 1366, h: 768, words: { l: 396, t: 265, r: 1000, b: 470 }, list: { l: 1101, t: 287, r: 1322, b: 481 } },
+    '390x844': { w: 390, h: 844, words: { l: 162, t: 307, r: 372, b: 383 }, list: { l: 162, t: 399, r: 330, b: 537 } },
 };
-const BUG_HALF = 32;
-function planFor(key) {
-    const L = LAYOUTS[key];
-    const bandMax = Math.max(26, L.w * 0.03), reach = bandMax * 0.8 + 5, gap = L.w * 0.025;
-    const star = { x: L.cx, y: L.h / 2, r: L.S * 10.6 / 24 };
-    const plan = planRoute({ w: L.w, h: L.h, rects: L.rects, star, edge: 36, clear: gap + reach + BUG_HALF, starPad: reach + BUG_HALF });
-    return { L, plan, gap, reach, star, bandMax };
+const INSET = 36;
+function planFor(key, over) {
+    const L = Object.assign({}, LAYOUTS[key], over || {});
+    const ribbonW = Math.max(12, L.w * 0.018);
+    const plan = planRoute({ w: L.w, h: L.h, words: L.words, list: L.list, clear: ribbonW / 2 + Math.max(8, L.w * 0.008), inset: INSET });
+    return { L, plan, ribbonW };
 }
 const createRouteFor = (w, h) => planFor(w + 'x' + h).plan.route;
+const boxDist = (x, y, b) => Math.hypot(Math.max(b.l - x, 0, x - b.r), Math.max(b.t - y, 0, y - b.b));
 
-test('route never comes within the safety margin of any text box (dense check)', () => {
+test('the ribbon (centre line +- half its width + margin) never comes near any category\'s words', () => {
     Object.keys(LAYOUTS).forEach((key) => {
-        const { L, plan } = planFor(key);
-        assert.ok(plan.ok, key + ' plan failed: ' + plan.kind + ' minClear ' + plan.minClear.toFixed(1) + ' < ' + plan.clear.toFixed(1));
-        const r = plan.route;
+        const { L, plan, ribbonW } = planFor(key);
+        assert.ok(plan.ok, key + ' minClear ' + plan.minClear.toFixed(1) + ' < ' + plan.clear.toFixed(1));
         let worst = Infinity;
-        for (let s = 0; s <= r.L; s += 1) {
-            const p = r.atS(s);
-            L.rects.forEach((b) => {
-                worst = Math.min(worst, Math.hypot(Math.max(b.l - p.x, 0, p.x - b.r), Math.max(b.t - p.y, 0, p.y - b.b)));
-            });
-            assert.ok(p.x >= 35 && p.x <= L.w - 35 && p.y >= 35 && p.y <= L.h - 35, key + ' out of stage at s=' + s);
+        for (let s = 0; s <= plan.route.L; s++) {
+            const p = plan.route.atS(s);
+            [L.words, L.list].forEach((b) => { worst = Math.min(worst, boxDist(p.x, p.y, b)); });
         }
-        assert.ok(worst >= plan.clear - 1, key + ' worst clearance ' + worst.toFixed(1) + ' < ' + plan.clear.toFixed(1));
-        console.log('     ' + key + ': ' + plan.kind + ', L ' + r.L.toFixed(0) + 'px, text clearance ' + worst.toFixed(0) + 'px (needs ' +
-            plan.clear.toFixed(0) + '), asterisk ' + plan.starClear.toFixed(0) + 'px, ' + plan.pts.length + ' control points');
+        assert.ok(worst - ribbonW / 2 >= 7.5, key + ' ribbon edge only ' + (worst - ribbonW / 2).toFixed(1) + 'px from the words');
+        console.log('     ' + key + ': ribbon edge ' + (worst - ribbonW / 2).toFixed(0) + 'px from the words, furthest control point moved ' +
+            plan.moved.toFixed(0) + 'px (' + (plan.moved / L.w * 100).toFixed(1) + 'vw)' + (plan.stacked ? ', stacked' : ''));
     });
 });
 
-test('route keeps its centre line off the asterisk\'s arm sweep, and wraps the words where the lane fits', () => {
-    Object.keys(LAYOUTS).forEach((key) => {
-        const { plan } = planFor(key);
-        assert.ok(plan.starClear >= 0, key + ' asterisk clearance ' + plan.starClear.toFixed(1));
-    });
-    assert.strictEqual(planFor('1920x1080').plan.kind, 'wrap');
-    assert.strictEqual(planFor('1366x768').plan.kind, 'wrap');
-});
-
-test('route flows like a ribbon: long, with loops (self-crossings), start and end apart', () => {
+test('route is the drawing: it enters at the top edge, swings under the title, crests, and leaves at the right edge', () => {
     Object.keys(LAYOUTS).forEach((key) => {
         const { L, plan } = planFor(key);
-        const r = plan.route;
-        assert.ok(r.L > L.w * 1.1, key + ' length ' + r.L.toFixed(0));
-        const a = r.at(0), b = r.at(1);
-        assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > Math.min(L.w, L.h) * 0.3, key + ' start/end too close');
-        // Count self-crossings of the polyline: each curl crosses itself once
-        const pts = [];
-        for (let i = 0; i <= 600; i++) pts.push(r.at(i / 600));
-        const cross = (p, q, u, v) => {
-            const d = (q.x - p.x) * (v.y - u.y) - (q.y - p.y) * (v.x - u.x);
-            if (!d) return false;
-            const s = ((u.x - p.x) * (v.y - u.y) - (u.y - p.y) * (v.x - u.x)) / d, t = ((u.x - p.x) * (q.y - p.y) - (u.y - p.y) * (q.x - p.x)) / d;
-            return s > 0 && s < 1 && t > 0 && t < 1;
-        };
-        let loops = 0;
-        for (let i = 0; i < pts.length - 1; i++) for (let j = i + 2; j < pts.length - 1; j++) if (cross(pts[i], pts[i + 1], pts[j], pts[j + 1])) loops++;
-        assert.ok(loops >= 1, key + ' has no loops');
+        const P = plan.pts;
+        assert.ok(Math.abs(P[0][0] - DRAWN[0][0] * L.w) < 0.5 && P[0][1] === 0, key + ' entry');
+        assert.ok(P[P.length - 1][0] === L.w, key + ' exit');
+        for (let i = 0; i <= 5; i++) {
+            const d = Math.hypot(P[i][0] - DRAWN[i][0] * L.w, P[i][1] - DRAWN[i][1] * L.h);
+            assert.ok(d < 1, key + ' descent point ' + i + ' moved ' + d.toFixed(1));
+        }
+        const bottom = P.reduce((a, p) => (p[1] > a[1] ? p : a));
+        assert.ok(Math.abs(bottom[1] - 478 / 515 * L.h) < L.h * 0.02, key + ' bottom at ' + bottom[1].toFixed(0));
+        assert.ok(bottom[1] > L.words.b, key + ' swing passes under the words');
+        if (!plan.stacked) {
+            for (let i = 9; i < P.length; i++) assert.ok(P[i][0] >= P[i - 1][0] - 0.5, key + ' folds back at point ' + i);
+            const crest = P.slice(9).reduce((a, p) => (p[1] < a[1] ? p : a));
+            assert.ok(crest[1] < L.words.t && crest[1] < L.list.t, key + ' crest above the words');
+        }
     });
 });
 
-test('planner adapts: a cramped viewport falls back to a simpler route that still clears the text', () => {
-    // 1280x560: the text block leaves no band above it; the planner must still find a clear route
-    const w = 1280, h = 560;
-    const rects = [{ l: 371, t: 110, r: 480, b: 121 }, { l: 371, t: 130, r: 960, b: 330 }, { l: 1030, t: 125, r: 1240, b: 340 }];
-    const bandMax = Math.max(26, w * 0.03), reach = bandMax * 0.8 + 5, clear = w * 0.025 + reach + BUG_HALF;
-    const plan = planRoute({ w, h, rects, star: { x: 77, y: h / 2, r: 0.58 * h * 10.6 / 24 }, edge: 36, clear, starPad: reach + BUG_HALF });
-    assert.ok(plan.ok, plan.kind + ' minClear ' + plan.minClear.toFixed(1));
-    assert.notStrictEqual(plan.kind, 'wrap');
-    console.log('     1280x560: ' + plan.kind + ', clearance ' + plan.minClear.toFixed(0) + 'px');
+test('the 1024x515 view keeps the drawing except where it ran through the title', () => {
+    const { plan, L } = planFor('1024x515');
+    const unmoved = plan.pts.filter((p, i) => Math.hypot(p[0] - DRAWN[i][0] * L.w, p[1] - DRAWN[i][1] * L.h) < 1).length;
+    assert.ok(unmoved >= 9, 'only ' + unmoved + ' of ' + plan.pts.length + ' control points kept');
+    // With only FRONTEND on the page, the rise still clears it (the drawn line crossed its right end)
+    const solo = planFor('1024x515', { words: { l: 297, t: 205, r: 577, b: 285 }, list: { l: 876, t: 186, r: 991, b: 330 } }).plan;
+    assert.ok(solo.ok && solo.moved < plan.moved, 'FRONTEND alone moves less: ' + solo.moved.toFixed(0) + ' vs ' + plan.moved.toFixed(0));
+});
+
+test('GLITCH\'s endpoints sit just inside the viewport, along the curve', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { L, plan } = planFor(key);
+        [plan.s0, plan.s1].forEach((s) => {
+            const p = plan.route.atS(s);
+            assert.ok(p.x >= INSET - 1 && p.x <= L.w - INSET + 1 && p.y >= INSET - 1 && p.y <= L.h - INSET + 1, key + ' endpoint ' + p.x.toFixed(0) + ',' + p.y.toFixed(0));
+        });
+        assert.ok(plan.s0 < 120 && plan.route.L - plan.s1 < 120 && plan.s1 > plan.s0, key + ' insets ' + plan.s0.toFixed(0) + ' / ' + (plan.route.L - plan.s1).toFixed(0));
+    });
 });
 
 test('route is arc-length parameterised: equal t steps are equal distances along it', () => {
-    const r = createRouteFor(1920, 1080);
-    const K = 400;
+    const r = createRouteFor(1920, 1080);    const K = 400;
     let worst = 0;
     for (let i = 0; i < K; i++) {
         const p = r.at(i / K), q = r.at((i + 1) / K);
@@ -377,70 +360,52 @@ test('route tangent points along the direction of travel', () => {
     }
 });
 
-function dmgFor(w, h) {
-    const { L, plan, gap } = planFor(w + 'x' + h);
-    const r = plan.route;
-    return { r, L, gap, d: buildDamage(r, { cell: 5, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04, avoid: L.rects, gap }) };
+function cellsFor(w, h) {
+    const { plan, ribbonW } = planFor(w + 'x' + h);
+    const cell = Math.max(3, ribbonW / 7);
+    return { r: plan.route, cell, half: ribbonW / 2, cells: ribbonCells(plan.route, { cell, half: ribbonW / 2, seed: 0x5ced04 }) };
 }
 
-test('no damage cell or tear (with its jolt and RGB split) lands within the gap of any text box', () => {
-    Object.keys(LAYOUTS).forEach((key) => {
+test('ribbon texture is deterministic: same stage, same broken pixels', () => {
+    assert.strictEqual(JSON.stringify(cellsFor(1920, 1080).cells), JSON.stringify(cellsFor(1920, 1080).cells));
+});
+
+test('ribbon texture has no holes: every cell the stroke can touch is filled, once, in arc-length order', () => {
+    ['1920x1080', '1024x515', '390x844'].forEach((key) => {
         const [w, h] = key.split('x').map(Number);
-        const { L, d, gap } = dmgFor(w, h);
-        const dist = (x0, y0, x1, y1) => Math.min(...L.rects.map((b) => Math.hypot(Math.max(b.l - x1, 0, x0 - b.r), Math.max(b.t - y1, 0, y0 - b.b))));
-        let worst = Infinity;
-        d.cells.forEach((c) => { worst = Math.min(worst, dist(c.gx * 5, c.gy * 5, c.gx * 5 + 5, c.gy * 5 + 5)); });
-        d.tears.forEach((t) => {
-            const reach = Math.abs(t.dx) * 15 + 3;
-            worst = Math.min(worst, dist(t.gx * 5 - reach, t.gy * 5, (t.gx + t.len) * 5 + reach, t.gy * 5 + 5));
-        });
-        assert.ok(worst >= gap, key + ' damage ' + worst.toFixed(1) + 'px from text, gap ' + gap.toFixed(1));
+        const { r, cell, half, cells } = cellsFor(w, h);
+        const have = new Set(cells.map((c) => c.gx + ',' + c.gy));
+        assert.strictEqual(have.size, cells.length, key + ' one colour per cell');
+        for (let i = 1; i < cells.length; i++) assert.ok(cells[i].s >= cells[i - 1].s, key + ' s order');
+        let missing = 0, checked = 0;
+        for (let s = 0; s <= r.L; s += cell * 0.5) {
+            const p = r.atS(s);
+            for (let gx = Math.floor((p.x - half) / cell); gx <= Math.floor((p.x + half) / cell); gx++) {
+                for (let gy = Math.floor((p.y - half) / cell); gy <= Math.floor((p.y + half) / cell); gy++) {
+                    // Any cell whose nearest point lies under the stroke can be lit by the mask
+                    const nx = Math.max(gx * cell, Math.min((gx + 1) * cell, p.x)), ny = Math.max(gy * cell, Math.min((gy + 1) * cell, p.y));
+                    if (Math.hypot(nx - p.x, ny - p.y) > half) continue;
+                    checked++;
+                    if (!have.has(gx + ',' + gy)) missing++;
+                }
+            }
+        }
+        assert.strictEqual(missing, 0, key + ': ' + missing + ' of ' + checked + ' covered cells unfilled');
     });
 });
 
-test('damage is deterministic: same stage, same dead pixels', () => {
-    const a = dmgFor(1920, 1080).d, b = dmgFor(1920, 1080).d;
-    assert.strictEqual(JSON.stringify(a), JSON.stringify(b));
-});
-
-test('damage cells and tears are ordered by arc length, so a progress prefix is the trail so far', () => {
-    const { r, d } = dmgFor(1920, 1080);
-    for (let i = 1; i < d.cells.length; i++) assert.ok(d.cells[i].s >= d.cells[i - 1].s);
-    for (let i = 1; i < d.tears.length; i++) assert.ok(d.tears[i].s >= d.tears[i - 1].s);
-    assert.ok(d.cells[d.cells.length - 1].s <= r.L);
-    const keys = new Set(d.cells.map((c) => c.gx + ',' + c.gy));
-    assert.strictEqual(keys.size, d.cells.length, 'one owner per grid cell');
-});
-
-test('damage hugs the route in a 1.5-3vw band with ragged edges', () => {
-    const w = 1920, h = 1080;
-    const { r, d } = dmgFor(w, h);
-    const pts = [];
-    for (let i = 0; i <= 2000; i++) pts.push(r.at(i / 2000));
-    const near = (x, y) => pts.reduce((m, p) => Math.min(m, Math.hypot(p.x - x, p.y - y)), Infinity);
-    let far = 0, within = 0;
-    const sample = d.cells.filter((c, i) => i % 7 === 0 && c.k !== 0);
-    sample.forEach((c) => {
-        const dist = near((c.gx + 0.5) * 5, (c.gy + 0.5) * 5);
-        far = Math.max(far, dist);
-        if (dist <= w * 0.015 + 5) within++;
-    });
-    assert.ok(far <= w * 0.03 * 0.8 + 10, 'farthest lit cell ' + far.toFixed(1) + 'px');
-    assert.ok(within / sample.length > 0.8, 'most cells inside the band: ' + (within / sample.length * 100).toFixed(0) + '%');
-});
-
-test('damage mixes dead, sub-pixel, stuck and hot pixels, plus a few tears', () => {
-    const { d } = dmgFor(1920, 1080);
-    const count = Array(9).fill(0);
-    d.cells.forEach((c) => count[c.k]++);
-    const n = d.cells.length;
-    assert.ok(n > 2000 && n < 20000, 'cell count ' + n);
-    assert.ok(count[0] / n > 0.1, 'dead ' + count[0]);
-    assert.ok(count[1] / n > 0.1, 'rgb ' + count[1]);
-    assert.ok((count[2] + count[3] + count[4]) / n > 0.1, 'stuck ' + (count[2] + count[3] + count[4]));
-    assert.ok(count[7] / n > 0.03, 'hot ' + count[7]);
-    assert.ok(d.tears.length >= 4, 'tears ' + d.tears.length);
-    console.log('     ' + n + ' cells, ' + d.tears.length + ' tears; kinds ' + count.join('/'));
+test('ribbon reads as signal red, broken by stuck sub-pixels, hot white, dead clusters and tears', () => {
+    const { cells } = cellsFor(1920, 1080);
+    const count = Array(11).fill(0);
+    cells.forEach((c) => count[c.k]++);
+    const n = cells.length;
+    const red = count[5] + count[6] + count[8] + count[9];
+    assert.ok(red / n > 0.5 && red / n < 0.85, 'red ' + (red / n * 100).toFixed(0) + '%');
+    assert.ok(count[1] / n > 0.05, 'rgb ' + count[1]);
+    assert.ok(count[7] / n > 0.01, 'hot ' + count[7]);
+    assert.ok(count[0] / n > 0.01 && count[0] / n < 0.1, 'dead ' + count[0]);
+    assert.ok((count[2] + count[3] + count[4] + count[10]) / n > 0.04, 'stuck colours');
+    console.log('     ' + n + ' cells; kinds ' + count.join('/'));
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));

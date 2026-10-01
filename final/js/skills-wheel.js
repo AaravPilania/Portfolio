@@ -1,9 +1,10 @@
 // Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, then turns like a wheel.
 // While the stage is stuck, one gesture (wheel flick, trackpad swipe, touch swipe, key) is one 60° detent and one
 // category swap; the first detent up and the last detent down hand the page back to normal scrolling.
-// GLITCH (pixel-bug.js) is leashed to a ribbon route planned around the words while the stage is stuck: it flies in to
-// the route's start, travels a quarter of it per detent and leaves dead pixels behind it until reverse steps eat them
-// back; then it's handed back to wandering.
+// GLITCH (pixel-bug.js) is leashed to a hand-drawn route (top edge -> down the left -> under the words -> up past them
+// -> out the right edge), nudged only where it would touch any category's text, while the stage is stuck: it flies in to
+// the route's start, travels a quarter of it per detent and lays a solid ribbon of broken screen behind it until reverse
+// steps eat it back; then it's handed back to wandering.
 (function (root) {
     'use strict';
 
@@ -156,10 +157,18 @@
     }
 
     // Segment i of a uniform Catmull-Rom through P (the prototype's bezier controls), at t in [0, 1]
+    // Centripetal (alpha 0.5) so a short segment next to a long one can't loop or overshoot into the text
+    function crHandle(p0, p1, p2) {
+        const a = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), b = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+        if (a < 1e-6 || b < 1e-6) return [p1[0] + (p2[0] - p1[0]) / 3, p1[1] + (p2[1] - p1[1]) / 3];
+        const sa = Math.sqrt(a), sb = Math.sqrt(b), k = 2 * a + 3 * sa * sb + b, d = 3 * sa * (sa + sb);
+        return [(a * p2[0] - b * p0[0] + k * p1[0]) / d, (a * p2[1] - b * p0[1] + k * p1[1]) / d];
+    }
+
     function crPoint(P, i, t) {
         const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
-        const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-        const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+        const [c1x, c1y] = crHandle(p0, p1, p2);
+        const [c2x, c2y] = crHandle(p3, p2, p1);
         const u = 1 - t;
         return [
             u * u * u * p1[0] + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * p2[0],
@@ -201,127 +210,119 @@
             const p = pos(s), q0 = pos(s - 6), q1 = pos(s + 6);
             return { x: p[0], y: p[1], a: Math.atan2(q1[1] - q0[1], q1[0] - q0[0]) };
         };
-        return { L, atS, at: (t) => atS(t * L), xs, ys };
+        return { L, atS, at: (t) => atS(t * L), xs, ys, cum };
     }
 
-    // A cursive loop (prolate trochoid) at xc travelling `dir`; vs -1 throws its bowl upward, +1 downward
-    function curl(xc, yc, b, dir, vs) {
-        const a = b * 0.32, out = [];
-        for (let k = 0; k <= 8; k++) {
-            const u = -Math.PI + k * Math.PI / 4;
-            out.push([xc + dir * (a * u - b * Math.sin(u)), yc + vs * b * Math.cos(u)]);
+    // The route GLITCH flies and its ribbon follows: the line the designer drew by hand over a 1024x515 view of this slide,
+    // as viewport fractions. It enters at the top edge right of the asterisk, drops through the gap before the title,
+    // swings round under it, rises past its right end, crests between the title and the skills, and waves out over the
+    // skills to the right edge. DRAWN_BOTTOM is the swing's lowest point, DRAWN_PEAK the crest.
+    const DRAWN = [[121, 0], [150, 55], [190, 110], [212, 190], [211, 290], [212, 385], [245, 435], [300, 465], [352, 478], [405, 450],
+        [445, 400], [470, 330], [490, 268], [525, 185], [575, 145], [620, 137], [690, 155], [760, 183], [850, 167], [950, 135], [1024, 119]]
+        .map((p) => [p[0] / 1024, p[1] / 515]);
+    const DRAWN_BOTTOM = 8, DRAWN_PEAK = 15;
+
+    const inside = (p, r) => !!r && p[0] > r.l && p[0] < r.r && p[1] > r.t && p[1] < r.b;
+    const grow = (r, m) => r && { l: r.l - m, t: r.t - m, r: r.r + m, b: r.b + m };
+
+    // The drawing mapped onto the stage, bent only where it would run over the words. `words` is the union of every
+    // category's counter and title, `list` of every skills list (all five, so the longest title and list count), and
+    // `clear` the ribbon's half-width plus a margin. Each control point that lands in a grown box is moved out along the
+    // way the drawing already passes it: the descent to the left, the swing under the title down, the rise to the right
+    // (into the gap before the skills; to the left when the words are stacked in one column on narrow screens), the crest
+    // and the wave over the skills up. The crest and wave are then re-spread so the line keeps flowing left to right, and
+    // the curve is checked densely; any segment still too close pushes its two control points further the same way.
+    function planRoute(o) {
+        const w = o.w, h = o.h, m = o.clear, inset = o.inset || 0;
+        const words = o.words || null, list = o.list || null;
+        const P = DRAWN.map((q) => [q[0] * w, q[1] * h]);
+        const stacked = !!(words && list && list.l < words.r);
+        const TU = grow(stacked ? unite(words, list) : words, m), SK = stacked ? null : grow(list, m);
+        const B = DRAWN_BOTTOM, K = DRAWN_PEAK, last = P.length - 1;
+        // The rise's way up past the words: the gap between them and the skills (a little left of its middle), or on
+        // narrow screens the strip left of the stacked column
+        const lo = TU ? TU.r : 0, hi = SK ? SK.l : w - inset;
+        const crossX = stacked ? (TU ? TU.l : 0) : lo <= hi ? lo + (hi - lo) * 0.4 : (lo + hi) / 2;
+        const below = (p) => !!TU && p[1] >= TU.b - 0.5;
+
+        for (let i = 1; i < last; i++) {
+            const p = P[i];
+            if (i < B - 2) {
+                if (inside(p, TU)) p[0] = TU.l;
+            } else if (i <= B + 1) {
+                if (inside(p, TU)) p[1] = TU.b;
+            } else if (i >= K) {
+                if (inside(p, TU)) p[1] = TU.t;
+                if (SK && p[0] > SK.l && p[1] > SK.t) p[1] = SK.t;
+            }
         }
-        return out;
-    }
-
-    // A wave along a horizontal corridor yr = [top, bottom] of centre-line positions, with curls at fractions `curls`
-    function sweep(yr, xa, xb, curls, vs, w) {
-        const yc = (yr[0] + yr[1]) / 2, hh = (yr[1] - yr[0]) / 2;
-        const span = Math.abs(xb - xa), dir = xb >= xa ? 1 : -1;
-        const rho = Math.min(hh * 0.7, Math.max(w * 0.055, 34) * (w < 700 ? 1.5 : 1), span * 0.16);
-        const amp = hh * 0.58;
-        const n = Math.max(1, Math.round(span / Math.max(150, w * 0.13)));
-        const loops = rho >= 16 ? curls.map((f) => xa + (xb - xa) * f) : [];
-        const pts = [];
-        let li = 0;
-        for (let i = 0; i <= n; i++) {
-            const x = xa + (xb - xa) * i / n;
-            while (li < loops.length && dir * (x - loops[li]) > 0) pts.push(...curl(loops[li++], yc, rho, dir, vs));
-            if (i === 0 || i === n || loops.every((lx) => Math.abs(x - lx) > rho * 1.9)) pts.push([x, yc + amp * Math.sin(i * 2.2 + (vs > 0 ? 1.1 : 0))]);
+        // Once the rise would cut into the words it goes up the gap instead. The first such point becomes a corner under
+        // the words, just short of the gap, so the swing rounds into it without the curve bulging past it; the rest climb
+        // the gap evenly from the words' bottom edge to where the last of them was drawn.
+        const cut = [];
+        for (let i = B + 2; i < K; i++) {
+            const p = P[i];
+            if (inside(p, TU) || inside(p, SK) || (cut.length && (stacked ? p[0] > crossX : p[0] < crossX))) cut.push(i);
         }
-        return pts;
-    }
+        if (cut.length && TU) {
+            const g = Math.min(48, w * 0.05) * (stacked ? -1 : 1);
+            const yTop = Math.min(P[cut[cut.length - 1]][1], TU.b);
+            P[cut[0]] = [crossX - g, Math.max(P[cut[0]][1], TU.b + Math.abs(g) * 0.8)];
+            const n = cut.length - 1;
+            for (let j = 1; j <= n; j++) P[cut[j]] = [crossX, TU.b + (yTop - TU.b) * (n === 1 ? 1 : (j - 1) / (n - 1))];
+        }
+        const dirOf = (i) => (i < B - 2 ? [-1, 0] : i <= B + 1 || (i < K && below(P[i])) ? [0, 1] : i < K ? [stacked ? -1 : 1, 0] : [0, -1]);
+        // The crest must stay past the rise; the wave after it is squeezed toward the exit rather than folding back
+        let rise = -Infinity;
+        for (let i = B + 1; i < K; i++) rise = Math.max(rise, P[i][0]);
+        const x0 = DRAWN[K][0] * w, xr = rise + w * 0.03;
+        if (!stacked && xr > x0) {
+            for (let i = K; i < last; i++) {
+                P[i][0] = xr + (DRAWN[i][0] * w - x0) / (w - x0) * (w - xr);
+                if (SK && P[i][0] > SK.l && P[i][1] > SK.t) P[i][1] = SK.t;
+            }
+        }
 
-    // Pushes control points out of any rect the curve comes within `m` of, and back inside the stage edge `e`
-    function settle(P, rects, w, h, e, m) {
-        for (let it = 0; it < 32; it++) {
-            const push = P.map(() => [0, 0]);
-            let bad = false;
-            const want = (i, vx, vy) => {
-                if (Math.hypot(vx, vy) > Math.hypot(push[i][0], push[i][1])) push[i] = [vx, vy];
-            };
-            for (let i = 0; i < P.length - 1; i++) {
+        const rects = [words, list].filter(Boolean);
+        for (let it = 0; it < 40; it++) {
+            const push = P.map(() => 0);
+            for (let i = 0; i < last; i++) {
                 for (let j = 0; j <= 16; j++) {
                     const q = crPoint(P, i, j / 16);
-                    let vx = 0, vy = 0;
-                    rects.forEach((r) => {
-                        const d = rectDist(q[0], q[1], r);
-                        if (d >= m) return;
-                        let nx = q[0] - Math.max(r.l, Math.min(r.r, q[0])), ny = q[1] - Math.max(r.t, Math.min(r.b, q[1]));
-                        if (!nx && !ny) {
-                            const dl = q[0] - r.l, dr = r.r - q[0], dt = q[1] - r.t, db = r.b - q[1], mn = Math.min(dl, dr, dt, db);
-                            if (mn === dl) nx = -1; else if (mn === dr) nx = 1; else if (mn === dt) ny = -1; else ny = 1;
-                        }
-                        const nl = Math.hypot(nx, ny), need = m - d + 2;
-                        vx += nx / nl * need;
-                        vy += ny / nl * need;
-                    });
-                    if (q[0] < e) vx += e - q[0] + 1;
-                    if (q[0] > w - e) vx -= q[0] - (w - e) + 1;
-                    if (q[1] < e) vy += e - q[1] + 1;
-                    if (q[1] > h - e) vy -= q[1] - (h - e) + 1;
-                    if (!vx && !vy) continue;
-                    bad = true;
-                    want(i, vx, vy);
-                    want(i + 1, vx, vy);
+                    let need = 0;
+                    rects.forEach((r) => { need = Math.max(need, m - rectDist(q[0], q[1], r)); });
+                    if (need <= 0) continue;
+                    push[i] = Math.max(push[i], need + 1);
+                    push[i + 1] = Math.max(push[i + 1], need + 1);
                 }
             }
-            if (!bad) return;
-            P.forEach((p, i) => {
-                p[0] = Math.max(e, Math.min(w - e, p[0] + push[i][0]));
-                p[1] = Math.max(e, Math.min(h - e, p[1] + push[i][1]));
-            });
-        }
-    }
-
-    // GLITCH's route, drawn around the words rather than over them. The union of every category's title, counter and
-    // skills boxes, grown by `clear`, leaves three free zones: the band above it, the band below it, and the lane between
-    // it and the asterisk. The full route wraps the words (top band right to left with a curl, down the lane, bottom band
-    // left to right with a curl); the lane is dropped when its centre line would cross the asterisk's arm sweep, a band
-    // when it's thinner than nothing. Each candidate is settled, then checked densely; the first that holds wins.
-    function planRoute(o) {
-        const w = o.w, h = o.h, e = o.edge, m = o.clear;
-        const rects = (o.rects || []).filter((r) => r && r.r > r.l && r.b > r.t);
-        const T = rects.reduce((a, r) => unite(a, r), null) || { l: w * 0.3, t: h * 0.45, r: w - e, b: h * 0.55 };
-        const E = { l: T.l - m, t: T.t - m, r: T.r + m, b: T.b + m };
-        const s = o.star;
-        const x0 = Math.max(e, w * 0.07), x1 = w - x0;
-        const top = E.t >= e ? [e, E.t] : null;
-        const bot = E.b <= h - e ? [E.b, h - e] : null;
-        const laneX = Math.min(E.l, x1);
-        const laneOk = laneX >= e && (!s || laneX >= s.x + s.r);
-        const room = s ? laneX - (s.x + s.r + (o.starPad || 0)) : laneX - e;
-        const bulge = Math.max(0, Math.min(room * 0.5, w * 0.04));
-        const lx = laneX - bulge * 0.2, lm = laneX - bulge;
-        const turnT = top ? Math.max(24, (top[1] - top[0]) * 0.4) : 0, turnB = bot ? Math.max(24, (bot[1] - bot[0]) * 0.4) : 0;
-        const cands = [];
-        if (top && bot && laneOk) {
-            cands.push(['wrap', sweep(top, x1, Math.min(x1 - 1, laneX + turnT), [0.42], -1, w)
-                .concat([[lx, E.t], [lm, (E.t + E.b) / 2], [lx, E.b]], sweep(bot, Math.min(x1 - 1, laneX + turnB), x1, [0.58], 1, w))]);
-        }
-        if (top && laneOk) cands.push(['top-lane', sweep(top, x1, Math.min(x1 - 1, laneX + turnT), [0.45], -1, w).concat([[lx, E.t], [lm, (E.t + h - e) / 2], [lx, h - e]])]);
-        if (bot && laneOk) cands.push(['lane-bottom', [[lx, e], [lm, (e + E.b) / 2], [lx, E.b]].concat(sweep(bot, Math.min(x1 - 1, laneX + turnB), x1, [0.55], 1, w))]);
-        const bands = [[top, -1, 'top'], [bot, 1, 'bottom']].filter((b) => b[0]).sort((a, b) => (b[0][1] - b[0][0]) - (a[0][1] - a[0][0]));
-        bands.forEach((b) => cands.push([b[2], sweep(b[0], x0, x1, [0.3, 0.68], b[1], w)]));
-        if (laneX >= e) cands.push(['lane', [[lx, e], [lm, h / 2], [lx, h - e]]]);
-        if (!cands.length) cands.push(['edge', sweep([e, e], x0, x1, [], -1, w)]);
-
-        let best = null;
-        for (const [kind, P] of cands) {
-            settle(P, rects, w, h, e, m);
-            const route = createRoute(P);
-            let minClear = Infinity, starClear = Infinity, inside = true;
-            for (let i = 0; i < route.xs.length; i++) {
-                const x = route.xs[i], y = route.ys[i];
-                rects.forEach((r) => { minClear = Math.min(minClear, rectDist(x, y, r)); });
-                if (s) starClear = Math.min(starClear, Math.hypot(x - s.x, y - s.y) - s.r);
-                if (x < e - 1 || x > w - e + 1 || y < e - 1 || y > h - e + 1) inside = false;
+            if (!push.some(Boolean)) break;
+            for (let i = 1; i < last; i++) {
+                if (!push[i]) continue;
+                const d = dirOf(i);
+                let x = Math.max(0, Math.min(w, P[i][0] + d[0] * push[i]));
+                // The rise never leaves its gap: past it is the skills (or, stacked, the descent)
+                if (i > B + 1 && i < K && d[0]) x = stacked ? Math.max(x, Math.min(crossX, P[i][0])) : Math.min(x, Math.max(hi, P[i][0]));
+                P[i][0] = x;
+                P[i][1] = Math.max(0, Math.min(h, P[i][1] + d[1] * push[i]));
             }
-            const plan = { kind, pts: P, route, box: T, clear: m, minClear, starClear, ok: inside && minClear >= m - 1 };
-            if (plan.ok) return plan;
-            if (!best || plan.minClear > best.minClear) best = plan;
         }
-        return best;
+
+        const route = createRoute(P);
+        let minClear = Infinity, s0 = 0, s1 = route.L, seen = false;
+        for (let i = 0; i < route.xs.length; i++) {
+            const x = route.xs[i], y = route.ys[i];
+            rects.forEach((r) => { minClear = Math.min(minClear, rectDist(x, y, r)); });
+            const ok = x >= inset && x <= w - inset && y >= inset && y <= h - inset;
+            if (ok && !seen) {
+                seen = true;
+                s0 = route.cum[i];
+            }
+            if (ok) s1 = route.cum[i];
+        }
+        let moved = 0;
+        P.forEach((p, i) => { moved = Math.max(moved, Math.hypot(p[0] - DRAWN[i][0] * w, p[1] - DRAWN[i][1] * h)); });
+        return { route, pts: P, s0, s1, box: rects.reduce((a, r) => unite(a, r), null), clear: m, minClear, moved, stacked, ok: minClear >= m - 1 };
     }
 
     function mulberry32(seed) {
@@ -334,88 +335,73 @@
         };
     }
 
-    // Dead-pixel damage along a route, seeded so the same stage always breaks the same way. Cells sit on a `cell`-px grid
-    // and each grid cell is owned by the first stamp that reaches it, so drawing every cell with s <= progress grows and
-    // erases the trail without re-rolling anything. Kinds: 0 dead, 1 RGB sub-pixels, 2 magenta, 3 cyan, 4 green, 5 red,
-    // 6 blue, 7 hot white, 8 dim.
-    const DAMAGE_ZONES = [
-        [0.34, [60, 6, 3, 3, 2, 1, 1, 6, 18]],     // dead patch
-        [0.46, [12, 26, 14, 14, 14, 5, 5, 8, 2]],  // stuck sub-pixels
-        [0.2, [18, 32, 9, 10, 4, 3, 2, 22, 0]],    // burn-in
+    // The ribbon's broken-screen fill: every `cell`-px grid cell within `half` + a cell of the route gets a colour, so the
+    // band clipped out of it has no holes. Seeded, so the same stage always breaks the same way; s is where along the
+    // route a cell is first reached. Mostly signal red (the colour the line was drawn in) in shifting zones of stuck RGB
+    // sub-pixels, burn-in and dead clusters, with scanline streaks (a cell often repeats its left neighbour) and tear rows.
+    // Kinds: 0 dead, 1 RGB sub-pixels, 2 magenta, 3 cyan, 4 green, 5 red, 6 deep red, 7 hot white, 8 light red, 9 maroon,
+    // 10 blue.
+    const RIBBON_ZONES = [
+        [0.55, [2, 5, 1, 1, 0.5, 36, 26, 2, 14, 12, 0.5]],    // signal red
+        [0.27, [3, 26, 9, 9, 7, 16, 12, 4, 6, 5, 3]],         // stuck sub-pixels
+        [0.18, [9, 8, 2, 4, 1, 20, 16, 13, 9, 16, 2]],        // burn-in
     ];
-    function buildDamage(route, o) {
+    function ribbonCells(route, o) {
         const rnd = mulberry32(o.seed || 0x5ced04);
-        const c = o.cell;
-        const owned = new Map();
-        const cells = [], tears = [];
-        const ph1 = rnd() * 6.283, ph2 = rnd() * 6.283;
+        const c = o.cell, R = o.half + c;
+        const owned = new Map(), cells = [];
+        const key = (gx, gy) => (gx + 4096) * 8192 + (gy + 4096);
+        for (let s = 0; s <= route.L; s += c * 0.4) {
+            const p = route.atS(s);
+            const gx0 = Math.floor((p.x - R) / c), gx1 = Math.floor((p.x + R) / c);
+            const gy0 = Math.floor((p.y - R) / c), gy1 = Math.floor((p.y + R) / c);
+            for (let gx = gx0; gx <= gx1; gx++) {
+                for (let gy = gy0; gy <= gy1; gy++) {
+                    const k = key(gx, gy);
+                    if (owned.has(k) || Math.hypot((gx + 0.5) * c - p.x, (gy + 0.5) * c - p.y) > R) continue;
+                    const cell = { gx, gy, s, k: 5 };
+                    owned.set(k, cell);
+                    cells.push(cell);
+                }
+            }
+        }
         const pick = (weights) => {
             let r = rnd() * weights.reduce((x, y) => x + y, 0);
             for (let i = 0; i < weights.length; i++) if ((r -= weights[i]) < 0) return i;
-            return 0;
+            return 5;
         };
-        // Nothing is stamped within `gap` of a kept-out box (the words), whatever the band's ragged edge does
-        const avoid = o.avoid || [], gap = o.gap || 0;
-        const clearOf = (x0, y0, x1, y1) => avoid.every((r) => Math.hypot(Math.max(r.l - x1, 0, x0 - r.r), Math.max(r.t - y1, 0, y0 - r.b)) >= gap);
-        // Dead clusters overwrite whatever kind already owns a cell (keeping its s), so they punch through the band
-        const put = (gx, gy, s, k, over) => {
-            if (avoid.length && !clearOf(gx * c, gy * c, gx * c + c, gy * c + c)) return;
-            const key = (gx + 4096) * 8192 + (gy + 4096);
-            const had = owned.get(key);
-            if (had) {
-                if (over) {
-                    had.k = k;
-                    had.f = false;
-                }
-                return;
-            }
-            const cell = { gx, gy, s, k, f: k !== 0 && k !== 8 && rnd() < 0.3 };
-            owned.set(key, cell);
-            cells.push(cell);
-        };
-        let zone = DAMAGE_ZONES[1][1], zoneUntil = -1;
-        for (let s = 0; s <= route.L; s += c * 0.9) {
-            const p = route.atS(s);
-            const nx = -Math.sin(p.a), ny = Math.cos(p.a);
-            const wob = 0.5 + 0.3 * Math.sin(s / 90 + ph1) + 0.2 * Math.sin(s / 37 + ph2);
-            const hw = (o.bandMin + (o.bandMax - o.bandMin) * wob) / 2;
-            if (s >= zoneUntil) {
+        let zone = RIBBON_ZONES[0][1], zoneUntil = -1;
+        cells.forEach((cell) => {
+            if (cell.s >= zoneUntil) {
                 const r = rnd();
-                zone = r < DAMAGE_ZONES[0][0] ? DAMAGE_ZONES[0][1] : r < DAMAGE_ZONES[0][0] + DAMAGE_ZONES[1][0] ? DAMAGE_ZONES[1][1] : DAMAGE_ZONES[2][1];
-                zoneUntil = s + 30 + rnd() * 110;
+                zone = r < RIBBON_ZONES[0][0] ? RIBBON_ZONES[0][1] : r < RIBBON_ZONES[0][0] + RIBBON_ZONES[1][0] ? RIBBON_ZONES[1][1] : RIBBON_ZONES[2][1];
+                zoneUntil = cell.s + 40 + rnd() * 120;
             }
-            for (let off = -hw * 1.6; off <= hw * 1.6; off += c) {
-                const r = Math.abs(off) / hw;
-                const fill = r < 0.45 ? 0.9 : r < 1 ? 0.9 - (r - 0.45) * 1.25 : 0.06;
-                if (rnd() >= fill) continue;
-                put(Math.floor((p.x + nx * off + (rnd() - 0.5) * c) / c), Math.floor((p.y + ny * off + (rnd() - 0.5) * c) / c), s, pick(zone));
+            const left = owned.get(key(cell.gx - 1, cell.gy));
+            cell.k = left && left.s <= cell.s && rnd() < 0.32 ? left.k : pick(zone);
+        });
+        const run = (gx, gy, n, k) => {
+            for (let i = 0; i < n; i++) {
+                const t = owned.get(key(gx + i, gy));
+                if (t) t.k = k;
             }
-            if (rnd() < 0.035) {
-                const w = 2 + Math.floor(rnd() * 4), hh = 1 + Math.floor(rnd() * 3);
-                const gx = Math.floor((p.x + nx * (rnd() - 0.5) * hw) / c) - (w >> 1), gy = Math.floor((p.y + ny * (rnd() - 0.5) * hw) / c) - (hh >> 1);
-                for (let i = 0; i < w; i++) for (let j = 0; j < hh; j++) put(gx + i, gy + j, s, 0, true);
+        };
+        cells.forEach((cell) => {
+            const r = rnd();
+            if (r < 0.006) {
+                const n = 2 + Math.floor(rnd() * 3);
+                run(cell.gx, cell.gy, n, 0);
+                if (rnd() < 0.5) run(cell.gx, cell.gy + 1, n - 1, 0);
+            } else if (r < 0.0095) {
+                const t = rnd();
+                run(cell.gx, cell.gy, 3 + Math.floor(rnd() * 6), t < 0.45 ? 7 : t < 0.75 ? 3 : 1);
             }
-            if (rnd() < 0.016) {
-                const len = 4 + Math.floor(rnd() * 12);
-                const t = {
-                    s,
-                    gx: Math.floor((p.x - len * c / 2 + (rnd() - 0.5) * hw) / c),
-                    gy: Math.floor((p.y + (rnd() - 0.5) * hw * 2) / c),
-                    len,
-                    dx: (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 2)),
-                    h: rnd() < 0.55 ? 0.5 : 1,
-                    k: rnd() < 0.6 ? 7 : 2 + Math.floor(rnd() * 3),
-                };
-                // Its whole sweep: the displacement, a flicker jolt of two more, and the red/cyan split either side
-                const reach = Math.abs(t.dx) * 3 * c + 3;
-                if (!avoid.length || clearOf(t.gx * c - reach, t.gy * c, (t.gx + len) * c + reach, (t.gy + 1) * c)) tears.push(t);
-            }
-        }
-        return { cells, tears };
+        });
+        return cells;
     }
 
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, planRoute, buildDamage };
+        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, DRAWN };
         return;
     }
 
@@ -452,7 +438,6 @@
     const SETTLE = 0.45;              // s to settle onto a detent after the page carries into the stage
     // Detents sit 0.3 viewports apart: under pixel-bug's 1200px/s fast-scroll threshold at this ease and LOCK
     const STEP_VH = 0.3;
-    const BUG_HALF = 32;              // half of pixel-bug's 64px hit box
     const ROUTE_EDGE = 36;            // inside pixel-bug's viewport clamp (24 / 30px), so it's never pushed off its route
     const APPROACH_MAX = 2600;        // ms a detent's travel waits for GLITCH to land on the route before going anyway
     const APP_URL = '/wp-content/themes/lamalama2025/dist/assets/app-DjHRamTc.js';
@@ -463,10 +448,13 @@
     const path = { t: 0 };
     const dmgCanvas = track.querySelector('.sk-damage');
     const dmgCtx = dmgCanvas ? dmgCanvas.getContext('2d') : null;
-    let route = null, plan = null, keepOut = [], damage = null, buckets = null, fringe = null, routeKey = '';
-    let cellDev = 5, dmgScale = 1, pathTween = null, pathGoal = 0, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
+    const texC = doc.createElement('canvas'), maskC = doc.createElement('canvas'), redC = doc.createElement('canvas'), cyanC = doc.createElement('canvas');
+    const texCtx = texC.getContext('2d'), maskCtx = maskC.getContext('2d', { willReadFrequently: true });
+    const redCtx = redC.getContext('2d'), cyanCtx = cyanC.getContext('2d');
+    let route = null, plan = null, keep = { words: null, list: null }, ribbon = [], routeKey = '';
+    let cellDev = 5, cellCss = 5, ribbonW = 20, dmgScale = 1, pathTween = null, pathGoal = 0, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
     let arrived = false, approachSince = 0, pendingT = null;
-    let flickerOff = null, tearJolt = null, nextFlicker = 0;
+    let flickCells = null, nextFlicker = 0;
     let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03, A = 0, B = 0, gapPx = 18;
     let geo = [];
     let visible = false, drawn = -1, detached = false, railDirty = true;
@@ -748,7 +736,7 @@
             title = unite(title, boxOf(p.titleEl.querySelectorAll(':scope > .sk-mk'), sr));
             set = unite(set, boxOf(p.setEl.querySelectorAll('.sk-mk'), sr));
         });
-        keepOut = [kick, title, set].filter(Boolean);
+        keep = { words: unite(kick, title), list: set };
 
         const tr = track.getBoundingClientRect();
         const scr = scroller.getBoundingClientRect();
@@ -804,135 +792,159 @@
         });
     }
 
-    // ---------- the route and the damage GLITCH leaves on it
+    // ---------- the route and the broken-screen ribbon GLITCH leaves on it
 
-    // The route is planned around the kept-out boxes with a clearance of 2.5vw, plus the trail's ragged half-width
-    // (its scatter reaches 0.8 of the widest band, plus a cell), plus half the bug; the damage grid is snapped to whole
-    // backing pixels (5 CSS px cells at 1x, 10 device px at 2x), and the backing store is capped at 2x since the look is
-    // deliberately coarse.
+    // The ribbon is 1.8vw wide (12px at least) on a grid of whole backing pixels about seven cells across it, and the route
+    // keeps its centre line that half-width plus 0.8vw (8px at least) off the words. The backing store is capped at 2x since
+    // the look is deliberately coarse.
     function buildTrail() {
         const w = stage.clientWidth, h = stage.clientHeight;
         if (!w || !h) return;
         const scale = Math.min(2, root.devicePixelRatio || 1);
-        const key = [w, h, scale, Math.round(cx), S].concat(...keepOut.map((r) => [r.l, r.t, r.r, r.b].map(Math.round))).join(',');
+        const key = [w, h, scale].concat(...[keep.words, keep.list].filter(Boolean).map((r) => [r.l, r.t, r.r, r.b].map(Math.round))).join(',');
         if (key === routeKey) return;
         routeKey = key;
         dmgScale = scale;
-        cellDev = Math.max(3, Math.round(5 * scale));
-        const cell = cellDev / scale;
-        const bandMin = Math.max(14, w * 0.015), bandMax = Math.max(26, w * 0.03);
-        const reach = bandMax * 0.8 + cell, gap = w * 0.025;
-        plan = planRoute({
-            w, h, rects: keepOut, edge: ROUTE_EDGE, clear: gap + reach + BUG_HALF, starPad: reach + BUG_HALF,
-            star: S ? { x: cx, y: h / 2, r: S * 10.6 / 24 } : null,
-        });
+        ribbonW = Math.max(12, w * 0.018);
+        cellDev = Math.max(2, Math.round(Math.max(3, ribbonW / 7) * scale));
+        cellCss = cellDev / scale;
+        plan = planRoute({ w, h, words: keep.words, list: keep.list, clear: ribbonW / 2 + Math.max(8, w * 0.008), inset: ROUTE_EDGE });
         route = plan.route;
-        damage = buildDamage(route, { cell, bandMin, bandMax, seed: 0x5ced04, avoid: keepOut, gap });
-        buckets = Array.from({ length: 9 }, () => []);
-        fringe = [];
-        damage.cells.forEach((c) => {
-            buckets[c.k].push(c);
-            if (c.f) fringe.push(c);
-        });
-        flickerOff = null;
-        tearJolt = null;
-        if (dmgCanvas) {
-            dmgCanvas.width = Math.round(w * scale);
-            dmgCanvas.height = Math.round(h * scale);
-        }
+        ribbon = ribbonCells(route, { cell: cellCss, half: ribbonW / 2, seed: 0x5ced04 });
+        flickCells = null;
         dmgDirty = true;
+        if (!dmgCanvas) return;
+        dmgCanvas.width = Math.round(w * scale);
+        dmgCanvas.height = Math.round(h * scale);
+        const gw = Math.ceil(w / cellCss) + 1, gh = Math.ceil(h / cellCss) + 1;
+        [maskC, redC, cyanC].forEach((c) => {
+            c.width = gw;
+            c.height = gh;
+        });
+        texC.width = gw * cellDev;
+        texC.height = gh * cellDev;
+        paintTexture();
     }
 
-    const DMG_FILL = ['#000', '', '#ff00ff', '#00ffff', '#00ff41', '#ff1a1a', '#1f4bff', '#ffffff', '#2b2b2b'];
+    const RIB_FILL = ['#3b0710', '', '#ff1fd0', '#18f0ff', '#22ff5a', '#ff1e2d', '#d90018', '#fff6f0', '#ff4a3d', '#99000f', '#2a4bff'];
     const SUB = ['#ff0000', '#00ff00', '#0000ff'];
 
-    function drawTrail(sNow) {
-        const ctx = dmgCtx;
-        ctx.clearRect(0, 0, dmgCanvas.width, dmgCanvas.height);
-        if (!damage || sNow <= 0) return;
-        const cd = cellDev, fr = Math.max(1, Math.round(dmgScale));
-        const off = flickerOff;
-        // RGB fringe: red and cyan ghosts a device pixel either side of a third of the lit cells
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = '#ff0040';
-        for (let i = 0; i < fringe.length && fringe[i].s <= sNow; i++) ctx.fillRect(fringe[i].gx * cd - fr, fringe[i].gy * cd, cd, cd);
-        ctx.fillStyle = '#00e5ff';
-        for (let i = 0; i < fringe.length && fringe[i].s <= sNow; i++) ctx.fillRect(fringe[i].gx * cd + fr, fringe[i].gy * cd, cd, cd);
-        ctx.globalAlpha = 1;
-        for (let k = 0; k < 9; k++) {
-            const list = buckets[k];
+    // The fill, painted once per layout: every cell the ribbon can cover, stuck sub-pixels as three hard stripes
+    function paintTexture() {
+        const ctx = texCtx, cd = cellDev, w3 = Math.max(1, Math.floor(cd / 3));
+        ctx.clearRect(0, 0, texC.width, texC.height);
+        for (let k = 0; k < RIB_FILL.length; k++) {
             if (k === 1) {
-                const w3 = Math.max(1, Math.floor(cd / 3));
                 for (let sp = 0; sp < 3; sp++) {
                     ctx.fillStyle = SUB[sp];
-                    for (let i = 0; i < list.length && list[i].s <= sNow; i++) {
-                        if (off && off.has(list[i])) continue;
-                        ctx.fillRect(list[i].gx * cd + sp * w3, list[i].gy * cd, sp === 2 ? cd - 2 * w3 : w3, cd);
-                    }
+                    ribbon.forEach((c) => { if (c.k === 1) ctx.fillRect(c.gx * cd + sp * w3, c.gy * cd, sp === 2 ? cd - 2 * w3 : w3, cd); });
                 }
                 continue;
             }
-            ctx.fillStyle = DMG_FILL[k];
-            for (let i = 0; i < list.length && list[i].s <= sNow; i++) {
-                if (off && off.has(list[i])) continue;
-                ctx.fillRect(list[i].gx * cd, list[i].gy * cd, cd, cd);
-            }
+            ctx.fillStyle = RIB_FILL[k];
+            ribbon.forEach((c) => { if (c.k === k) ctx.fillRect(c.gx * cd, c.gy * cd, cd, cd); });
         }
-        if (off) {
-            ctx.fillStyle = '#000';
-            off.forEach((c) => { if (c.s <= sNow) ctx.fillRect(c.gx * cd, c.gy * cd, cd, cd); });
-        }
-        // Tear slivers: a displaced scanline with a hard red/cyan split
-        damage.tears.forEach((t) => {
-            if (t.s > sNow) return;
-            const x = (t.gx + t.dx + (tearJolt === t ? t.dx * 2 : 0)) * cd, y = t.gy * cd;
-            const w = t.len * cd, h = Math.max(fr, Math.round(cd * t.h));
-            ctx.globalAlpha = 0.75;
-            ctx.fillStyle = '#ff0040';
-            ctx.fillRect(x - 2 * fr, y, w, h);
-            ctx.fillStyle = '#00e5ff';
-            ctx.fillRect(x + 2 * fr, y, w, h);
-            ctx.globalAlpha = 0.92;
-            ctx.fillStyle = DMG_FILL[t.k];
-            ctx.fillRect(x, y, w, h);
-        });
-        ctx.globalAlpha = 1;
     }
 
-    // A few lit pixels die and come back, and once in a while a tear jumps; throttled, and only while the stage is seen
+    function tint(ctx, color) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0, 0, maskC.width, maskC.height);
+        ctx.drawImage(maskC, 0, 0);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, maskC.width, maskC.height);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // The ribbon up to arc length sNow: a round-capped stroke at one pixel per cell, hardened to whole cells, scaled up
+    // without smoothing so its edge steps cell by cell, then filled with the broken-screen texture (source-in), the
+    // flicker painted only where the ribbon is (source-atop), and a red/cyan ghost slipped out either side behind it.
+    function drawTrail(sNow) {
+        const ctx = dmgCtx;
+        ctx.clearRect(0, 0, dmgCanvas.width, dmgCanvas.height);
+        if (!route || sNow <= 0) return;
+        const m = maskCtx, k = 1 / cellCss;
+        m.clearRect(0, 0, maskC.width, maskC.height);
+        m.lineWidth = ribbonW * k;
+        m.lineCap = 'round';
+        m.lineJoin = 'round';
+        m.strokeStyle = '#fff';
+        m.beginPath();
+        const end = Math.min(sNow, route.L);
+        for (let s = 0; s < end; s += cellCss) {
+            const p = route.atS(s);
+            if (s === 0) m.moveTo(p.x * k, p.y * k);
+            else m.lineTo(p.x * k, p.y * k);
+        }
+        const q = route.atS(end);
+        m.lineTo(q.x * k, q.y * k);
+        m.stroke();
+        const img = m.getImageData(0, 0, maskC.width, maskC.height), d = img.data;
+        for (let i = 3; i < d.length; i += 4) {
+            d[i - 3] = d[i - 2] = d[i - 1] = 255;
+            d[i] = d[i] >= 128 ? 255 : 0;
+        }
+        m.putImageData(img, 0, 0);
+        tint(redCtx, '#ff0040');
+        tint(cyanCtx, '#00e5ff');
+
+        const cd = cellDev, cw = maskC.width * cd, ch = maskC.height * cd, fr = Math.max(1, Math.round(1.5 * dmgScale));
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(maskC, 0, 0, cw, ch);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.drawImage(texC, 0, 0);
+        if (flickCells) {
+            ctx.globalCompositeOperation = 'source-atop';
+            flickCells.forEach((f) => {
+                ctx.fillStyle = f[3];
+                ctx.fillRect(f[0] * cd, f[1] * cd, f[2] * cd, cd);
+            });
+        }
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.globalAlpha = 0.6;
+        ctx.drawImage(redC, -fr, 0, cw, ch);
+        ctx.drawImage(cyanC, fr, 0, cw, ch);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // A few cells die or burn white and come back, and once in a while a scanline tears across; throttled, and only
+    // while the stage is seen
     function flicker(sNow, t) {
         if (t < nextFlicker) return false;
         nextFlicker = t + 110 + Math.random() * 90;
-        let lo = 0, hi = damage.cells.length;
+        let lo = 0, hi = ribbon.length;
         while (lo < hi) {
             const mid = (lo + hi) >> 1;
-            if (damage.cells[mid].s <= sNow) lo = mid + 1;
+            if (ribbon[mid].s <= sNow) lo = mid + 1;
             else hi = mid;
         }
         const n = lo;
-        flickerOff = new Set();
-        const count = Math.min(18, Math.ceil(n * 0.006));
+        flickCells = [];
+        if (!n) return true;
+        const count = Math.min(16, Math.ceil(n * 0.004));
         for (let i = 0; i < count; i++) {
-            const c = damage.cells[Math.floor(Math.random() * n)];
-            if (c && c.k !== 0 && c.k !== 8) flickerOff.add(c);
+            const c = ribbon[Math.floor(Math.random() * n)];
+            flickCells.push([c.gx, c.gy, 1, Math.random() < 0.6 ? '#120205' : '#fff6f0']);
         }
-        tearJolt = null;
-        if (Math.random() < 0.06) {
-            const live = damage.tears.filter((tr) => tr.s <= sNow);
-            if (live.length) tearJolt = live[Math.floor(Math.random() * live.length)];
+        if (Math.random() < 0.08) {
+            const c = ribbon[Math.floor(Math.random() * n)];
+            flickCells.push([c.gx - 2, c.gy, 4 + Math.floor(Math.random() * 5), Math.random() < 0.5 ? '#fff6f0' : '#18f0ff']);
         }
         return true;
     }
 
-    // GLITCH rides the route at the live path progress, facing along the tangent in the direction it's travelling.
-    // Viewport coordinates, read per bug frame so it stays glued to the stage; it flies while a detent is moving it.
-    // `avoid` is the words' box, so its approach flight bends around them rather than across.
+    // GLITCH rides the route between points a ROUTE_EDGE inset from the viewport (the drawn line runs edge to edge), at
+    // the live path progress, facing along the tangent in the direction it's travelling. The ribbon grows to t * L, so
+    // it leaves the top edge as GLITCH sets off and reaches the right edge as it arrives. Viewport coordinates, read per
+    // bug frame so it stays glued to the stage; it flies while a detent is moving it. `avoid` is the words' box, so its
+    // approach flight bends around them rather than across.
     function routeTarget() {
         if (!route) return null;
         const r = stage.getBoundingClientRect();
-        const p = route.at(path.t);
+        const p = route.atS(plan.s0 + path.t * (plan.s1 - plan.s0));
         const moving = !!(pathTween && pathTween.isActive());
-        const T = plan && plan.box;
+        const T = plan.box;
         return {
             x: r.left + p.x, y: r.top + p.y, heading: pathDir > 0 ? p.a : p.a + Math.PI, lift: moving ? 1 : 0,
             avoid: T ? { l: r.left + T.l, t: r.top + T.t, r: r.left + T.r, b: r.top + T.b } : null,
@@ -1095,7 +1107,7 @@
             drawn = st.travel;
         }
         if (railDirty && (visible || rail.p === 0)) renderRail();
-        if (dmgCtx && damage && visible) {
+        if (dmgCtx && route && visible) {
             const sNow = path.t * route.L;
             if (sNow > 0 && flicker(sNow, now())) dmgDirty = true;
             if (dmgDirty || sNow !== dmgDrawn) {
@@ -1116,11 +1128,11 @@
     // whenever that point is on screen (pixel-bug places a leashed bug without animating it under reduced motion).
     function reducedTrail() {
         path.t = pathGoal = 1;
-        if (dmgCtx && damage) drawTrail(route.L);
+        if (dmgCtx && route) drawTrail(route.L);
         const sync = () => {
             if (!route || typeof root.__pixelBugLeash !== 'function') return;
             const r = stage.getBoundingClientRect();
-            const e = route.at(1);
+            const e = route.atS(plan.s1);
             const y = r.top + e.y;
             const on = y > 0 && y < scroller.clientHeight;
             if (on && !leashed) {
@@ -1146,7 +1158,7 @@
                 syncHeight();
                 measure();
                 render();
-                if (dmgCtx && damage) drawTrail(route.L);
+                if (dmgCtx && route) drawTrail(route.L);
             };
             root.addEventListener('resize', redo, { passive: true });
             if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(redo);

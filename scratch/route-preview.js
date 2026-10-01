@@ -1,24 +1,28 @@
-// node scratch/route-preview.js -> scratch/route-<size>.png: text boxes, clearance halo, asterisk sweep, route and damage
+// node scratch/route-preview.js [screenshot.png] -> scratch/route-<size>.png
+// The ribbon as the page draws it (cells under the round-capped stroke, the seeded broken-screen fill, a red/cyan
+// ghost either side), the clearance halo round the words, and GLITCH's two endpoints (green start, red end). The
+// 1024x515 preview is laid over the screenshot the line was drawn on, if given, with the drawn line as a thin red trace.
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { planRoute, buildDamage } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+const { planRoute, ribbonCells, DRAWN } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
 const LAYOUTS = {
-    '1920x1080': { w: 1920, h: 1080, cx: 115, S: 626, rects: [{ l: 557, t: 400, r: 700, b: 411 }, { l: 557, t: 428, r: 1496, b: 652 }, { l: 1574, t: 413, r: 1864, b: 667 }] },
-    '1366x768': { w: 1366, h: 768, cx: 82, S: 445, rects: [{ l: 396, t: 281, r: 520, b: 292 }, { l: 396, t: 300, r: 1044, b: 470 }, { l: 1101, t: 287, r: 1322, b: 481 }] },
-    '390x844': { w: 390, h: 844, cx: 18, S: 273, rects: [{ l: 162, t: 307, r: 290, b: 318 }, { l: 162, t: 329, r: 372, b: 383 }, { l: 162, t: 399, r: 330, b: 537 }] },
+    '1024x515': { w: 1024, h: 515, words: { l: 297, t: 173, r: 746, b: 318 }, list: { l: 811, t: 178, r: 991, b: 336 } },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 557, t: 383, r: 1380, b: 652 }, list: { l: 1574, t: 413, r: 1864, b: 667 } },
+    '1366x768': { w: 1366, h: 768, words: { l: 396, t: 265, r: 1000, b: 470 }, list: { l: 1101, t: 287, r: 1322, b: 481 } },
+    '390x844': { w: 390, h: 844, words: { l: 162, t: 307, r: 372, b: 383 }, list: { l: 162, t: 399, r: 330, b: 537 } },
 };
 
-function png(w, h, px) {
-    const crcT = [];
-    for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        crcT[n] = c >>> 0;
-    }
-    const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+const crcT = [];
+for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crcT[n] = c >>> 0;
+}
+const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function encode(w, h, px) {
     const chunk = (type, data) => {
         const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
         const td = Buffer.concat([Buffer.from(type), data]);
@@ -26,48 +30,108 @@ function png(w, h, px) {
         return Buffer.concat([len, td, c]);
     };
     const raw = Buffer.alloc((w * 3 + 1) * h);
-    for (let y = 0; y < h; y++) {
-        raw[y * (w * 3 + 1)] = 0;
-        px.copy(raw, y * (w * 3 + 1) + 1, y * w * 3, (y + 1) * w * 3);
-    }
+    for (let y = 0; y < h; y++) px.copy(raw, y * (w * 3 + 1) + 1, y * w * 3, (y + 1) * w * 3);
     const ihdr = Buffer.alloc(13);
     ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
     return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+// 8-bit RGB / RGBA, non-interlaced
+function decode(buf) {
+    let p = 8, w = 0, h = 0, type = 0;
+    const idat = [];
+    while (p < buf.length) {
+        const len = buf.readUInt32BE(p), t = buf.toString('ascii', p + 4, p + 8), d = buf.subarray(p + 8, p + 8 + len);
+        if (t === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); type = d[9]; if (d[8] !== 8 || d[12]) return null; }
+        if (t === 'IDAT') idat.push(d);
+        p += 12 + len;
+    }
+    const bpp = type === 6 ? 4 : type === 2 ? 3 : 0;
+    if (!bpp) return null;
+    const raw = zlib.inflateSync(Buffer.concat(idat)), stride = w * bpp, out = Buffer.alloc(w * h * 3);
+    let prev = Buffer.alloc(stride);
+    for (let y = 0; y < h; y++) {
+        const f = raw[y * (stride + 1)], line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
+        for (let i = 0; i < stride; i++) {
+            const a = i >= bpp ? line[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+            const pr = a + b - c, pa = Math.abs(pr - a), pb = Math.abs(pr - b), pc = Math.abs(pr - c);
+            line[i] = (line[i] + (f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : f === 4 ? (pa <= pb && pa <= pc ? a : pb <= pc ? b : c) : 0)) & 255;
+        }
+        for (let x = 0; x < w; x++) for (let k = 0; k < 3; k++) out[(y * w + x) * 3 + k] = line[x * bpp + k];
+        prev = line;
+    }
+    return { w, h, px: out };
+}
+
+const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+const FILL = ['#3b0710', '', '#ff1fd0', '#18f0ff', '#22ff5a', '#ff1e2d', '#d90018', '#fff6f0', '#ff4a3d', '#99000f', '#2a4bff'].map((c) => c && hex(c));
+const SUB = [[255, 0, 0], [0, 255, 0], [0, 0, 255]];
+const shot = process.argv[2] && fs.existsSync(process.argv[2]) ? decode(fs.readFileSync(process.argv[2])) : null;
 
 Object.entries(LAYOUTS).forEach(([key, L]) => {
     const { w, h } = L;
-    const bandMax = Math.max(26, w * 0.03), reach = bandMax * 0.8 + 5, gap = w * 0.025, clear = gap + reach + 32;
-    const star = { x: L.cx, y: h / 2, r: L.S * 10.6 / 24 };
-    const plan = planRoute({ w, h, rects: L.rects, star, edge: 36, clear, starPad: reach + 32 });
-    const dmg = buildDamage(plan.route, { cell: 5, bandMin: Math.max(14, w * 0.015), bandMax, seed: 0x5ced04, avoid: L.rects, gap });
+    const ribbonW = Math.max(12, w * 0.018), half = ribbonW / 2, cell = Math.max(3, ribbonW / 7);
+    const clear = half + Math.max(8, w * 0.008);
+    const plan = planRoute({ w, h, words: L.words, list: L.list, clear, inset: 36 });
+    const cells = ribbonCells(plan.route, { cell, half, seed: 0x5ced04 });
     const px = Buffer.alloc(w * h * 3);
-    const set = (x, y, c) => {
-        x |= 0; y |= 0;
+    const set = (x, y, c, a) => {
+        x = Math.floor(x); y = Math.floor(y);
         if (x < 0 || y < 0 || x >= w || y >= h) return;
         const i = (y * w + x) * 3;
-        px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2];
+        for (let k = 0; k < 3; k++) px[i + k] = a === undefined ? c[k] : px[i + k] * (1 - a) + c[k] * a;
     };
-    const dist = (x, y, r) => Math.hypot(Math.max(r.l - x, 0, x - r.r), Math.max(r.t - y, 0, y - r.b));
+    const useShot = shot && shot.w === w && shot.h === h;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        let c = [8, 8, 10];
-        if (Math.hypot(x - star.x, y - star.y) < star.r) c = [60, 54, 10];
-        const d = Math.min(...L.rects.map((r) => dist(x, y, r)));
-        if (d < clear) c = [34, 22, 30];
-        if (d === 0) c = [255, 237, 41];
-        if (Math.abs(y - h / 2) < 0.5) c = [200, 200, 200];
-        set(x, y, c);
+        if (useShot) {
+            const i = (y * w + x) * 3;
+            px[i] = shot.px[i]; px[i + 1] = shot.px[i + 1]; px[i + 2] = shot.px[i + 2];
+            continue;
+        }
+        const d = Math.min(...[L.words, L.list].map((r) => Math.hypot(Math.max(r.l - x, 0, x - r.r), Math.max(r.t - y, 0, y - r.b))));
+        set(x, y, d === 0 ? [255, 237, 41] : d < clear ? [40, 26, 34] : [10, 10, 12]);
     }
-    const COL = [[0, 0, 0], [255, 255, 255], [255, 0, 255], [0, 255, 255], [0, 255, 65], [255, 26, 26], [31, 75, 255], [255, 255, 255], [43, 43, 43]];
-    dmg.cells.forEach((c) => { for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) set(c.gx * 5 + i, c.gy * 5 + j, c.k === 1 ? [[255, 0, 0], [0, 255, 0], [0, 0, 255]][Math.min(2, (i / 5 * 3) | 0)] : COL[c.k]); });
-    for (let s = 0; s <= plan.route.L; s += 0.5) {
+    if (useShot) {
+        // The drawn line, thin, so the ribbon can be compared against it
+        for (let i = 0; i < DRAWN.length - 1; i++) for (let k = 0; k <= 40; k++) {
+            const t = k / 40;
+            set((DRAWN[i][0] + (DRAWN[i + 1][0] - DRAWN[i][0]) * t) * w, (DRAWN[i][1] + (DRAWN[i + 1][1] - DRAWN[i][1]) * t) * h, [255, 255, 255], 0.5);
+        }
+        [L.words, L.list].forEach((r) => {
+            for (let x = r.l - clear; x <= r.r + clear; x++) { set(x, r.t - clear, [120, 120, 255]); set(x, r.b + clear, [120, 120, 255]); }
+            for (let y = r.t - clear; y <= r.b + clear; y++) { set(r.l - clear, y, [120, 120, 255]); set(r.r + clear, y, [120, 120, 255]); }
+        });
+    }
+    // The page lights a cell when the stroke covers half of it; its centre lying within the half-width is the same test
+    const lit = new Set();
+    for (let s = 0; s <= plan.route.L; s += cell * 0.4) {
         const p = plan.route.atS(s);
-        set(p.x, p.y, [255, 255, 255]);
+        for (let gx = Math.floor((p.x - half) / cell); gx <= Math.floor((p.x + half) / cell); gx++) {
+            for (let gy = Math.floor((p.y - half) / cell); gy <= Math.floor((p.y + half) / cell); gy++) {
+                if (Math.hypot((gx + 0.5) * cell - p.x, (gy + 0.5) * cell - p.y) <= half) lit.add(gx + ',' + gy);
+            }
+        }
     }
-    [0, 0.25, 0.5, 0.75, 1].forEach((t, i) => {
-        const p = plan.route.at(t);
-        for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) if (Math.hypot(a, b) <= 6) set(p.x + a, p.y + b, i === 0 ? [0, 255, 0] : i === 4 ? [255, 0, 0] : [255, 255, 255]);
+    const byKey = new Map(cells.map((c) => [c.gx + ',' + c.gy, c]));
+    const fr = 1.5;
+    lit.forEach((k) => {
+        const [gx, gy] = k.split(',').map(Number);
+        if (!lit.has((gx - 1) + ',' + gy)) for (let y = gy * cell; y < (gy + 1) * cell; y++) for (let x = gx * cell - fr; x < gx * cell; x++) set(x, y, [255, 0, 64], 0.6);
+        if (!lit.has((gx + 1) + ',' + gy)) for (let y = gy * cell; y < (gy + 1) * cell; y++) for (let x = (gx + 1) * cell; x < (gx + 1) * cell + fr; x++) set(x, y, [0, 229, 255], 0.6);
     });
-    fs.writeFileSync(path.join(__dirname, 'route-' + key + '.png'), png(w, h, px));
-    console.log(key, plan.kind, 'ok', plan.ok, 'clear', plan.minClear.toFixed(0), '/', clear.toFixed(0), 'star', plan.starClear.toFixed(0));
+    lit.forEach((k) => {
+        const c = byKey.get(k);
+        if (!c) return;
+        for (let y = c.gy * cell; y < (c.gy + 1) * cell; y++) for (let x = c.gx * cell; x < (c.gx + 1) * cell; x++) {
+            set(x, y, c.k === 1 ? SUB[Math.min(2, Math.floor((x - c.gx * cell) / cell * 3))] : FILL[c.k]);
+        }
+    });
+    [[plan.s0, [0, 255, 0]], [plan.s1, [255, 40, 40]]].forEach(([s, col]) => {
+        const p = plan.route.atS(s);
+        for (let a = -7; a <= 7; a++) for (let b = -7; b <= 7; b++) {
+            const r = Math.hypot(a, b);
+            if (r <= 7) set(p.x + a, p.y + b, r > 5 ? [0, 0, 0] : col);
+        }
+    });
+    fs.writeFileSync(path.join(__dirname, 'route-' + key + '.png'), encode(w, h, px));
+    console.log(key, 'ok', plan.ok, 'ribbon edge', (plan.minClear - half).toFixed(0) + 'px from words', 'moved', plan.moved.toFixed(0) + 'px', plan.stacked ? 'stacked' : '', useShot ? '(over screenshot)' : '');
 });
