@@ -592,6 +592,7 @@
     <link rel="stylesheet" id="main-css" href="/css/lamalama.css" media="all" />
     <link rel="stylesheet" href="/css/custom.css?v=7.0" media="all" />
     <link rel="stylesheet" href="/css/skills-wheel.css" media="all" />
+    <link rel="stylesheet" href="/css/experience.css" media="all" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Kalam:wght@700&family=Reenie+Beanie&display=swap" rel="stylesheet">
@@ -3233,38 +3234,124 @@
 </div></section>
 
 <!-- =======================================================
-     5. SLIDE 5: HAPPY CLIENTS & PARTNERS (USER SCREENSHOT IMAGE 1)
+     5. SLIDE 5: EXPERIENCE (SAMSUNG PRISM)
      ======================================================= -->
-<section class="ll-section ll-section--logos min-h-[100dvh] pt-section-lg pb-section-3xl text-textPrimary flex flex-col justify-center" style="min-height: 100vh; min-height: 100dvh;" data-component="sections/logos" data-theme="none">
-    <div class="ll-container" data-component="blocks/backdrop_theme" data-logo="logo">
-        <div class="ll-part--label mb-6 lg:mb-14 ll-add-tag">
-            <div class="relative ll-part--mono-text-reveal js-mono-text-reveal" data-component="parts/mono_text_reveal">
-                <div class="js-animation-target absolute left-0 right-0 js-text-container">[ HAPPY CLIENTS ]</div>
-                <div class="opacity-0 js-text-container">[ HAPPY CLIENTS ]</div>
+<section class="ll-section ll-section--experience xp" id="experience" aria-labelledby="xpTitle">
+    <header class="xp-head xp-grid" data-xp-block data-xp-start="top 78%">
+        <div class="xp-kicker">
+            <span class="xp-rule" data-xp="rule" aria-hidden="true"></span>
+            <span class="xp-tag xp-mono" data-xp="chars">[ EXPERIENCE ]</span>
+            <p class="xp-status xp-mono js-xp-status" data-xp="fade" data-start="2026-05-01" data-end="2026-10-31" data-state="live">
+                <span class="xp-status__row"><i class="xp-pulse" aria-hidden="true"></i><span class="js-xp-state">In progress</span><span aria-hidden="true">&middot;</span><span>May&mdash;Oct 2026</span><span class="xp-status__day js-xp-day"></span></span>
+                <span class="xp-clock" aria-hidden="true"><i class="xp-clock__fill js-xp-clock"></i></span>
+            </p>
+        </div>
+        <h2 class="xp-title" id="xpTitle" data-xp="chars">Building one of five AI agents for <em>Samsung PRISM.</em></h2>
+        <div class="xp-meta">
+            <span class="xp-rule" data-xp="rule" aria-hidden="true"></span>
+            <dl class="xp-meta__list">
+                <div class="xp-meta__item"><dt class="xp-mono" data-xp="lines">At</dt><dd data-xp="lines">Samsung R&amp;D Institute India &ndash; Bangalore</dd></div>
+                <div class="xp-meta__item"><dt class="xp-mono" data-xp="lines">Role</dt><dd data-xp="lines">AI Research Intern</dd></div>
+                <div class="xp-meta__item"><dt class="xp-mono" data-xp="lines">Mode</dt><dd data-xp="lines">Remote</dd></div>
+                <div class="xp-meta__item"><dt class="xp-mono" data-xp="lines">Worklet</dt><dd data-xp="lines">26ARS07</dd></div>
+            </dl>
+        </div>
+    </header>
+
+    <div class="xp-block xp-grid">
+        <p class="xp-rail xp-mono" data-xp-block><i class="xp-star" data-xp="star" aria-hidden="true"></i><span data-xp="chars">What I built</span></p>
+        <div class="xp-body">
+            <div data-xp-block>
+                <h3 class="xp-sub" data-xp="chars">The IEEE Standards &amp; Features Agent.</h3>
+                <p class="xp-lede" data-xp="lines">IEEE 802.11 is the standard behind Wi-Fi, and one document can run past a thousand pages. My agent is the platform&rsquo;s core engine: <strong>it decomposes a whole standard into standalone documents, one per feature,</strong> with every clause landing in exactly one of them.</p>
+            </div>
+            <div class="xp-pipe">
+                <span class="xp-pipe__line" aria-hidden="true"></span>
+                <ol class="xp-steps">
+                    <li class="xp-step" data-xp-block data-xp-at=".xp-step__node" data-xp-start="center 72%">
+                        <span class="xp-rule xp-step__rule" data-xp="rule" aria-hidden="true"></span>
+                        <span class="xp-step__node" aria-hidden="true"><i class="xp-star" data-xp="star"></i></span>
+                        <div class="xp-step__head"><span class="xp-step__n xp-mono" data-xp="chars">01</span><h4 class="xp-step__t" data-xp="chars">Structure</h4></div>
+                        <p class="xp-step__d" data-xp="lines">Section hierarchy, TF-IDF and Union-Find group clauses by where they sit in the standard. Built to settle <em>70&ndash;80% of them here, at zero API cost.</em></p>
+                        <p class="xp-step__k xp-mono"><span data-xp="lines">TF-IDF</span><span data-xp="lines">Union-Find</span></p>
+                    </li>
+                    <li class="xp-step" data-xp-block data-xp-at=".xp-step__node" data-xp-start="center 72%">
+                        <span class="xp-rule xp-step__rule" data-xp="rule" aria-hidden="true"></span>
+                        <span class="xp-step__node" aria-hidden="true"><i class="xp-star" data-xp="star"></i></span>
+                        <div class="xp-step__head"><span class="xp-step__n xp-mono" data-xp="chars">02</span><h4 class="xp-step__t" data-xp="chars">Meaning</h4></div>
+                        <p class="xp-step__d" data-xp="lines">384-dim sentence embeddings in ChromaDB catch what shared words miss, like <em>&ldquo;MLD&rdquo; and &ldquo;multi-link device&rdquo;,</em> and give orphan clauses a home.</p>
+                        <p class="xp-step__k xp-mono"><span data-xp="lines">Embeddings</span><span data-xp="lines">ChromaDB</span></p>
+                    </li>
+                    <li class="xp-step" data-xp-block data-xp-at=".xp-step__node" data-xp-start="center 72%">
+                        <span class="xp-rule xp-step__rule" data-xp="rule" aria-hidden="true"></span>
+                        <span class="xp-step__node" aria-hidden="true"><i class="xp-star" data-xp="star"></i></span>
+                        <div class="xp-step__head"><span class="xp-step__n xp-mono" data-xp="chars">03</span><h4 class="xp-step__t" data-xp="chars">Judgment</h4></div>
+                        <p class="xp-step__d" data-xp="lines">An LLM gets a say <em>only when the pipeline is unsure,</em> below 0.75 confidence. Every call is logged for audit.</p>
+                        <p class="xp-step__k xp-mono"><span data-xp="lines">LLM</span><span data-xp="lines">Below 0.75 only</span></p>
+                    </li>
+                </ol>
+            </div>
+            <p class="xp-around" data-xp-block data-xp="lines">Around it: <b>a PyMuPDF parser</b> that spots headings by font weight, <b>a FastAPI service</b> streaming live progress over SSE, <b>REST endpoints</b> the other agents call, <b>a React/Vite dashboard,</b> and <b>Docker.</b></p>
+        </div>
+    </div>
+
+    <div class="xp-block xp-grid">
+        <p class="xp-rail xp-mono" data-xp-block><i class="xp-star" data-xp="star" aria-hidden="true"></i><span data-xp="chars">By the numbers</span></p>
+        <div class="xp-body" data-xp-block data-xp-start="top 82%">
+            <ul class="xp-stats">
+                <li class="xp-stat"><span class="xp-rule" data-xp="rule" aria-hidden="true"></span><span class="xp-num" data-xp="num">5</span><span class="xp-unit xp-mono" data-xp="lines">Standards</span></li>
+                <li class="xp-stat"><span class="xp-rule" data-xp="rule" aria-hidden="true"></span><span class="xp-num" data-xp="num">6,335</span><span class="xp-unit xp-mono" data-xp="lines">Pages</span></li>
+                <li class="xp-stat"><span class="xp-rule" data-xp="rule" aria-hidden="true"></span><span class="xp-num" data-xp="num">8,233</span><span class="xp-unit xp-mono" data-xp="lines">Clauses parsed</span></li>
+                <li class="xp-stat"><span class="xp-rule" data-xp="rule" aria-hidden="true"></span><span class="xp-num" data-xp="num">444</span><span class="xp-unit xp-mono" data-xp="lines">Features found</span></li>
+            </ul>
+            <p class="xp-note" data-xp="lines">From the agent&rsquo;s own run log, 802.11-2020 through 802.11bk-2025: about 550 feature documents exported.</p>
+        </div>
+    </div>
+
+    <div class="xp-block xp-grid">
+        <p class="xp-rail xp-mono" data-xp-block><i class="xp-star" data-xp="star" aria-hidden="true"></i><span data-xp="chars">Bug log</span></p>
+        <aside class="xp-body xp-bug" data-xp-block aria-label="A bug I fixed">
+            <span class="xp-bug__re" data-xp="fade"><code>[\.\s]{5,}\d{1,4}\s*$</code><span class="xp-bug__strike" data-xp="rule" aria-hidden="true"></span></span>
+            <p data-xp="lines">A table-of-contents regex hit catastrophic backtracking on certain inputs and stalled live uploads. I replaced it with <span class="xp-bug__fix">a bounded backward scan that runs in linear time.</span></p>
+        </aside>
+    </div>
+
+    <div class="xp-block xp-grid">
+        <p class="xp-rail xp-mono" data-xp-block><i class="xp-star" data-xp="star" aria-hidden="true"></i><span data-xp="chars">Credits</span></p>
+        <div class="xp-body xp-credits">
+            <div class="xp-cr" data-xp-block>
+                <h4 class="xp-cr__role xp-mono" data-xp="chars">Team</h4>
+                <span class="xp-cr__axis" aria-hidden="true"><i class="xp-star" data-xp="star"></i></span>
+                <ul class="xp-cr__names">
+                    <li class="xp-name"><span data-xp="lines">Kunal</span><small data-xp="lines">Document Manager</small></li>
+                    <li class="xp-name"><span data-xp="lines">Rachita</span><small data-xp="lines">Comments &amp; Logistics</small></li>
+                    <li class="xp-name"><span data-xp="lines">Dhruv</span><small data-xp="lines">Motions &amp; shared dashboard</small></li>
+                </ul>
+            </div>
+            <div class="xp-cr" data-xp-block>
+                <h4 class="xp-cr__role xp-mono" data-xp="chars">Mentored by</h4>
+                <span class="xp-cr__axis" aria-hidden="true"><i class="xp-star" data-xp="star"></i></span>
+                <ul class="xp-cr__names">
+                    <li class="xp-name"><span data-xp="lines">Manasi Ekkundi</span><small data-xp="lines">Standards Architect</small></li>
+                    <li class="xp-name"><span data-xp="lines">Karthik Srinivasa Gopalan</span><small data-xp="lines">Principal Standards Architect</small></li>
+                    <li class="xp-cr__org xp-mono" data-xp="lines">Samsung R&amp;D Institute India &ndash; Bangalore</li>
+                </ul>
             </div>
         </div>
+    </div>
 
-        <div class="pt-4 relative w-screen overflow-hidden -mx-[var(--ll-grid-margin)] px-[var(--ll-grid-margin)] lg:pt-[calc(120/16*1rem)]">
-            <div class="absolute left-0 right-0 top-0 h-[calc(1/16*1rem)] opacity-20 bg-current js-line"></div>
-
-            <div class="ll-block--logo-marquee js-marquee-container flex gap-x-14 pr-14 w-max" data-label="In good company">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/achmea.png" alt="achmea">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Cupra.png" alt="Cupra">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/BUMA.png" alt="BUMA">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Sony.png" alt="Sony">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Van-Doorne.png" alt="Van Doorne">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/DSM.png" alt="DSM">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Amsterdam.png" alt="Amsterdam">
-                <!-- Infinite loop duplicate items -->
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/achmea.png" alt="achmea">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Cupra.png" alt="Cupra">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/BUMA.png" alt="BUMA">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Sony.png" alt="Sony">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Van-Doorne.png" alt="Van Doorne">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/DSM.png" alt="DSM">
-                <img class="ll-part--img ll-logo-item aspect-[5/3] !w-[calc(150/16*1rem)] flex-shrink-0 flex items-center relative pointer-events-none select-none object-contain" src="/wp-content/uploads/2026/01/Amsterdam.png" alt="Amsterdam">
-            </div>
-        </div>
+    <div class="xp-block xp-grid">
+        <p class="xp-rail xp-mono" data-xp-block><i class="xp-star" data-xp="star" aria-hidden="true"></i><span data-xp="chars">Stack</span></p>
+        <ul class="xp-body xp-stack xp-mono" data-xp-block data-xp-start="top 90%">
+            <li data-xp="lines">FastAPI</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>ChromaDB</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>SQLite</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>PyMuPDF</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>scikit-learn</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>sentence-transformers</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>React/Vite</li>
+            <li data-xp="lines"><span class="xp-slash" aria-hidden="true">/</span>Docker</li>
+        </ul>
     </div>
 </section>
 
@@ -4090,6 +4177,7 @@
     <script>window.__pixelBugSkin = 'beetle';</script>
     <script src="/js/pixel-bug.js"></script>
     <script src="/js/skills-wheel.js"></script>
+    <script src="/js/experience.js"></script>
     
 
     <!-- =======================================================

@@ -137,7 +137,7 @@
         screen: ['same guy, smaller screen. i live in the gaps between the words.', 'keep it simple, stupid. i\'m the simple part.'],
         projects: ['the good work is down here. hover a row, i\'ll wait on the line.', 'zero bugs in any of these. except me, visiting.'],
         services: ['scroll me. i\'m a wheel now.', 'six arms, five stacks. i ride the spare one.'],
-        logos: ['people he\'s shipped with. none of them caught me.', 'big names. i\'ve crawled across all their screens.'],
+        experience: ['8,233 clauses sorted. i\'m still unsorted.', 'samsung r&d. i came in over the wi-fi.'],
         pet: ['tickles.', '*antennae intensify*', 'careful. i bite. in bytes.', 'you\'re not squashing me. i like you.'],
         caught: ['gotcha. not a feature.', 'reproduced it.', 'found you. marking as resolved.', 'faster than your QA team.', 'tag. you\'re the bug now.'],
         flip: ['i\'m fine. this is fine.', 'help. legs. air.', 'undefined is not a function.', 'works on my machine.',
@@ -537,7 +537,7 @@
         const SECTIONS = [
             ['projects', doc.getElementById('section-projects')],
             ['services', doc.querySelector('.ll-section--services')],
-            ['logos', doc.querySelector('.ll-section--logos')],
+            ['experience', doc.querySelector('.ll-section--experience')],
         ].filter((s) => s[1]);
         const seen = {}, told = {};
         let section = '', sectionSince = 0;
