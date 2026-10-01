@@ -506,8 +506,55 @@
         return cells;
     }
 
+    // At full size the asterisk is filled with the word EXPERTISE, small and many times over, clipped to its exact
+    // silhouette. Star-glyph units (the 24-unit box, centre at 0): each of the six arms runs from the centre out to TIP
+    // (the 9-unit arm plus its square cap) and is 2 * HALF thick. Neighbouring arms' bands overlap only inside r = 2 * HALF,
+    // where an arm's edge meets the next one's, so the centre is a hub of that radius (touching the six inner corners,
+    // inside the silhouette) and beyond it every arm is a band of its own, flat at the tip and round at the hub, with RING
+    // of air between. Rows run along each arm, an even number so the stage's rail (on the axis) runs between the middle
+    // two: as many as keep caps MIN_CAP px tall, 4 to MAX_ROWS (small stars keep 4, so every row still holds whole words). The hub is a medallion of level rows, up to HUB times the
+    // arms' size and never so big that a whole word won't sit in either centre row. `adv` is one word's advance and
+    // `capEm` the cap height, both in ems; a word repeats every word plus GAP ems.
+    const WORD = 'EXPERTISE';
+    const ARM_DIRS = [0, 60, 120, 180, 240, 300];
+    const FILL_GEO = { tip: 10.6, half: 1.6, ring: 0.38, fill: 0.7, gap: 0.42, minCap: 8.5, maxRows: 6, brick: 0.5, hub: 1.5 };
+    function starFill(S, adv, capEm, opt) {
+        const o = Object.assign({}, FILL_GEO, opt);
+        const band = 2 * o.half;
+        const n = Math.max(4, 2 * Math.floor(Math.min(o.maxRows, band * S / 24 * o.fill / o.minCap) / 2));
+        const pitch = band / n, cap = pitch * o.fill, fs = cap / capEm, P = (adv + o.gap) * fs;
+        const hubIn = band - o.ring / 2, armIn = band + o.ring / 2;
+        const rows = Array.from({ length: n }, (d, i) => ({ y: -o.half + pitch * (i + 0.5), off: (i * o.brick) % 1, rank: Math.abs(i - (n - 1) / 2) }));
+        // Arm-local, x out along the arm: a row's words cover [armIn - P, tip + P], so shifted anywhere in [0, P), and
+        // either way up about the band's midpoint, they still fill it from armIn to the tip
+        const from = armIn - P;
+        const words = Math.ceil((o.tip + P - from) / P) + 1;
+        const xa = Math.sqrt(armIn * armIn - o.half * o.half);
+        const clip = 'M' + o.tip + ' ' + -o.half + 'H' + xa + 'A' + armIn + ' ' + armIn + ' 0 0 1 ' + xa + ' ' + o.half + 'H' + o.tip + 'Z';
+        // The hub, in its own units (k times the arms'): rows either side of the axis, the middle two each one whole word
+        // centred, the rest bricked; a row stays while half its cap is inside the hub
+        const k = Math.min(o.hub, hubIn * 1.7 / (adv * fs));
+        const hp = pitch * k, hcap = cap * k, hubRows = [];
+        for (let j = 0; (j + 0.5) * hp < hubIn - hcap / 4; j++) {
+            [-1, 1].forEach((s) => {
+                const x0 = -adv * fs * k / 2 - P * k * (Math.ceil(hubIn / (P * k)) + 1) + P * k * ((j * o.brick) % 1);
+                hubRows.push({ y: s * (j + 0.5) * hp, x0, words: Math.ceil((hubIn - x0) / (P * k)) + 1 });
+            });
+        }
+        return {
+            n, pitch, cap, fs, P, hubIn, armIn, tip: o.tip, half: o.half, mid: (armIn + o.tip) / 2, base: cap / 2, rows, from, words, clip,
+            hub: { k, fs: fs * k, P: P * k, base: hcap / 2, rows: hubRows },
+        };
+    }
+
+    // Whether an arm's rows, reading out along `deg` on screen, are turned end for end to stay readable
+    const wordFlip = (deg) => {
+        const d = ((deg % 360) + 360) % 360;
+        return d > 90 && d <= 270 ? 1 : 0;
+    };
+
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, navSpan, navHide, PORTRAIT };
+        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, navSpan, navHide, PORTRAIT, starFill, wordFlip, ARM_DIRS };
         return;
     }
 
@@ -520,6 +567,8 @@
     const scroller = doc.querySelector('.js-scroller');
     const stage = track.querySelector('.sk__stage');
     const star = track.querySelector('.sk-star');
+    const solid = star && star.querySelector('.sk-star__solid');
+    const wordSvg = solid && star.querySelector('.sk-star__word');
     const railSegs = [...track.querySelectorAll('.sk-rail__seg')];
     const container = track.parentElement;
     const cats = [...track.querySelectorAll('.sk-cat')];
@@ -778,6 +827,7 @@
         track.style.setProperty('--sk-w', W + 'px');
         S = Math.round(Math.min(W, H) * (W < 650 ? 0.7 : 0.58));
         track.style.setProperty('--sk-S', S + 'px');
+        buildFill();
         gapPx = Math.max(14, Math.min(26, W * 0.014));
 
         // Row 16's ::before: a 0.8em box flush left in the index cell, vertically centred. Under 650px the index is
@@ -872,6 +922,119 @@
         srcS = size / S;
     }
 
+    // ---------- the asterisk filled with EXPERTISE
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const WK = 100;                   // svg units per glyph unit
+    const FILL_FONT = { family: "'Brier', Georgia, serif", weight: '700', check: '700 100px Brier' };
+    const FADE_FROM = 0.62;           // of the flight's scale-up: the solid glyph hands over to the words from here to full size
+    const DRIFT = 0.22;               // glyph units / s the rows run out along their arms
+    const FLAP = 0.34, FLAP_LAG = 0.05;
+    let sf = null, fillKey = '', armRows = [], hubG = null, fillDrawn = '', fillFade = 0, drift = 0, driftAt = 0;
+    const flaps = ARM_DIRS.map(() => ({ f: 0, to: 0, t0: -1 }));
+    const smooth = (x) => {
+        const u = Math.max(0, Math.min(1, x));
+        return u * u * (3 - 2 * u);
+    };
+    const svgEl = (tag, attrs, parent) => {
+        const el = doc.createElementNS(SVG_NS, tag);
+        Object.keys(attrs).forEach((k) => el.setAttribute(k, attrs[k]));
+        if (parent) parent.appendChild(el);
+        return el;
+    };
+    const u = (v) => (v * WK).toFixed(2);
+
+    // One row of words: a <text> whose words are placed one by one, so the repeat is exact and the drift seamless
+    function rowText(parent, x0, words, P, base) {
+        const t = svgEl('text', { y: u(base) }, parent);
+        for (let j = 0; j < words; j++) {
+            const s = svgEl('tspan', { x: u(x0 + j * P) }, t);
+            s.textContent = WORD;
+        }
+        return t;
+    }
+
+    // Rebuilt when the star's size changes the row count or font size, and once the font has loaded
+    function buildFill() {
+        if (!wordSvg || !S) return;
+        const loaded = !doc.fonts || doc.fonts.check(FILL_FONT.check);
+        const c = doc.createElement('canvas').getContext('2d');
+        if (!c) return;
+        c.font = FILL_FONT.weight + ' 1000px ' + FILL_FONT.family;
+        const capEm = c.measureText('H').actualBoundingBoxAscent / 1000 || 0.7;
+        const f = starFill(S, c.measureText(WORD).width / 1000, capEm);
+        const key = [loaded, f.n, f.fs.toFixed(4), f.P.toFixed(4)].join('|');
+        if (key === fillKey) return;
+        fillKey = key;
+        sf = f;
+        wordSvg.textContent = '';
+        wordSvg.setAttribute('font-family', FILL_FONT.family);
+        wordSvg.setAttribute('font-weight', FILL_FONT.weight);
+        wordSvg.setAttribute('font-size', u(f.fs));
+        const defs = svgEl('defs', {}, wordSvg);
+        svgEl('path', { d: f.clip, transform: 'scale(' + WK + ')' }, svgEl('clipPath', { id: 'skArmClip' }, defs));
+        svgEl('circle', { r: u(f.hubIn) }, svgEl('clipPath', { id: 'skHubClip' }, defs));
+        armRows = ARM_DIRS.map((d) => {
+            const g = svgEl('g', { transform: 'rotate(' + d + ')', 'clip-path': 'url(#skArmClip)' }, wordSvg);
+            return f.rows.map((r) => ({ el: rowText(svgEl('g', {}, g), f.from, f.words, f.P, f.base).parentNode, r }));
+        });
+        hubG = svgEl('g', { 'font-size': u(f.hub.fs) }, svgEl('g', { 'clip-path': 'url(#skHubClip)' }, wordSvg));
+        f.hub.rows.forEach((r) => rowText(svgEl('g', { transform: 'translate(0 ' + u(r.y) + ')' }, hubG), r.x0, r.words, f.hub.P, f.hub.base));
+        fillDrawn = '';
+    }
+
+    // T is the glyph's rotation on screen (deg), e its eased flight. The hub counter-rotates, so its rows stay level
+    // while the arms turn round it; an arm that turns past vertical flaps its rows end for end, axis row first.
+    function renderFill(T, e) {
+        if (!sf) return;
+        const F = reduced ? 1 : smooth((e - FADE_FROM) / (1 - FADE_FROM));
+        const t = now() / 1000;
+        if (!reduced && F > 0 && visible) drift = (drift + DRIFT * Math.min(0.05, Math.max(0, t - driftAt))) % sf.P;
+        driftAt = t;
+        const rest = Math.round(T / 60) * 60;
+        const snap = reduced || F < 0.01 || fillFade < 0.01;
+        let busy = false;
+        const maxRank = (sf.n - 1) / 2;
+        flaps.forEach((fl, a) => {
+            const want = wordFlip(ARM_DIRS[a] + rest);
+            if (snap) {
+                fl.f = fl.to = want;
+                fl.t0 = -1;
+                return;
+            }
+            if (fl.t0 >= 0 && t - fl.t0 >= FLAP + FLAP_LAG * maxRank) {
+                fl.f = fl.to;
+                fl.t0 = -1;
+            }
+            if (fl.t0 < 0 && want !== fl.f) {
+                fl.to = want;
+                fl.t0 = t;
+            }
+            if (fl.t0 >= 0) busy = true;
+        });
+        if (F !== fillFade || !fillDrawn) {
+            solid.style.opacity = (1 - F).toFixed(4);
+            wordSvg.style.opacity = F.toFixed(4);
+        }
+        fillFade = F;
+        if (F <= 0) return;
+        const key = T.toFixed(3) + '|' + drift.toFixed(4) + '|' + F.toFixed(4);
+        if (!busy && key === fillDrawn) return;
+        fillDrawn = busy ? '' : key;
+        hubG.setAttribute('transform', 'rotate(' + (-T).toFixed(3) + ')');
+        const m = u(sf.mid);
+        armRows.forEach((rows, a) => {
+            const fl = flaps[a];
+            rows.forEach((row) => {
+                const p = fl.t0 < 0 ? 0 : Math.max(0, Math.min(1, (t - fl.t0 - FLAP_LAG * row.r.rank) / FLAP));
+                const flip = p < 0.5 ? fl.f : fl.to;
+                const ph = (drift + row.r.off * sf.P) % sf.P;
+                row.el.setAttribute('transform', 'translate(' + m + ' ' + u(row.r.y) + ') rotate(' + 180 * flip + ') scale(1 ' +
+                    Math.abs(Math.cos(Math.PI * p)).toFixed(4) + ') translate(' + u((flip ? -ph : ph) - sf.mid) + ' 0)');
+            });
+        });
+    }
+
     // ---------- drawing
 
     const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
@@ -884,7 +1047,9 @@
             detached = on;
             if (srcIndex) srcIndex.classList.toggle('sk-detached', on);
         }
-        star.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) rotate(' + (60 * e + st.angle * 180 / Math.PI) + 'deg) scale(' + (srcS + (1 - srcS) * e) + ')';
+        const T = 60 * e + st.angle * 180 / Math.PI;
+        star.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) rotate(' + T + 'deg) scale(' + (srcS + (1 - srcS) * e) + ')';
+        renderFill(T, e);
     }
 
     // Three 100%-wide segments, each placed and cut to length by transform alone; progress fills the visible length

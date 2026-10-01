@@ -565,4 +565,55 @@ test('nav state has 40px of hysteresis at both edges, the same scrolling either 
     assert.deepStrictEqual(walk([1021, 4990, 5010, 5019, 5021, 5000, 4981, 4979]), [true, true, true, true, false, false, false, true]);
 });
 
+const { starFill, wordFlip, ARM_DIRS } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+// Brier 700, measured in headless Chrome: EXPERTISE's advance and the cap height, in ems
+const ADV = 5.033, CAP = 0.703;
+
+test('EXPERTISE fill: an even 4-6 rows per arm, packed edge to edge across the 3.2-unit band, none on the axis', () => {
+    [[273, 4], [445, 4], [626, 6], [835, 6], [1200, 6]].forEach(([S, n]) => {
+        const f = starFill(S, ADV, CAP);
+        assert.strictEqual(f.n, n, 'S ' + S);
+        assert.ok(Math.abs(f.rows[0].y - f.pitch / 2 + 1.6) < 1e-9 && Math.abs(f.rows[n - 1].y + f.pitch / 2 - 1.6) < 1e-9);
+        assert.ok(f.rows.every((r) => Math.abs(r.y) >= f.pitch / 2 - 1e-9), 'a row rides the rail');
+        assert.ok(f.cap * S / 24 >= 6, 'caps ' + (f.cap * S / 24).toFixed(1) + 'px');
+    });
+});
+
+test('EXPERTISE fill: each row covers its arm from the hub ring to the tip at any drift, either way up', () => {
+    [273, 445, 626, 835].forEach((S) => {
+        const f = starFill(S, ADV, CAP);
+        const x0 = f.from, x1 = f.from + (f.words - 1) * f.P + ADV * f.fs;
+        for (let ph = 0; ph < f.P; ph += f.P / 37) {
+            assert.ok(x0 + ph <= f.armIn && x1 + ph >= f.tip, 'upright at ' + ph);
+            assert.ok(2 * f.mid - x1 + ph <= f.armIn && 2 * f.mid - x0 + ph >= f.tip, 'flipped at ' + ph);
+        }
+    });
+});
+
+test('EXPERTISE fill: the arm clip is the band beyond the hub, square at the tip; the hub sits inside the silhouette', () => {
+    const f = starFill(626, ADV, CAP);
+    const m = f.clip.match(/-?[\d.]+/g).map(Number);
+    assert.deepStrictEqual([m[0], m[1]], [10.6, -1.6]);
+    assert.ok(Math.abs(Math.hypot(m[2], 1.6) - f.armIn) < 1e-9, 'arc meets the band edge on the ring');
+    // the star's inner corners (where neighbouring arms' edges meet) are 3.2 from the centre: the hub stays inside them
+    assert.ok(f.hubIn < 3.2 && f.armIn > 3.2 && Math.abs(f.armIn - f.hubIn - 0.38) < 1e-9);
+    // its two centre rows each hold one whole word, centred
+    f.hub.rows.slice(0, 2).forEach((r) => {
+        const j = Math.round((-ADV * f.hub.fs / 2 - r.x0) / f.hub.P);
+        const l = r.x0 + j * f.hub.P;
+        assert.ok(Math.abs(l + ADV * f.hub.fs / 2) < 1e-9);
+        assert.ok(Math.hypot(l, Math.abs(r.y) + f.hub.base) < f.hubIn, 'centre word inside the hub');
+    });
+});
+
+test('EXPERTISE fill: an arm reads outward unless that would be upside down on screen, at every detent', () => {
+    for (let T = 0; T <= 360; T += 60) {
+        ARM_DIRS.forEach((d) => {
+            const read = ((d + T + 180 * wordFlip(d + T)) % 360 + 360) % 360;
+            assert.ok(read < 90 || read > 270, 'arm ' + d + ' at ' + T + ' reads at ' + read);
+        });
+    }
+    assert.deepStrictEqual(ARM_DIRS.map((d) => wordFlip(d + 120)), [1, 1, 1, 0, 0, 0]);
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));
