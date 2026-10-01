@@ -138,17 +138,17 @@ test('keys respect the lock', () => {
 
 // ---------- zone
 
-const A = 5000, B = 6620; // 1080px viewport, the intro + 5 categories: 5 detents 0.3 * 1080 apart
+const A = 5000, B = 6944; // 1080px viewport, the intro + 6 categories: 6 steps 0.3 * 1080 apart
 
 function zoneAt(y) {
-    const z = createZone(6);
+    const z = createZone(7);
     z.frame(y, A, B, false, false);
     return z;
 }
 
 test('offsets are evenly spaced detents from A to B', () => {
     const z = zoneAt(0);
-    assert.deepStrictEqual([0, 1, 2, 3, 4, 5].map(z.offset), [5000, 5324, 5648, 5972, 6296, 6620]);
+    assert.deepStrictEqual([0, 1, 2, 3, 4, 5, 6].map(z.offset), [5000, 5324, 5648, 5972, 6296, 6620, 6944]);
 });
 
 test('crossing A from above engages detent 0, even with overshoot', () => {
@@ -159,27 +159,27 @@ test('crossing A from above engages detent 0, even with overshoot', () => {
 });
 
 test('crossing B from below engages the last detent', () => {
-    const z = zoneAt(6800);
-    const act = z.frame(6580, A, B, false, false);
-    assert.deepStrictEqual(act, { type: 'engage', step: 5, y: 6620 });
+    const z = zoneAt(7100);
+    const act = z.frame(6900, A, B, false, false);
+    assert.deepStrictEqual(act, { type: 'engage', step: 6, y: 6944 });
 });
 
 test('loading inside the zone engages the nearest detent', () => {
-    const z = createZone(6);
+    const z = createZone(7);
     const act = z.frame(5700, A, B, false, false);
     assert.deepStrictEqual(act, { type: 'engage', step: 2, y: 5648 });
 });
 
-test('steps walk the intro (0) and the categories 1..5, then down releases at B', () => {
+test('steps walk the intro (0) and the categories 1..6 (Experience last), then down releases at B', () => {
     const z = zoneAt(4900);
     z.frame(5000, A, B, false, false);
     const seen = [];
-    for (let i = 0; i < 5; i++) seen.push(z.input(1));
-    assert.deepStrictEqual(seen.map((a) => a.step), [1, 2, 3, 4, 5]);
+    for (let i = 0; i < 6; i++) seen.push(z.input(1));
+    assert.deepStrictEqual(seen.map((a) => a.step), [1, 2, 3, 4, 5, 6]);
     const rel = z.input(1);
     assert.deepStrictEqual(rel, { type: 'release', dir: 1, y: B });
     assert.strictEqual(z.pinned, false);
-    assert.strictEqual(z.desired(B), 5, 'the last category stays up while the stage scrolls away');
+    assert.strictEqual(z.desired(B), 6, 'Experience stays up while the stage scrolls away');
 });
 
 test('up at the intro releases at A and hides the text', () => {
@@ -189,16 +189,16 @@ test('up at the intro releases at A and hides the text', () => {
     assert.strictEqual(z.desired(A), -1);
 });
 
-test('after releasing down, the page scrolls on without re-engaging; coming back re-engages at 5', () => {
-    const z = zoneAt(6620);
+test('after releasing down, the page scrolls on without re-engaging; coming back re-engages at 6', () => {
+    const z = zoneAt(6944);
     z.pinned = true;
-    z.step = 5;
+    z.step = 6;
     z.input(1);
-    assert.strictEqual(z.frame(6620, A, B, false, false), null);
-    assert.strictEqual(z.frame(6700, A, B, false, false), null);
-    assert.strictEqual(z.frame(7200, A, B, false, false), null);
-    const back = z.frame(6600, A, B, false, false);
-    assert.deepStrictEqual(back, { type: 'engage', step: 5, y: 6620 });
+    assert.strictEqual(z.frame(6944, A, B, false, false), null);
+    assert.strictEqual(z.frame(7000, A, B, false, false), null);
+    assert.strictEqual(z.frame(7500, A, B, false, false), null);
+    const back = z.frame(6920, A, B, false, false);
+    assert.deepStrictEqual(back, { type: 'engage', step: 6, y: 6944 });
 });
 
 test('after releasing up, scrolling away does not re-engage; reversing does', () => {
@@ -213,7 +213,7 @@ test('after releasing up, scrolling away does not re-engage; reversing does', ()
 test('a jump clean over the zone does not engage', () => {
     const z = zoneAt(4000);
     assert.strictEqual(z.frame(8000, A, B, false, false), null);
-    assert.strictEqual(z.desired(8000), 5);
+    assert.strictEqual(z.desired(8000), 6);
 });
 
 test('external movement while pinned releases, and stays free until the page leaves the zone', () => {
@@ -265,13 +265,14 @@ test('input is ignored when free or when the classifier said no', () => {
 
 const { planRoute, ribbonCells, eyeSpots, legS, PORTRAIT } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
-// Slide 04 measured on the page with the stage stuck (scratch/eyes/probe.js): `words` is the union of every category's
-// counter and title, `list` of every skills list, starX the asterisk's centre. Phones stack it all in one column.
+// Slide 04 measured on the page with the stage stuck (scratch/sixth-arm/probe.js): `words` is the union of every
+// category's counter and title, `list` of every right column (the Experience one is the tallest), starX the asterisk's
+// centre. Phones stack it all in one column.
 const LAYOUTS = {
-    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 412, r: 1866, b: 673 }, starX: 68 },
-    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 286, r: 1324, b: 487 }, starX: 48 },
-    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 178, r: 992, b: 341 }, starX: 36 },
-    '390x844': { w: 390, h: 844, words: { l: 172, t: 305, r: 370, b: 386 }, list: { l: 173, t: 373, r: 340, b: 520 }, starX: 30 },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 367, r: 1866, b: 718 }, starX: 68 },
+    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 245, r: 1324, b: 527 }, starX: 48 },
+    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 128, r: 992, b: 391 }, starX: 36 },
+    '390x844': { w: 390, h: 844, words: { l: 172, t: 289, r: 370, b: 433 }, list: { l: 173, t: 354, r: 343, b: 534 }, starX: 30 },
 };
 const DESKTOP = ['1920x1080', '1366x768', '1024x515'];
 const INSET = 36;
@@ -353,18 +354,31 @@ test('one leg per detent: loop 1 done at step 2, loop 2 at step 3, touchdown at 
     });
 });
 
-test('six detents on the flight: the intro rests on the take-off with nothing drawn, the categories fly one leg each', () => {
+test('seven detents on the flight: the intro rests on the take-off with nothing drawn, the categories fly one leg each', () => {
     Object.keys(LAYOUTS).forEach((key) => {
         const { plan } = planFor(key);
         const st = plan.steps, m = plan.marks;
-        assert.strictEqual(st.length, 6);
+        assert.strictEqual(st.length, 7);
         assert.strictEqual(st[0], 0, key + ' intro at the take-off: empty trail');
         assert.ok(st[1] > 20 && st[1] <= plan.calm[0], key + ' Frontend climbs past the asterisk to loop 1 entry, ' + st[1].toFixed(0));
         assert.ok(st[1] < m[1] - 20, key + ' loop 1 still to fly after Frontend');
-        assert.deepStrictEqual(st.slice(2), m.slice(1), key + ' Backend closes loop 1, AI / ML loop 2, Languages touches down, Tools stops');
-        // Detent k of the six sits at t = k / 5
-        st.forEach((s, k) => assert.ok(Math.abs(legS(st, k / 5) - s) < 1e-9, key + ' legS step ' + k));
-        assert.ok(legS(st, 0.1) > 0 && legS(st, 0.1) < st[1], key + ' halfway to Frontend is on the climb');
+        assert.deepStrictEqual(st.slice(2, 4), m.slice(1, 3), key + ' Backend closes loop 1, AI / ML loop 2');
+        assert.ok(st[4] > m[2] + 20 && st[4] < m[3] - 20, key + ' Languages ends the dive short of touchdown');
+        assert.deepStrictEqual(st.slice(5), m.slice(3), key + ' Tools touches down, Experience rolls out to the stop');
+        for (let k = 1; k < 7; k++) assert.ok(st[k] - st[k - 1] > 40, key + ' leg ' + k + ' is ' + (st[k] - st[k - 1]).toFixed(0) + 'px');
+        // Detent k of the seven sits at t = k / 6
+        st.forEach((s, k) => assert.ok(Math.abs(legS(st, k / 6) - s) < 1e-9, key + ' legS step ' + k));
+        assert.ok(legS(st, 1 / 12) > 0 && legS(st, 1 / 12) < st[1], key + ' halfway to Frontend is on the climb');
+    });
+});
+
+test('Languages rests at the foot of the dive: below the words, beside the skills (desktop), heading down', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { L, plan } = planFor(key);
+        const p = plan.route.atS(plan.steps[4]);
+        assert.ok(p.y > plan.box.b, key + ' at ' + p.x.toFixed(0) + ',' + p.y.toFixed(0) + ' below the words');
+        assert.ok(Math.sin(p.a) > 0.5, key + ' still descending, heading ' + p.a.toFixed(2));
+        if (DESKTOP.includes(key)) assert.ok(p.x > L.words.r && p.x < L.list.l, key + ' between the columns at x ' + p.x.toFixed(0));
     });
 });
 
@@ -553,9 +567,10 @@ test('the eye loops ring the sockets: centreline at 62 video px, so a narrowed b
 const { navSpan, navHide } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
 test('nav lifts as slide 04 starts entering and returns once the portrait wipe has erased the eyes', () => {
-    // 1920x1080 as measured live: section 4577..7360, detents 4717..6013, eye loops' tops at 86.7
+    // 1920x1080 as measured live (scratch/sixth-arm/wheel.js): section 4577..8008, detents 4717..6661 (intro + six
+    // categories), eye loops' tops at 86.7
     const eyeTop = Math.min(...eyeSpots(1920, 1080).eyes.map((e) => e.y)) - eyeSpots(1920, 1080).r;
-    const span = navSpan({ sTop: 4577, sBot: 7360, A: 4717, B: 6013, H: 1080, eyeTop });
+    const span = navSpan({ sTop: 4577, sBot: 8008, A: 4717, B: 6661, H: 1080, eyeTop });
     assert.strictEqual(span[0], 4577 - 1080 * 0.85);
     // the bundle's shader: the loops' top row (GL height v) is gone at u_bottomProgress 0.8 (0.7 v + 0.225) + 0.2,
     // with the wipe's noise at its worst; no row of the loops survives past it
@@ -566,8 +581,8 @@ test('nav lifts as slide 04 starts entering and returns once the portrait wipe h
             assert.ok(bp - 0.2 >= row * 0.8 - 1e-9, 'row ' + y + ' still showing at bp ' + bp.toFixed(3));
         }
     }
-    assert.ok(span[1] > 6013 && span[1] < 7360, 'end ' + span[1]);
-    console.log('     section bottom ' + (7360 - span[1]).toFixed(1) + 'px from the viewport top when the nav returns');
+    assert.ok(span[1] > 6661 && span[1] < 8008, 'end ' + span[1]);
+    console.log('     section bottom ' + (8008 - span[1]).toFixed(1) + 'px from the viewport top when the nav returns');
     // a stage that engages before the section's top would reach the line still starts it
     assert.strictEqual(navSpan({ sTop: 1000, sBot: 3000, A: 50, B: 900, H: 800, eyeTop: 10 })[0], 50);
     console.log('     1920x1080: hidden from scroll ' + span[0] + ' to ' + span[1].toFixed(0) + ' (eye loops top ' + eyeTop.toFixed(1) + ')');

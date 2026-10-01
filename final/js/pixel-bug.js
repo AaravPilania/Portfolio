@@ -854,6 +854,7 @@
                     act = null;
                 }
                 const p = leash.target(now);
+                leash.avoid = p && p.avoid;
                 speed = 0;
                 if (p) {
                     const px = clampX(p.x), py = clampY(p.y), ox = x, oy = y;
@@ -899,6 +900,7 @@
                 state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
             } else if (leash && reduced) {
                 const p = leash.target(now);
+                leash.avoid = p && p.avoid;
                 if (p) {
                     x = clampX(p.x);
                     y = clampY(p.y);
@@ -1173,7 +1175,10 @@
                 const cx = tx + HALF, cy = ty + HALF;
                 const bx = Math.max(12, Math.min(vw - say.bw - 12, cx - 30));
                 let by = cy - 38 - say.bh;
-                const below = by < 12;
+                // A leashing scene's `avoid` box is text the bubble mustn't cover; it drops below when there's room
+                const keepOff = leash && leash.avoid;
+                const onText = !!keepOff && bx < keepOff.r + 12 && bx + say.bw > keepOff.l - 12 && by < keepOff.b + 12 && by + say.bh > keepOff.t - 12;
+                const below = by < 12 || (onText && cy + 38 + say.bh <= vh - 4);
                 if (below) by = cy + 38;
                 bubble.classList.toggle('is-below', below);
                 bubble.style.transform = 'translate3d(' + bx + 'px,' + by + 'px,0)';
