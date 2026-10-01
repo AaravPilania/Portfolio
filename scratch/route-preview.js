@@ -1,18 +1,20 @@
-// node scratch/route-preview.js [screenshot.png] -> scratch/route-<size>.png
-// The ribbon as the page draws it (cells under the round-capped stroke, the seeded broken-screen fill, a red/cyan
-// ghost either side), the clearance halo round the words, and GLITCH's two endpoints (green start, red end). The
-// 1024x515 preview is laid over the screenshot the line was drawn on, if given, with the drawn line as a thin red trace.
+// node scratch/route-preview.js -> scratch/route-<size>.png
+// The paper plane's flight as the page draws it (cells under the round-capped stroke, the seeded broken-screen fill, a
+// red/cyan ghost either side), the clearance halo round the words, GLITCH's stops at each detent (green take-off, white
+// in between, red landing) and the portrait's eyes (green crosshairs). Sizes with a marker-free page screenshot in
+// scratch/eyes/bg-<w>.png are laid over it.
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { planRoute, ribbonCells, DRAWN } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+const { planRoute, ribbonCells, eyeSpots } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
+// Measured on the page with slide 04 stuck (scratch/eyes/probe.js): every category's words and skills, the star's centre
 const LAYOUTS = {
-    '1024x515': { w: 1024, h: 515, words: { l: 297, t: 173, r: 746, b: 318 }, list: { l: 811, t: 178, r: 991, b: 336 } },
-    '1920x1080': { w: 1920, h: 1080, words: { l: 557, t: 383, r: 1380, b: 652 }, list: { l: 1574, t: 413, r: 1864, b: 667 } },
-    '1366x768': { w: 1366, h: 768, words: { l: 396, t: 265, r: 1000, b: 470 }, list: { l: 1101, t: 287, r: 1322, b: 481 } },
-    '390x844': { w: 390, h: 844, words: { l: 162, t: 307, r: 372, b: 383 }, list: { l: 162, t: 399, r: 330, b: 537 } },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 412, r: 1866, b: 673 }, starX: 68 },
+    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 286, r: 1324, b: 487 }, starX: 48 },
+    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 178, r: 992, b: 341 }, starX: 36 },
+    '390x844': { w: 390, h: 844, words: { l: 172, t: 305, r: 370, b: 386 }, list: { l: 173, t: 373, r: 340, b: 520 }, starX: 30 },
 };
 
 const crcT = [];
@@ -65,13 +67,15 @@ function decode(buf) {
 const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
 const FILL = ['#3b0710', '', '#ff1fd0', '#18f0ff', '#22ff5a', '#ff1e2d', '#d90018', '#fff6f0', '#ff4a3d', '#99000f', '#2a4bff'].map((c) => c && hex(c));
 const SUB = [[255, 0, 0], [0, 255, 0], [0, 0, 255]];
-const shot = process.argv[2] && fs.existsSync(process.argv[2]) ? decode(fs.readFileSync(process.argv[2])) : null;
-
 Object.entries(LAYOUTS).forEach(([key, L]) => {
     const { w, h } = L;
+    const bg = path.join(__dirname, 'eyes', 'bg-' + w + '.png');
+    const shot = fs.existsSync(bg) ? decode(fs.readFileSync(bg)) : null;
     const ribbonW = Math.max(12, w * 0.018), half = ribbonW / 2, cell = Math.max(3, ribbonW / 7);
     const clear = half + Math.max(8, w * 0.008);
-    const plan = planRoute({ w, h, words: L.words, list: L.list, clear, inset: 36 });
+    const S = Math.round(Math.min(w, h) * (w < 650 ? 0.7 : 0.58));
+    const spot = eyeSpots(w, h);
+    const plan = planRoute({ w, h, words: L.words, list: L.list, clear, half, inset: 36, star: { x: L.starX, y: h / 2, r: S * 0.375 }, eyes: spot.eyes, eyeR: spot.r });
     const cells = ribbonCells(plan.route, { cell, half, seed: 0x5ced04 });
     const px = Buffer.alloc(w * h * 3);
     const set = (x, y, c, a) => {
@@ -91,11 +95,6 @@ Object.entries(LAYOUTS).forEach(([key, L]) => {
         set(x, y, d === 0 ? [255, 237, 41] : d < clear ? [40, 26, 34] : [10, 10, 12]);
     }
     if (useShot) {
-        // The drawn line, thin, so the ribbon can be compared against it
-        for (let i = 0; i < DRAWN.length - 1; i++) for (let k = 0; k <= 40; k++) {
-            const t = k / 40;
-            set((DRAWN[i][0] + (DRAWN[i + 1][0] - DRAWN[i][0]) * t) * w, (DRAWN[i][1] + (DRAWN[i + 1][1] - DRAWN[i][1]) * t) * h, [255, 255, 255], 0.5);
-        }
         [L.words, L.list].forEach((r) => {
             for (let x = r.l - clear; x <= r.r + clear; x++) { set(x, r.t - clear, [120, 120, 255]); set(x, r.b + clear, [120, 120, 255]); }
             for (let y = r.t - clear; y <= r.b + clear; y++) { set(r.l - clear, y, [120, 120, 255]); set(r.r + clear, y, [120, 120, 255]); }
@@ -125,13 +124,18 @@ Object.entries(LAYOUTS).forEach(([key, L]) => {
             set(x, y, c.k === 1 ? SUB[Math.min(2, Math.floor((x - c.gx * cell) / cell * 3))] : FILL[c.k]);
         }
     });
-    [[plan.s0, [0, 255, 0]], [plan.s1, [255, 40, 40]]].forEach(([s, col]) => {
+    plan.marks.forEach((s, i) => {
         const p = plan.route.atS(s);
+        const col = i === 0 ? [0, 255, 0] : i === plan.marks.length - 1 ? [255, 40, 40] : [255, 255, 255];
         for (let a = -7; a <= 7; a++) for (let b = -7; b <= 7; b++) {
             const r = Math.hypot(a, b);
             if (r <= 7) set(p.x + a, p.y + b, r > 5 ? [0, 0, 0] : col);
         }
     });
+    spot.eyes.forEach((e) => {
+        for (let a = -10; a <= 10; a++) { set(e.x + a, e.y, [0, 255, 90]); set(e.x, e.y + a, [0, 255, 90]); }
+    });
     fs.writeFileSync(path.join(__dirname, 'route-' + key + '.png'), encode(w, h, px));
-    console.log(key, 'ok', plan.ok, 'ribbon edge', (plan.minClear - half).toFixed(0) + 'px from words', 'moved', plan.moved.toFixed(0) + 'px', plan.stacked ? 'stacked' : '', useShot ? '(over screenshot)' : '');
+    console.log(key, 'ok', plan.ok, 'ribbon edge', (plan.minClear - half).toFixed(0) + 'px from words', 'loops', plan.onEyes ? 'on the eyes' : 'above the words',
+        plan.lensOk ? 'clear' : 'over the words (' + (plan.lensClear - half).toFixed(0) + 'px)', plan.stacked ? 'stacked' : '', useShot ? '(over screenshot)' : '');
 });

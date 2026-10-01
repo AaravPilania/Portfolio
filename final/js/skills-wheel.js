@@ -1,10 +1,10 @@
 // Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, then turns like a wheel.
 // While the stage is stuck, one gesture (wheel flick, trackpad swipe, touch swipe, key) is one 60° detent and one
 // category swap; the first detent up and the last detent down hand the page back to normal scrolling.
-// GLITCH (pixel-bug.js) is leashed to a hand-drawn route (top edge -> down the left -> under the words -> up past them
-// -> out the right edge), nudged only where it would touch any category's text, while the stage is stuck: it flies in to
-// the route's start, travels a quarter of it per detent and lays a solid ribbon of broken screen behind it until reverse
-// steps eat it back; then it's handed back to wandering.
+// GLITCH (pixel-bug.js) is leashed to a paper plane's flight while the stage is stuck: take-off past the asterisk, a
+// loop round each of the backdrop portrait's eyes (a pair of goggles), a dive between the words and the skills, and a
+// landing. It flies in to the take-off, flies one leg per detent and lays a solid ribbon of broken screen behind it
+// until reverse steps eat it back; then it's handed back to wandering.
 (function (root) {
     'use strict';
 
@@ -179,19 +179,21 @@
     const rectDist = (x, y, r) => Math.hypot(Math.max(r.l - x, 0, x - r.r), Math.max(r.t - y, 0, y - r.b));
     const unite = (a, b) => (!a ? b : !b ? a : { l: Math.min(a.l, b.l), t: Math.min(a.t, b.t), r: Math.max(a.r, b.r), b: Math.max(a.b, b.b) });
 
-    // The curve through stage-pixel control points, sampled densely and parameterised by arc length
+    // The curve through stage-pixel control points, sampled densely and parameterised by arc length. Each span gets
+    // samples about every 3px (dense runs like the loops need few); knots[i] is the arc length at control point i.
     function createRoute(P) {
-        const SEG = 48;
-        const xs = [], ys = [], cum = [];
+        const xs = [], ys = [], cum = [], knots = [0];
         let L = 0;
         for (let i = 0; i < P.length - 1; i++) {
-            for (let j = i ? 1 : 0; j <= SEG; j++) {
-                const q = crPoint(P, i, j / SEG);
+            const seg = Math.max(2, Math.min(48, Math.ceil(Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]) / 3)));
+            for (let j = i ? 1 : 0; j <= seg; j++) {
+                const q = crPoint(P, i, j / seg);
                 if (xs.length) L += Math.hypot(q[0] - xs[xs.length - 1], q[1] - ys[ys.length - 1]);
                 xs.push(q[0]);
                 ys.push(q[1]);
                 cum.push(L);
             }
+            knots.push(L);
         }
         const n = xs.length;
         const pos = (s) => {
@@ -210,119 +212,195 @@
             const p = pos(s), q0 = pos(s - 6), q1 = pos(s + 6);
             return { x: p[0], y: p[1], a: Math.atan2(q1[1] - q0[1], q1[0] - q0[0]) };
         };
-        return { L, atS, at: (t) => atS(t * L), xs, ys, cum };
+        return { L, atS, at: (t) => atS(t * L), xs, ys, cum, knots };
     }
 
-    // The route GLITCH flies and its ribbon follows: the line the designer drew by hand over a 1024x515 view of this slide,
-    // as viewport fractions. It enters at the top edge right of the asterisk, drops through the gap before the title,
-    // swings round under it, rises past its right end, crests between the title and the skills, and waves out over the
-    // skills to the right edge. DRAWN_BOTTOM is the swing's lowest point, DRAWN_PEAK the crest.
-    const DRAWN = [[121, 0], [150, 55], [190, 110], [212, 190], [211, 290], [212, 385], [245, 435], [300, 465], [352, 478], [405, 450],
-        [445, 400], [470, 330], [490, 268], [525, 185], [575, 145], [620, 137], [690, 155], [760, 183], [850, 167], [950, 135], [1024, 119]]
-        .map((p) => [p[0] / 1024, p[1] / 515]);
-    const DRAWN_BOTTOM = 8, DRAWN_PEAK = 15;
+    // The backdrop behind this slide is a still portrait (videos/services-bg.mp4, 1440x1920). Its eyes in video pixels,
+    // and the radius each loop's round is flown at: the eye socket plus a little, so the ribbon rims it.
+    const PORTRAIT = { w: 1440, h: 1920, eyes: [[655, 682], [816, 694]], lens: 58 };
 
-    const inside = (p, r) => !!r && p[0] > r.l && p[0] < r.r && p[1] > r.t && p[1] < r.b;
-    const grow = (r, m) => r && { l: r.l - m, t: r.t - m, r: r.r + m, b: r.b + m };
+    // Where the backdrop draws a video pixel: its grid shader covers the viewport (u_size = innerWidth x innerHeight)
+    // with the video centred, at u_scale 1 once its intro zoom has settled
+    function eyeSpots(vw, vh) {
+        const k = Math.max(vw / PORTRAIT.w, vh / PORTRAIT.h);
+        const ox = (vw - PORTRAIT.w * k) / 2, oy = (vh - PORTRAIT.h * k) / 2;
+        return { eyes: PORTRAIT.eyes.map((e) => ({ x: ox + e[0] * k, y: oy + e[1] * k })), r: PORTRAIT.lens * k, k };
+    }
 
-    // The drawing mapped onto the stage, bent only where it would run over the words. `words` is the union of every
-    // category's counter and title, `list` of every skills list (all five, so the longest title and list count), and
-    // `clear` the ribbon's half-width plus a margin. Each control point that lands in a grown box is moved out along the
-    // way the drawing already passes it: the descent to the left, the swing under the title down, the rise to the right
-    // (into the gap before the skills; to the left when the words are stacked in one column on narrow screens), the crest
-    // and the wave over the skills up. The crest and wave are then re-spread so the line keeps flowing left to right, and
-    // the curve is checked densely; any segment still too close pushes its two control points further the same way.
+    // A paper plane's inside loop, design 10's prolate cycloid: x = drift * (q - PI) + sin q, y = cos q, out of level
+    // flight to the right, up, over the top and back down. Stretched across so its closed part (from the top down to
+    // where the path crosses itself) is round; cy and rad place that circle against the cycloid's axis, per unit radius.
+    const LOOP = (() => {
+        const drift = 0.2, f = (q) => drift * (q - Math.PI) + Math.sin(q);
+        let lo = 0.01, hi = Math.PI - 0.01;
+        for (let i = 0; i < 60; i++) {
+            const mid = (lo + hi) / 2;
+            if (f(mid) < 0) lo = mid;
+            else hi = mid;
+        }
+        const cross = Math.cos(lo), rad = (cross + 1) / 2;
+        return { drift, cy: (cross - 1) / 2, rad, wide: rad / f(Math.acos(-drift)), n: 72 };
+    })();
+
+    // The loop whose round closes on a circle of radius rad about (cx, cy), entry to exit, both level at the bottom
+    function loopPts(cx, cy, rad) {
+        const R = rad / LOOP.rad, ly = cy - LOOP.cy * R, out = [];
+        for (let j = 0; j <= LOOP.n; j++) {
+            const q = j / LOOP.n * Math.PI * 2;
+            out.push([cx + LOOP.wide * R * (LOOP.drift * (q - Math.PI) + Math.sin(q)), ly + R * Math.cos(q)]);
+        }
+        return out;
+    }
+
+    // A stacked column's dive may run this close to the right edge: pixel-bug keeps GLITCH 24px inside the viewport
+    const DIVE_EDGE = 24;
+
+    // Unit vector from the nearest of rects out to (x, y); from inside, out through the nearest edge
+    function awayFrom(rects, x, y) {
+        let best = [0, -1], bd = Infinity;
+        rects.forEach((r) => {
+            const px = Math.max(r.l, Math.min(r.r, x)), py = Math.max(r.t, Math.min(r.b, y));
+            const d = Math.hypot(x - px, y - py);
+            if (d > 1e-6) {
+                if (d < bd) {
+                    bd = d;
+                    best = [(x - px) / d, (y - py) / d];
+                }
+                return;
+            }
+            const e = [[x - r.l, -1, 0], [r.r - x, 1, 0], [y - r.t, 0, -1], [r.b - y, 0, 1]].reduce((a, b) => (b[0] < a[0] ? b : a));
+            if (-1 < bd) {
+                bd = -1;
+                best = [e[1], e[2]];
+            }
+        });
+        return best;
+    }
+
+    // The flight on the stage, in stage pixels. `words` is the union of every category's counter and title, `list` of
+    // every skills list, `clear` the ribbon's half-width plus a margin, `half` the half-width alone, `star` the asterisk
+    // (centre, arm length) and `eyes` / `eyeR` the portrait's eyes and loop radius. One leg per detent: take-off past the
+    // asterisk into loop 1, the bridge and loop 2, the dive to touchdown, the roll-out. The loops stay on the eyes: one
+    // that touches the words is tried a little smaller, then nudged off them, and is left on the eye if neither clears.
+    // If an eye's loop would leave the stage, the pair is flown in the band above the words instead. The rest of the
+    // flight is bent, control point by control point, until it keeps `clear` off the words. lensClear is how close the
+    // loops (and anything held with them) come to the words; under `clear` means the ribbon passes under them there.
     function planRoute(o) {
-        const w = o.w, h = o.h, m = o.clear, inset = o.inset || 0;
+        const w = o.w, h = o.h, m = o.clear, half = o.half || 0, inset = o.inset || 0;
         const words = o.words || null, list = o.list || null;
-        const P = DRAWN.map((q) => [q[0] * w, q[1] * h]);
-        const stacked = !!(words && list && list.l < words.r);
-        const TU = grow(stacked ? unite(words, list) : words, m), SK = stacked ? null : grow(list, m);
-        const B = DRAWN_BOTTOM, K = DRAWN_PEAK, last = P.length - 1;
-        // The rise's way up past the words: the gap between them and the skills (a little left of its middle), or on
-        // narrow screens the strip left of the stacked column
-        const lo = TU ? TU.r : 0, hi = SK ? SK.l : w - inset;
-        const crossX = stacked ? (TU ? TU.l : 0) : lo <= hi ? lo + (hi - lo) * 0.4 : (lo + hi) / 2;
-        const below = (p) => !!TU && p[1] >= TU.b - 0.5;
-
-        for (let i = 1; i < last; i++) {
-            const p = P[i];
-            if (i < B - 2) {
-                if (inside(p, TU)) p[0] = TU.l;
-            } else if (i <= B + 1) {
-                if (inside(p, TU)) p[1] = TU.b;
-            } else if (i >= K) {
-                if (inside(p, TU)) p[1] = TU.t;
-                if (SK && p[0] > SK.l && p[1] > SK.t) p[1] = SK.t;
-            }
-        }
-        // Once the rise would cut into the words it goes up the gap instead. The first such point becomes a corner under
-        // the words, just short of the gap, so the swing rounds into it without the curve bulging past it; the rest climb
-        // the gap evenly from the words' bottom edge to where the last of them was drawn.
-        const cut = [];
-        for (let i = B + 2; i < K; i++) {
-            const p = P[i];
-            if (inside(p, TU) || inside(p, SK) || (cut.length && (stacked ? p[0] > crossX : p[0] < crossX))) cut.push(i);
-        }
-        if (cut.length && TU) {
-            const g = Math.min(48, w * 0.05) * (stacked ? -1 : 1);
-            const yTop = Math.min(P[cut[cut.length - 1]][1], TU.b);
-            P[cut[0]] = [crossX - g, Math.max(P[cut[0]][1], TU.b + Math.abs(g) * 0.8)];
-            const n = cut.length - 1;
-            for (let j = 1; j <= n; j++) P[cut[j]] = [crossX, TU.b + (yTop - TU.b) * (n === 1 ? 1 : (j - 1) / (n - 1))];
-        }
-        const dirOf = (i) => (i < B - 2 ? [-1, 0] : i <= B + 1 || (i < K && below(P[i])) ? [0, 1] : i < K ? [stacked ? -1 : 1, 0] : [0, -1]);
-        // The crest must stay past the rise; the wave after it is squeezed toward the exit rather than folding back
-        let rise = -Infinity;
-        for (let i = B + 1; i < K; i++) rise = Math.max(rise, P[i][0]);
-        const x0 = DRAWN[K][0] * w, xr = rise + w * 0.03;
-        if (!stacked && xr > x0) {
-            for (let i = K; i < last; i++) {
-                P[i][0] = xr + (DRAWN[i][0] * w - x0) / (w - x0) * (w - xr);
-                if (SK && P[i][0] > SK.l && P[i][1] > SK.t) P[i][1] = SK.t;
-            }
-        }
-
         const rects = [words, list].filter(Boolean);
-        for (let it = 0; it < 40; it++) {
-            const push = P.map(() => 0);
-            for (let i = 0; i < last; i++) {
+        const box = rects.reduce((a, r) => unite(a, r), null);
+        const stacked = !!(words && list && list.l < words.r);
+        const star = o.star || { x: 0, y: h / 2, r: 0 };
+        const near = (x, y) => rects.reduce((a, r) => Math.min(a, rectDist(x, y, r)), Infinity);
+        const clearOf = (P) => P.reduce((a, p) => Math.min(a, near(p[0], p[1])), Infinity);
+        const fits = (c, r) => c.x - r - half >= 0 && c.x + r + half <= w && c.y - r - half >= 0 && c.y + r + half <= h;
+
+        let rad = o.eyeR || 0;
+        const onEyes = !!(o.eyes && o.eyes.length === 2 && rad > 0 && o.eyes.every((e) => fits(e, rad)));
+        let spots;
+        if (onEyes) {
+            spots = o.eyes.map((e) => ({ x: e.x, y: e.y })).sort((a, b) => a.x - b.x);
+        } else {
+            const top = box ? box.t - m : h * 0.45, l = words ? words.l : w * 0.3, ww = words ? words.r - words.l : w * 0.4;
+            rad = Math.max(8, Math.min((top - inset) * 0.3, w * 0.05));
+            const y = Math.max(inset + rad, (inset + top) / 2);
+            spots = [{ x: l + ww * 0.22, y }, { x: l + ww * 0.22 + rad * 2.8, y }];
+        }
+
+        let lensOk = true;
+        const TRIES = [[1, 0], [0.88, 0], [0.76, 0], [0.88, 0.2], [0.88, 0.4]];
+        const lens = spots.map((c) => {
+            const n = awayFrom(rects, c.x, c.y);
+            for (const [s, k] of TRIES) {
+                const x = c.x + n[0] * k * rad, y = c.y + n[1] * k * rad;
+                const P = loopPts(x, y, rad * s);
+                if (!rects.length || clearOf(P) >= m) return { x, y, r: rad * s, P };
+            }
+            lensOk = false;
+            return { x: c.x, y: c.y, r: rad, P: loopPts(c.x, c.y, rad) };
+        });
+
+        // Take-off: from the bottom edge under the asterisk, up past its right arm, round the words' top-left corner
+        const in1 = lens[0].P[0], out2 = lens[1].P[LOOP.n];
+        const xb = words ? words.l - m : w * 0.3, tip = star.x + star.r + m;
+        const ax = Math.max(inset, Math.min(tip <= xb ? (tip + xb) / 2 : xb, in1[0] - rad));
+        const S0 = [Math.max(inset, Math.min(ax, star.x + star.r * 0.5)), h - inset];
+        const A1 = [ax, Math.max(in1[1] + rad, Math.min(S0[1] - rad, star.y))];
+        const P = [S0, A1];
+        if (words && in1[1] < words.t - m) P.push([Math.min(xb, ax + (in1[0] - ax) * 0.25), Math.min(words.t - m, (A1[1] + in1[1]) / 2)]);
+        const i1s = P.length;
+        P.push(...lens[0].P);
+        const i1e = P.length - 1;
+        P.push(...lens[1].P);
+        const i2e = P.length - 1;
+
+        // The dive: between the words and the skills (stacked: down the free strip beside the column), touchdown below
+        // them and a short level roll-out
+        const yTop = box ? box.t : h * 0.4;
+        const yBot = box ? Math.min(h - inset, box.b + m) : h * 0.7;
+        const yLand = Math.min(h - inset, yBot + Math.max(m, (h - inset - yBot) * 0.45));
+        let gx, stop;
+        if (!stacked) {
+            gx = words && list ? (words.r + list.l) / 2 : w * 0.75;
+            gx = Math.min(w - inset, Math.max(gx, out2[0] + rad));
+            stop = w - inset;
+        } else if ((list ? list.r : box.r) + m <= w - DIVE_EDGE) {
+            gx = ((list ? list.r : box.r) + m + w - DIVE_EDGE) / 2;
+            stop = Math.max(inset, w * 0.45);
+        } else {
+            gx = (inset + Math.max(inset, box.l - m)) / 2;
+            stop = w - inset;
+        }
+        P.push([gx, Math.max(yTop, out2[1] + rad)], [gx, yBot]);
+        // Stacked, a loop left on an eye under the words leaves loop 2 inside them, so the dive is under them until it
+        // clears the column; that stretch is held as drawn and counted with the loops
+        const ex = stacked && words && rectDist(out2[0], out2[1], words) < m ? P.length - 1 : i2e;
+        P.push([gx + (stop - gx) * 0.45, yLand]);
+        const iTouch = P.length - 1;
+        P.push([stop, yLand]);
+
+        const fixed = (i) => i >= i1s && i <= ex;
+        for (let it = 0; it < 40 && rects.length; it++) {
+            const push = P.map(() => null);
+            let any = false;
+            for (let i = 0; i < P.length - 1; i++) {
+                if (i >= i1s && i < ex) continue;
                 for (let j = 0; j <= 16; j++) {
                     const q = crPoint(P, i, j / 16);
-                    let need = 0;
-                    rects.forEach((r) => { need = Math.max(need, m - rectDist(q[0], q[1], r)); });
+                    const need = m - near(q[0], q[1]);
                     if (need <= 0) continue;
-                    push[i] = Math.max(push[i], need + 1);
-                    push[i + 1] = Math.max(push[i + 1], need + 1);
+                    any = true;
+                    const d = awayFrom(rects, q[0], q[1]);
+                    [i, i + 1].forEach((k) => {
+                        if (!fixed(k) && (!push[k] || push[k][2] < need + 1)) push[k] = [d[0], d[1], need + 1];
+                    });
                 }
             }
-            if (!push.some(Boolean)) break;
-            for (let i = 1; i < last; i++) {
-                if (!push[i]) continue;
-                const d = dirOf(i);
-                let x = Math.max(0, Math.min(w, P[i][0] + d[0] * push[i]));
-                // The rise never leaves its gap: past it is the skills (or, stacked, the descent)
-                if (i > B + 1 && i < K && d[0]) x = stacked ? Math.max(x, Math.min(crossX, P[i][0])) : Math.min(x, Math.max(hi, P[i][0]));
-                P[i][0] = x;
-                P[i][1] = Math.max(0, Math.min(h, P[i][1] + d[1] * push[i]));
-            }
+            if (!any) break;
+            push.forEach((p, k) => {
+                if (p) P[k] = [Math.max(inset, Math.min(w - inset, P[k][0] + p[0] * p[2])), Math.max(inset, Math.min(h - inset, P[k][1] + p[1] * p[2]))];
+            });
         }
 
         const route = createRoute(P);
-        let minClear = Infinity, s0 = 0, s1 = route.L, seen = false;
+        const K = route.knots;
+        let minClear = Infinity, lensClear = Infinity;
         for (let i = 0; i < route.xs.length; i++) {
-            const x = route.xs[i], y = route.ys[i];
-            rects.forEach((r) => { minClear = Math.min(minClear, rectDist(x, y, r)); });
-            const ok = x >= inset && x <= w - inset && y >= inset && y <= h - inset;
-            if (ok && !seen) {
-                seen = true;
-                s0 = route.cum[i];
-            }
-            if (ok) s1 = route.cum[i];
+            const d = near(route.xs[i], route.ys[i]);
+            if (route.cum[i] >= K[i1s] && route.cum[i] <= K[ex]) lensClear = Math.min(lensClear, d);
+            else minClear = Math.min(minClear, d);
         }
-        let moved = 0;
-        P.forEach((p, i) => { moved = Math.max(moved, Math.hypot(p[0] - DRAWN[i][0] * w, p[1] - DRAWN[i][1] * h)); });
-        return { route, pts: P, s0, s1, box: rects.reduce((a, r) => unite(a, r), null), clear: m, minClear, moved, stacked, ok: minClear >= m - 1 };
+        return {
+            route, pts: P, s0: 0, s1: route.L, marks: [0, K[i1e], K[i2e], K[iTouch], route.L], box, clear: m,
+            minClear, lensClear, lens: lens.map((l) => ({ x: l.x, y: l.y, r: l.r })), onEyes, lensOk, stacked, ok: minClear >= m - 1,
+        };
+    }
+
+    // Arc length at path progress t: detent k of the N rests at marks[k], at t = k / (N - 1), and moves evenly between
+    function legS(marks, t) {
+        const n = marks.length - 1, f = Math.max(0, Math.min(1, t)) * n, i = Math.min(n - 1, Math.floor(f));
+        return marks[i] + (marks[i + 1] - marks[i]) * (f - i);
     }
 
     function mulberry32(seed) {
@@ -337,7 +415,7 @@
 
     // The ribbon's broken-screen fill: every `cell`-px grid cell within `half` + a cell of the route gets a colour, so the
     // band clipped out of it has no holes. Seeded, so the same stage always breaks the same way; s is where along the
-    // route a cell is first reached. Mostly signal red (the colour the line was drawn in) in shifting zones of stuck RGB
+    // route a cell is first reached. Mostly signal red in shifting zones of stuck RGB
     // sub-pixels, burn-in and dead clusters, with scanline streaks (a cell often repeats its left neighbour) and tear rows.
     // Kinds: 0 dead, 1 RGB sub-pixels, 2 magenta, 3 cyan, 4 green, 5 red, 6 deep red, 7 hot white, 8 light red, 9 maroon,
     // 10 blue.
@@ -401,7 +479,7 @@
     }
 
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, DRAWN };
+        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, PORTRAIT };
         return;
     }
 
@@ -452,6 +530,7 @@
     const texCtx = texC.getContext('2d'), maskCtx = maskC.getContext('2d', { willReadFrequently: true });
     const redCtx = redC.getContext('2d'), cyanCtx = cyanC.getContext('2d');
     let route = null, plan = null, keep = { words: null, list: null }, ribbon = [], routeKey = '';
+    let eyes = null, starAt = null;
     let cellDev = 5, cellCss = 5, ribbonW = 20, dmgScale = 1, pathTween = null, pathGoal = 0, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
     let arrived = false, approachSince = 0, pendingT = null;
     let flickCells = null, nextFlicker = 0;
@@ -740,6 +819,11 @@
 
         const tr = track.getBoundingClientRect();
         const scr = scroller.getBoundingClientRect();
+        // The backdrop is fixed to the viewport and the stage sticks at the scroller's top, so this is where the eyes
+        // sit on the stage while it's stuck, whatever the scroll is now
+        const spot = eyeSpots(root.innerWidth, root.innerHeight);
+        eyes = { pts: spot.eyes.map((e) => ({ x: e.x - sr.left, y: e.y - scr.top })), r: spot.r };
+        starAt = { x: cx, y: stage.clientHeight / 2, r: S * 0.375 };
         A = Math.round(tr.top - scr.top + scroller.scrollTop);
         B = A + Math.round(track.offsetHeight - scroller.clientHeight);
         buildTrail();
@@ -801,14 +885,19 @@
         const w = stage.clientWidth, h = stage.clientHeight;
         if (!w || !h) return;
         const scale = Math.min(2, root.devicePixelRatio || 1);
-        const key = [w, h, scale].concat(...[keep.words, keep.list].filter(Boolean).map((r) => [r.l, r.t, r.r, r.b].map(Math.round))).join(',');
+        const at = [keep.words, keep.list].filter(Boolean).map((r) => [r.l, r.t, r.r, r.b])
+            .concat(eyes ? [eyes.r].concat(...eyes.pts.map((e) => [e.x, e.y])) : [], starAt ? [starAt.x, starAt.y, starAt.r] : []);
+        const key = [w, h, scale].concat(...at).map(Math.round).join(',');
         if (key === routeKey) return;
         routeKey = key;
         dmgScale = scale;
         ribbonW = Math.max(12, w * 0.018);
         cellDev = Math.max(2, Math.round(Math.max(3, ribbonW / 7) * scale));
         cellCss = cellDev / scale;
-        plan = planRoute({ w, h, words: keep.words, list: keep.list, clear: ribbonW / 2 + Math.max(8, w * 0.008), inset: ROUTE_EDGE });
+        plan = planRoute({
+            w, h, words: keep.words, list: keep.list, clear: ribbonW / 2 + Math.max(8, w * 0.008), half: ribbonW / 2, inset: ROUTE_EDGE,
+            star: starAt, eyes: eyes && eyes.pts, eyeR: eyes ? eyes.r : 0,
+        });
         route = plan.route;
         ribbon = ribbonCells(route, { cell: cellCss, half: ribbonW / 2, seed: 0x5ced04 });
         flickCells = null;
@@ -934,15 +1023,14 @@
         return true;
     }
 
-    // GLITCH rides the route between points a ROUTE_EDGE inset from the viewport (the drawn line runs edge to edge), at
-    // the live path progress, facing along the tangent in the direction it's travelling. The ribbon grows to t * L, so
-    // it leaves the top edge as GLITCH sets off and reaches the right edge as it arrives. Viewport coordinates, read per
-    // bug frame so it stays glued to the stage; it flies while a detent is moving it. `avoid` is the words' box, so its
-    // approach flight bends around them rather than across.
+    // GLITCH rides the flight (take-off and stop both a ROUTE_EDGE inside the viewport) at the live path progress, facing
+    // along the tangent in the direction it's travelling, and the ribbon ends exactly under it. Viewport coordinates,
+    // read per bug frame so it stays glued to the stage; it flies while a detent is moving it. `avoid` is the words'
+    // box, so its approach flight bends around them rather than across.
     function routeTarget() {
         if (!route) return null;
         const r = stage.getBoundingClientRect();
-        const p = route.atS(plan.s0 + path.t * (plan.s1 - plan.s0));
+        const p = route.atS(legS(plan.marks, path.t));
         const moving = !!(pathTween && pathTween.isActive());
         const T = plan.box;
         return {
@@ -1108,7 +1196,7 @@
         }
         if (railDirty && (visible || rail.p === 0)) renderRail();
         if (dmgCtx && route && visible) {
-            const sNow = path.t * route.L;
+            const sNow = legS(plan.marks, path.t);
             if (sNow > 0 && flicker(sNow, now())) dmgDirty = true;
             if (dmgDirty || sNow !== dmgDrawn) {
                 drawTrail(sNow);

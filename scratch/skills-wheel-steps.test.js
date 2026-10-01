@@ -261,102 +261,198 @@ test('input is ignored when free or when the classifier said no', () => {
     assert.strictEqual(z.step, 0);
 });
 
-// ---------- route (the designer's drawn red line) + ribbon
+// ---------- the backdrop's eyes, the paper plane's flight + ribbon
 
-const { planRoute, ribbonCells, DRAWN } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+const { planRoute, ribbonCells, eyeSpots, legS, PORTRAIT } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
-// Synthetic slide 04 layouts following measure()'s formulas. `words` is the union of every category's counter and title
-// (the longest, "TOOLS & TECHNOLOGIES", wraps to two lines and sets the width), `list` of every skills list (the
-// longest list and widest item). 1024x515 is the view the line was drawn on. Narrow screens stack it all in one column.
+// Slide 04 measured on the page with the stage stuck (scratch/eyes/probe.js): `words` is the union of every category's
+// counter and title, `list` of every skills list, starX the asterisk's centre. Phones stack it all in one column.
 const LAYOUTS = {
-    '1024x515': { w: 1024, h: 515, words: { l: 297, t: 173, r: 746, b: 318 }, list: { l: 811, t: 178, r: 991, b: 336 } },
-    '1920x1080': { w: 1920, h: 1080, words: { l: 557, t: 383, r: 1380, b: 652 }, list: { l: 1574, t: 413, r: 1864, b: 667 } },
-    '1366x768': { w: 1366, h: 768, words: { l: 396, t: 265, r: 1000, b: 470 }, list: { l: 1101, t: 287, r: 1322, b: 481 } },
-    '390x844': { w: 390, h: 844, words: { l: 162, t: 307, r: 372, b: 383 }, list: { l: 162, t: 399, r: 330, b: 537 } },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 412, r: 1866, b: 673 }, starX: 68 },
+    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 286, r: 1324, b: 487 }, starX: 48 },
+    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 178, r: 992, b: 341 }, starX: 36 },
+    '390x844': { w: 390, h: 844, words: { l: 172, t: 305, r: 370, b: 386 }, list: { l: 173, t: 373, r: 340, b: 520 }, starX: 30 },
 };
+const DESKTOP = ['1920x1080', '1366x768', '1024x515'];
 const INSET = 36;
 function planFor(key, over) {
     const L = Object.assign({}, LAYOUTS[key], over || {});
     const ribbonW = Math.max(12, L.w * 0.018);
-    const plan = planRoute({ w: L.w, h: L.h, words: L.words, list: L.list, clear: ribbonW / 2 + Math.max(8, L.w * 0.008), inset: INSET });
-    return { L, plan, ribbonW };
+    const S = Math.round(Math.min(L.w, L.h) * (L.w < 650 ? 0.7 : 0.58));
+    const spot = eyeSpots(L.w, L.h);
+    const plan = planRoute({
+        w: L.w, h: L.h, words: L.words, list: L.list, clear: ribbonW / 2 + Math.max(8, L.w * 0.008), half: ribbonW / 2, inset: INSET,
+        star: { x: L.starX, y: L.h / 2, r: S * 0.375 }, eyes: 'eyes' in L ? L.eyes : spot.eyes, eyeR: spot.r,
+    });
+    return { L, plan, ribbonW, spot };
 }
 const createRouteFor = (w, h) => planFor(w + 'x' + h).plan.route;
 const boxDist = (x, y, b) => Math.hypot(Math.max(b.l - x, 0, x - b.r), Math.max(b.t - y, 0, y - b.b));
+const near = (p, b) => Math.hypot(p.x - b.x, p.y - b.y);
 
-test('the ribbon (centre line +- half its width + margin) never comes near any category\'s words', () => {
+test('eyes map onto the viewport as the backdrop draws them (verified against page screenshots to 1px)', () => {
+    // scratch/eyes/verify-map.py correlated the dot-grid render with this cover: offsets of at most 1px at both sizes
+    const want = { '1920x1080': [[873.4, 169.3], [1088.1, 185.4]], '1366x768': [[621.4, 120.3], [774.1, 131.7]] };
+    Object.keys(want).forEach((key) => {
+        const [w, h] = key.split('x').map(Number);
+        const s = eyeSpots(w, h);
+        s.eyes.forEach((e, i) => assert.ok(Math.hypot(e.x - want[key][i][0], e.y - want[key][i][1]) < 0.5, key + ' eye ' + i + ' at ' + e.x.toFixed(1) + ',' + e.y.toFixed(1)));
+    });
+    // Portrait viewports are cut at the sides instead: height fits, the video is centred across
+    const p = eyeSpots(390, 844), k = 844 / 1920, ox = (390 - 1440 * k) / 2;
+    assert.ok(Math.abs(p.eyes[0].x - (ox + 655 * k)) < 1e-6 && Math.abs(p.eyes[0].y - 682 * k) < 1e-6, 'portrait cover');
+    assert.ok(Math.abs(p.r - PORTRAIT.lens * k) < 1e-9 && Math.abs(eyeSpots(1920, 1080).r - PORTRAIT.lens * 1920 / 1440) < 1e-9, 'loop radius scales with the cover');
+});
+
+test('the two loops close round the two eyes: goggles', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { plan, spot } = planFor(key);
+        assert.ok(plan.onEyes, key + ' loops on the eyes');
+        plan.lens.forEach((l, i) => {
+            assert.ok(near(l, spot.eyes[i]) < 0.5, key + ' lens ' + i + ' off its eye by ' + near(l, spot.eyes[i]).toFixed(1));
+            assert.ok(Math.abs(l.r - spot.r) < 0.5, key + ' lens ' + i + ' radius ' + l.r.toFixed(1) + ' vs ' + spot.r.toFixed(1));
+        });
+        // The flown path really rounds each eye: every direction from the eye meets the ribbon's centre line near the radius
+        plan.lens.forEach((l, i) => {
+            const s0 = plan.marks[i], s1 = plan.marks[i + 1];
+            const hit = Array(24).fill(Infinity);
+            for (let s = s0; s <= s1; s += 1) {
+                const p = plan.route.atS(s), d = Math.hypot(p.x - l.x, p.y - l.y);
+                const a = Math.floor(((Math.atan2(p.y - l.y, p.x - l.x) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 24) % 24;
+                hit[a] = Math.min(hit[a], Math.abs(d - l.r));
+            }
+            const worst = Math.max(...hit);
+            assert.ok(worst < l.r * 0.18, key + ' loop ' + i + ' strays ' + worst.toFixed(1) + 'px from a circle of ' + l.r.toFixed(0));
+        });
+    });
+});
+
+test('one leg per detent: loop 1 done at step 2, loop 2 at step 3, touchdown at step 4, stopped at step 5', () => {
+    Object.keys(LAYOUTS).forEach((key) => {
+        const { plan } = planFor(key);
+        const m = plan.marks;
+        assert.strictEqual(m.length, 5);
+        assert.ok(m[0] === plan.s0 && m[4] === plan.s1 && plan.s1 === plan.route.L, key + ' starts and ends with the flight');
+        for (let i = 1; i < 5; i++) assert.ok(m[i] > m[i - 1] + 20, key + ' leg ' + i + ' has length');
+        // Step 2 rests at loop 1's exit, under its eye, and step 3 at loop 2's
+        [1, 2].forEach((i) => {
+            const p = plan.route.atS(m[i]), l = plan.lens[i - 1];
+            assert.ok(Math.abs(p.x - l.x) < l.r * 1.2 && p.y > l.y + l.r * 0.8 && p.y < l.y + l.r * 1.3, key + ' step ' + (i + 1) + ' at ' + p.x.toFixed(0) + ',' + p.y.toFixed(0));
+            assert.ok(Math.abs(Math.cos(p.a)) > 0.9, key + ' step ' + (i + 1) + ' level out of the loop');
+        });
+        // Touchdown and the stop are level, below the words
+        [3, 4].forEach((i) => {
+            const p = plan.route.atS(m[i]);
+            assert.ok(p.y > plan.box.b, key + ' step ' + (i + 1) + ' below the words');
+        });
+        const end = plan.route.atS(m[4] - 2);
+        assert.ok(Math.abs(Math.sin(end.a)) < 0.2, key + ' lands level');
+        // legS walks the marks
+        [0, 0.25, 0.5, 0.75, 1].forEach((t, i) => assert.ok(Math.abs(legS(m, t) - m[i]) < 1e-9, key + ' legS ' + t));
+        assert.ok(Math.abs(legS(m, 0.125) - (m[0] + m[1]) / 2) < 1e-9 && legS(m, -1) === m[0] && legS(m, 2) === m[4]);
+    });
+});
+
+test('take-off passes the asterisk on its right; the dive drops between the words and the skills', () => {
+    DESKTOP.forEach((key) => {
+        const { L, plan } = planFor(key);
+        const S = Math.round(Math.min(L.w, L.h) * 0.58), tip = L.starX + S * 0.375;
+        let atStar = null;
+        for (let s = 0; s < plan.marks[1]; s++) {
+            const p = plan.route.atS(s);
+            if (Math.abs(p.y - L.h / 2) < 2) { atStar = p; break; }
+        }
+        assert.ok(atStar && atStar.x > tip && atStar.x < L.words.l, key + ' crosses the star\'s height at ' + (atStar && atStar.x.toFixed(0)) + ' (tip ' + tip.toFixed(0) + ')');
+        const mid = (L.words.b + L.list.t) / 2;
+        let dive = null;
+        for (let s = plan.marks[2]; s < plan.marks[3]; s++) {
+            const p = plan.route.atS(s);
+            if (Math.abs(p.y - mid) < 2) { dive = p; break; }
+        }
+        assert.ok(dive && dive.x > L.words.r && dive.x < L.list.l, key + ' dive at ' + (dive && dive.x.toFixed(0)));
+    });
+});
+
+test('the ribbon keeps clear of every category\'s words wherever it isn\'t rimming an eye', () => {
     Object.keys(LAYOUTS).forEach((key) => {
         const { L, plan, ribbonW } = planFor(key);
         assert.ok(plan.ok, key + ' minClear ' + plan.minClear.toFixed(1) + ' < ' + plan.clear.toFixed(1));
-        let worst = Infinity;
-        for (let s = 0; s <= plan.route.L; s++) {
+        assert.ok(plan.minClear - ribbonW / 2 >= 7.5, key + ' ribbon edge only ' + (plan.minClear - ribbonW / 2).toFixed(1) + 'px from the words');
+        console.log('     ' + key + ': ribbon edge ' + (plan.minClear - ribbonW / 2).toFixed(0) + 'px from the words; loops ' +
+            (plan.lensOk ? (plan.lensClear - ribbonW / 2).toFixed(0) + 'px clear' : 'under the words (stacked column over the eyes)'));
+    });
+    DESKTOP.forEach((key) => assert.ok(planFor(key).plan.lensOk, key + ' loops clear of the words too'));
+});
+
+test('phones: the stacked column sits on the eyes, so the dive drops down the free strip right of the skills and lands short of the take-off', () => {
+    [{}, { list: Object.assign({}, LAYOUTS['390x844'].list, { r: 340.6 }) }].forEach((over) => {
+        const { L, plan } = planFor('390x844', over);
+        assert.ok(plan.stacked && plan.onEyes, 'stacked, loops on the eyes');
+        let lo = Infinity;
+        for (let s = plan.marks[2]; s < plan.marks[3]; s++) {
             const p = plan.route.atS(s);
-            [L.words, L.list].forEach((b) => { worst = Math.min(worst, boxDist(p.x, p.y, b)); });
+            if (p.y > L.list.t && p.y < L.list.b) lo = Math.min(lo, p.x);
         }
-        assert.ok(worst - ribbonW / 2 >= 7.5, key + ' ribbon edge only ' + (worst - ribbonW / 2).toFixed(1) + 'px from the words');
-        console.log('     ' + key + ': ribbon edge ' + (worst - ribbonW / 2).toFixed(0) + 'px from the words, furthest control point moved ' +
-            plan.moved.toFixed(0) + 'px (' + (plan.moved / L.w * 100).toFixed(1) + 'vw)' + (plan.stacked ? ', stacked' : ''));
+        assert.ok(lo > L.list.r && lo <= L.w - 24, 'dive beside the skills at x >= ' + lo.toFixed(1));
+        const stop = plan.route.atS(plan.s1);
+        let up = Infinity;
+        for (let s = 0; s < plan.marks[1]; s++) {
+            const p = plan.route.atS(s);
+            if (Math.abs(p.y - stop.y) < 3) up = Math.min(up, p.x);
+        }
+        assert.ok(stop.x > up + 40 && stop.y > L.list.b, 'lands at ' + stop.x.toFixed(0) + ',' + stop.y.toFixed(0) + ', take-off passes x ' + up.toFixed(0));
     });
 });
 
-test('route is the drawing: it enters at the top edge, swings under the title, crests, and leaves at the right edge', () => {
-    Object.keys(LAYOUTS).forEach((key) => {
-        const { L, plan } = planFor(key);
-        const P = plan.pts;
-        assert.ok(Math.abs(P[0][0] - DRAWN[0][0] * L.w) < 0.5 && P[0][1] === 0, key + ' entry');
-        assert.ok(P[P.length - 1][0] === L.w, key + ' exit');
-        for (let i = 0; i <= 5; i++) {
-            const d = Math.hypot(P[i][0] - DRAWN[i][0] * L.w, P[i][1] - DRAWN[i][1] * L.h);
-            assert.ok(d < 1, key + ' descent point ' + i + ' moved ' + d.toFixed(1));
-        }
-        const bottom = P.reduce((a, p) => (p[1] > a[1] ? p : a));
-        assert.ok(Math.abs(bottom[1] - 478 / 515 * L.h) < L.h * 0.02, key + ' bottom at ' + bottom[1].toFixed(0));
-        assert.ok(bottom[1] > L.words.b, key + ' swing passes under the words');
-        if (!plan.stacked) {
-            for (let i = 9; i < P.length; i++) assert.ok(P[i][0] >= P[i - 1][0] - 0.5, key + ' folds back at point ' + i);
-            const crest = P.slice(9).reduce((a, p) => (p[1] < a[1] ? p : a));
-            assert.ok(crest[1] < L.words.t && crest[1] < L.list.t, key + ' crest above the words');
-        }
-    });
+test('a loop that would touch the words shrinks or steps off them before giving up its eye', () => {
+    const { L, spot } = planFor('1920x1080');
+    // Words rising to just under the right eye: the loop at full size would overlap them
+    const words = Object.assign({}, L.words, { t: spot.eyes[1].y + spot.r + 6 });
+    const { plan } = planFor('1920x1080', { words });
+    assert.ok(plan.lensOk && plan.ok, 'still clear');
+    const l = plan.lens[1];
+    assert.ok(l.r < spot.r || near(l, spot.eyes[1]) > 0, 'adjusted');
+    assert.ok(near(l, spot.eyes[1]) <= spot.r * 0.41, 'eye stays inside its loop');
+    // Words over the eye itself: nothing clears, so the loop stays on the eye (under the words) and says so
+    const over = planFor('1920x1080', { words: Object.assign({}, L.words, { t: spot.eyes[0].y - 10 }) }).plan;
+    assert.ok(!over.lensOk && near(over.lens[0], spot.eyes[0]) < 0.5 && Math.abs(over.lens[0].r - spot.r) < 0.5, 'held on the eye');
 });
 
-test('the 1024x515 view keeps the drawing except where it ran through the title', () => {
-    const { plan, L } = planFor('1024x515');
-    const unmoved = plan.pts.filter((p, i) => Math.hypot(p[0] - DRAWN[i][0] * L.w, p[1] - DRAWN[i][1] * L.h) < 1).length;
-    assert.ok(unmoved >= 9, 'only ' + unmoved + ' of ' + plan.pts.length + ' control points kept');
-    // With only FRONTEND on the page, the rise still clears it (the drawn line crossed its right end)
-    const solo = planFor('1024x515', { words: { l: 297, t: 205, r: 577, b: 285 }, list: { l: 876, t: 186, r: 991, b: 330 } }).plan;
-    assert.ok(solo.ok && solo.moved < plan.moved, 'FRONTEND alone moves less: ' + solo.moved.toFixed(0) + ' vs ' + plan.moved.toFixed(0));
+test('eyes off the stage: the pair is flown in the band above the words instead', () => {
+    const { L } = planFor('1920x1080');
+    const { plan } = planFor('1920x1080', { eyes: [{ x: 873, y: -40 }, { x: 1088, y: -30 }] });
+    assert.ok(!plan.onEyes && plan.ok && plan.lensOk, 'fallback is clear');
+    plan.lens.forEach((l) => assert.ok(l.y + l.r < L.words.t && l.y - l.r > 0 && l.x > L.words.l && l.x < L.words.r, 'loop in the band at ' + l.x.toFixed(0) + ',' + l.y.toFixed(0)));
 });
 
-test('GLITCH\'s endpoints sit just inside the viewport, along the curve', () => {
+test('GLITCH\'s endpoints sit just inside the viewport', () => {
     Object.keys(LAYOUTS).forEach((key) => {
         const { L, plan } = planFor(key);
         [plan.s0, plan.s1].forEach((s) => {
             const p = plan.route.atS(s);
             assert.ok(p.x >= INSET - 1 && p.x <= L.w - INSET + 1 && p.y >= INSET - 1 && p.y <= L.h - INSET + 1, key + ' endpoint ' + p.x.toFixed(0) + ',' + p.y.toFixed(0));
         });
-        assert.ok(plan.s0 < 120 && plan.route.L - plan.s1 < 120 && plan.s1 > plan.s0, key + ' insets ' + plan.s0.toFixed(0) + ' / ' + (plan.route.L - plan.s1).toFixed(0));
     });
 });
 
 test('route is arc-length parameterised: equal t steps are equal distances along it', () => {
-    const r = createRouteFor(1920, 1080);    const K = 400;
+    const r = createRouteFor(1920, 1080);
+    const K = 400;
     let worst = 0;
     for (let i = 0; i < K; i++) {
         const p = r.at(i / K), q = r.at((i + 1) / K);
         worst = Math.max(worst, Math.abs(Math.hypot(q.x - p.x, q.y - p.y) - r.L / K) / (r.L / K));
     }
-    assert.ok(worst < 0.02, 'chord vs arc error ' + (worst * 100).toFixed(2) + '%');
+    assert.ok(worst < 0.05, 'chord vs arc error ' + (worst * 100).toFixed(2) + '%');
 });
 
-test('route tangent points along the direction of travel', () => {
+test('route tangent points along the direction of travel, round the loops too', () => {
     const r = createRouteFor(1920, 1080);
-    for (let i = 1; i < 100; i++) {
-        const p = r.at(i / 100), q = r.at(i / 100 + 0.002);
+    for (let i = 1; i < 400; i++) {
+        const p = r.at(i / 400), q = r.at(i / 400 + 0.0005);
         const d = Math.atan2(q.y - p.y, q.x - p.x);
         const err = Math.abs(Math.atan2(Math.sin(d - p.a), Math.cos(d - p.a)));
-        assert.ok(err < 0.35, 't=' + i / 100 + ' err ' + err.toFixed(2));
+        assert.ok(err < 0.35, 't=' + i / 400 + ' err ' + err.toFixed(2));
     }
 });
 
