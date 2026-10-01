@@ -1,6 +1,8 @@
 // Renders guide/ribbon-shapes.html in headless Chrome: each design solo at its completed state (1600x900) into
 // scratch/ribbon-shapes/NN-id.png, the ?sheet=1 contact sheet into scratch/ribbon-shapes/contact-sheet.png, and prints
-// every card's clearance report. Usage: node scratch/ribbon-shapes-shoot.js [port=3010] [only=N]
+// every card's clearance report. Usage: node scratch/ribbon-shapes-shoot.js [port=3010] [only=N | A-B] [sheet]
+// With a range A-B and "sheet", the sheet holds designs A onward and is written to contact-sheet-2.png; "all" writes
+// the full contact-sheet.png alongside the range (a range of 0 renders no solos).
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -8,7 +10,10 @@ const os = require('os');
 const path = require('path');
 
 const SITE = 'http://localhost:' + (process.argv[2] || 3010) + '/guide/ribbon-shapes.html';
-const ONLY = parseInt(process.argv[3], 10) || 0;
+const RANGE = String(process.argv[3] || '').split('-').map((v) => parseInt(v, 10) || 0);
+const LO = RANGE[0], HI = RANGE.length > 1 ? RANGE[1] : RANGE[0];
+const SHEET2 = LO && process.argv[4] === 'sheet';
+const SHEETALL = process.argv[4] === 'all';
 const OUT = path.join(__dirname, 'ribbon-shapes');
 const PORT = 9433;
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -60,12 +65,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const rep = JSON.parse(await load(SITE + '?done=1', 1400, 900) || '[]');
         console.log('gallery @1400 (card width ' + (rep[0] && rep[0].W) + 'px):');
         rep.forEach((r) => console.log('  ' + String(r.n).padStart(2, '0') + ' ' + r.id.padEnd(16) + (r.ok ? 'ok  ' : 'FAIL') +
-            ' clear ' + r.minClear + '/' + r.need + (r.inside ? '' : ' OFF-STAGE') + ' L ' + r.L + ' marks ' + r.marks.join(',')));
+            ' clear ' + r.minClear + '/' + r.need + (r.inside ? '' : ' OFF-STAGE') + ' L ' + r.L + ' marks ' + r.marks.join(',') +
+            (r.ok ? '' : ' closest at ' + r.at + ' T ' + r.T)));
         return rep.length;
     })();
 
     for (let n = 1; n <= count; n++) {
-        if (ONLY && n !== ONLY) continue;
+        if (LO && (n < LO || n > HI)) continue;
         const rep = JSON.parse(await load(SITE + '?solo=' + n + '&done=1', 1600, 900) || '[]')[0];
         const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 1600, height: 900, scale: 1 } });
         const file = path.join(OUT, String(n).padStart(2, '0') + '-' + rep.id + '.png');
@@ -73,12 +79,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         console.log('solo ' + String(n).padStart(2, '0') + ' ' + (rep.ok ? 'ok  ' : 'FAIL') + ' clear ' + rep.minClear + '/' + rep.need + (rep.inside ? '' : ' OFF-STAGE') + ' -> ' + path.relative(process.cwd(), file));
     }
 
-    if (!ONLY) {
-        await load(SITE + '?sheet=1&done=1', 2400, 1400);
+    if (!LO || SHEET2 || SHEETALL) {
+        const url = SITE + '?sheet=1&done=1' + (SHEET2 ? '&from=' + LO : '');
+        await load(url, 2400, 1400);
         const h = Math.ceil(await evaluate('document.documentElement.scrollHeight'));
-        await load(SITE + '?sheet=1&done=1', 2400, h);
+        await load(url, 2400, h);
         const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 2400, height: h, scale: 1 } });
-        const file = path.join(OUT, 'contact-sheet.png');
+        const file = path.join(OUT, SHEET2 ? 'contact-sheet-2.png' : 'contact-sheet.png');
         fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
         console.log('sheet 2400x' + h + ' -> ' + path.relative(process.cwd(), file));
     }

@@ -1,7 +1,8 @@
 // Ribbon shapes: a gallery of route designs for GLITCH's broken-screen ribbon on slide 04. Each card is a mock of the
 // slide (asterisk, title + counter, skills, axis line) whose route is built from that card's measured text boxes, so it
 // keeps the same clearance rule as the live slide: the ribbon's centre line stays half its width plus 0.8vw off the words.
-// ?solo=N shows one design full-viewport, ?sheet=1 lays every design out as a contact sheet, &done=1 jumps to step 05.
+// ?solo=N shows one design full-viewport, ?sheet=1 lays every design out as a contact sheet, &from=N starts at design N,
+// &done=1 jumps to step 05.
 (function () {
     'use strict';
 
@@ -17,6 +18,7 @@
     ];
     const qs = new URLSearchParams(location.search);
     const SOLO = parseInt(qs.get('solo'), 10) || 0;
+    const FROM = parseInt(qs.get('from'), 10) || 0;
     const SHEET = qs.has('sheet');
     const DONE = qs.has('done');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -111,6 +113,25 @@
                     P.line(x0 + d[0], y0 + d[1]);
                     P.line(x0, y0);
                 });
+                return P;
+            },
+            // Straight runs through the list with every corner filleted (radius r, capped at half of either run)
+            rounded(list, r) {
+                const Q = [last().slice()].concat(list);
+                for (let i = 1; i < Q.length; i++) {
+                    const a = Q[i - 1], b = Q[i], c = Q[i + 1];
+                    if (!c) { P.line(b[0], b[1], b[2]); break; }
+                    const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, l2 = Math.hypot(c[0] - b[0], c[1] - b[1]) || 1;
+                    const k = Math.min(r, l1 / 2, l2 / 2);
+                    const p0 = [b[0] - (b[0] - a[0]) / l1 * k, b[1] - (b[1] - a[1]) / l1 * k];
+                    const p2 = [b[0] + (c[0] - b[0]) / l2 * k, b[1] + (c[1] - b[1]) / l2 * k];
+                    P.line(p0[0], p0[1]);
+                    P.fn((t) => {
+                        const u = 1 - t;
+                        return [u * u * p0[0] + 2 * u * t * b[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * b[1] + t * t * p2[1]];
+                    }, Math.max(4, Math.ceil(k / 2)));
+                    if (b[2]) P.mark();
+                }
                 return P;
             },
         };
@@ -383,6 +404,43 @@
     }
 
     // ---------- the designs: build(g) returns a pen with five marks (where steps 01..05 land)
+
+    const MONO = '"IBM Plex Mono", "Sometype Mono", Consolas, monospace';
+    const smooth = (t) => t * t * (3 - 2 * t);
+
+    // A solid leaf on a short stalk from the current point: out along each edge and back down the midrib, the passes no
+    // further apart than the ribbon is wide so they fuse into one blade
+    function leaf(p, ang, len, w) {
+        const [bx, by] = p.at();
+        const d = [Math.cos(ang), Math.sin(ang)], n = [-d[1], d[0]];
+        const st = len * 0.14, ll = len - st;
+        const at = (u, s) => {
+            const half = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.85)), 0.9) * w / 2 * s;
+            return [bx + d[0] * (st + u * ll) + n[0] * half, by + d[1] * (st + u * ll) + n[1] * half];
+        };
+        p.line(bx + d[0] * st, by + d[1] * st);
+        [1, -1].forEach((s) => {
+            p.fn((t) => at(t, s), 40);
+            p.fn((t) => at(1 - t, 0), 30);
+        });
+        return p.line(bx, by);
+    }
+
+    // Hilbert curve of side n (a power of two): index d to cell, starting bottom-left and ending bottom-right
+    function d2xy(n, d) {
+        let x = 0, y = 0, t = d;
+        for (let s = 1; s < n; s *= 2) {
+            const rx = 1 & (t / 2), ry = 1 & (t ^ rx);
+            if (ry === 0) {
+                if (rx === 1) { x = s - 1 - x; y = s - 1 - y; }
+                const tmp = x; x = y; y = tmp;
+            }
+            x += s * rx;
+            y += s * ry;
+            t = Math.floor(t / 4);
+        }
+        return [x, y];
+    }
 
     const DESIGNS = [
         {
@@ -834,6 +892,395 @@
                 return p;
             },
         },
+        {
+            id: 'git-branch', name: 'Git branch',
+            desc: 'A commit graph under the words: two commits on main, a feature branch forks off for three more and merges back, and step 05 lands on HEAD.',
+            build(g) {
+                const xa = g.left.x0, hr = g.rw * 1.1, hx = g.W - g.e - g.rw * 0.5 - hr, sp = hx - xa;
+                const yM = g.bot.y0 + g.bh * 0.7, yB = g.bot.y0 + g.bh * 0.24;
+                const X = (f) => xa + sp * f, pr = g.rw * 0.62;
+                const p = pen(X(0), yM);
+                const lane = (x0, y0, x1, y1) => p.fn((t) => [x0 + (x1 - x0) * t, y0 + (y1 - y0) * smooth(t)], 48);
+                p.pad(pr).line(X(0.15), yM).pad(pr).mark();
+                p.line(X(0.2), yM);
+                lane(X(0.2), yM, X(0.31), yB);
+                p.line(X(0.37), yB).pad(pr).mark();
+                p.line(X(0.52), yB).pad(pr).mark();
+                p.line(X(0.66), yB).pad(pr);
+                p.line(X(0.7), yB);
+                lane(X(0.7), yB, X(0.81), yM);
+                p.line(X(0.86), yM).pad(pr * 1.15).mark();
+                p.line(hx, yM).pad(hr).mark();
+                p.decor = (ctx) => {
+                    const fs = Math.max(9, g.W * 0.0082);
+                    ctx.strokeStyle = 'rgba(244, 242, 234, 0.34)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([3, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(X(0.2), yM);
+                    ctx.lineTo(X(0.81), yM);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    [0.43, 0.61].forEach((f) => {
+                        ctx.beginPath();
+                        ctx.arc(X(f), yM, pr * 0.85, 0, TAU);
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                        ctx.stroke();
+                    });
+                    ctx.fillStyle = 'rgba(244, 242, 234, 0.5)';
+                    ctx.font = '500 ' + fs + 'px ' + MONO;
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('main', X(0) - pr, yM + g.rw * 1.55);
+                    ctx.fillText('feat/skills', X(0.31), yB - g.rw * 1.3);
+                    ctx.textAlign = 'right';
+                    ctx.fillText('HEAD -> main', hx + hr, yM - hr - g.rw * 0.95);
+                    ctx.textAlign = 'left';
+                };
+                return p;
+            },
+        },
+        {
+            id: 'file-tree', name: 'File tree',
+            desc: 'The output of `tree` drawn down past the asterisk: a skills/ root, then one branch per step out to a folder per category, the last on a └── elbow.',
+            build(g) {
+                const tx = g.left.x0 + g.lw * 0.32, pr = g.rw * 0.6, Lb = Math.min(g.W * 0.12, g.T.w * 0.3);
+                const yr = g.top.y0 + g.th * 0.1;
+                const ys = [g.top.y0 + g.th * 0.5, g.top.y0 + g.th * 0.9, g.bot.y0 + g.bh * 0.1, g.bot.y0 + g.bh * 0.5, g.bot.y0 + g.bh * 0.9];
+                const p = pen(tx, yr - 1).line(tx, yr).pad(pr * 1.25);
+                ys.forEach((y, i) => {
+                    if (i < 4) p.line(tx, y).line(tx + Lb, y).pad(pr).mark().line(tx, y);
+                    else p.rounded([[tx, y], [tx + Lb, y]], g.rw * 1.2).pad(pr).mark();
+                });
+                p.decor = (ctx) => {
+                    const fs = Math.max(10, g.W * 0.011), lx = tx + Lb + pr + g.rw * 0.9;
+                    ctx.fillStyle = 'rgba(244, 242, 234, 0.58)';
+                    ctx.font = '500 ' + fs + 'px ' + MONO;
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('skills/', tx + pr * 1.25 + g.rw * 0.9, yr);
+                    ['frontend/', 'backend/', 'ai-ml/', 'languages/', 'tools/'].forEach((s, i) => ctx.fillText(s, lx, ys[i]));
+                };
+                return p;
+            },
+        },
+        {
+            id: 'vine', name: 'Growing vine',
+            desc: 'A vine grows out of the ground by the asterisk and along the bottom of the slide, putting out a leaf per step and curling a tendril at the end.',
+            build(g) {
+                const yc = g.bot.y0 + g.bh * 0.52, A = g.bh * 0.09;
+                const r0 = Math.min(g.bh * 0.25, g.W * 0.045);
+                const x0 = g.cx + g.R * 0.7, x1 = g.W - g.e - r0 - g.rw * 0.5, sp = x1 - x0;
+                const gy = g.bot.y1 - 2;
+                const stemY = (x) => {
+                    const u = (x - x0) / sp, k = smooth(clamp(u / 0.12, 0, 1));
+                    return gy + (yc + A * Math.sin(u * Math.PI * 5 - Math.PI / 2) - gy) * k;
+                };
+                const p = pen(x0, gy);
+                const grow = (f0, f1) => p.fn((t) => {
+                    const x = x0 + sp * (f0 + (f1 - f0) * t);
+                    return [x, stemY(x)];
+                }, Math.ceil(sp * (f1 - f0) / 3));
+                const len = g.bh * 0.46, w = Math.min(len * 0.5, g.rw * 1.9);
+                [0.2, 0.4, 0.6, 0.8].forEach((f, i) => {
+                    grow(i ? f - 0.2 : 0, f);
+                    leaf(p, i % 2 ? 0.95 : -0.95, len, w).mark();
+                });
+                grow(0.8, 1);
+                const ex = x1, ey = stemY(x1), cy = ey - r0;
+                return p.fn((t) => {
+                    const a = Math.PI / 2 - t * TAU * 1.05, r = r0 * (1 - 0.58 * t);
+                    return [ex + r * Math.cos(a), cy + r * Math.sin(a)];
+                }, 220, true);
+            },
+        },
+        {
+            id: 'vortex', name: 'Vortex',
+            desc: 'A funnel cloud spins up over the title, twists down past the asterisk in a tightening coil and touches down in a spreading ring of dust.',
+            build(g) {
+                const nx = (g.left.x0 + g.left.x1) / 2, rN = g.lw * 0.42, k = 0.3;
+                const rT = Math.min(g.T.w * 0.36, g.th * 1.15), xT = nx + rT * 0.8;
+                const yA0 = g.top.y0 + rT * k, yA1 = g.top.y1 - rN * k;
+                const rC0 = rN * 0.65, yB1 = g.bot.y0 + rC0 * k;
+                const yg = g.bot.y0 + g.bh * 0.66, rG = g.rw * 0.6;
+                let turns = 0;
+                const p = pen(xT + rT, yA0);
+                const phase = (n, f, m) => {
+                    const t0 = turns;
+                    turns += n;
+                    p.fn((s) => {
+                        const q = f(s), a = TAU * (t0 + n * s);
+                        return [q[0] + q[1] * Math.cos(a), q[2] + q[1] * k * Math.sin(a)];
+                    }, Math.ceil(n * 150), m);
+                };
+                phase(1.5, (s) => [xT + (nx - xT) * s, rT + (rN - rT) * s, yA0 + (yA1 - yA0) * s], true);
+                const neck = (s) => [nx + rN * 0.12 * Math.sin(Math.PI * s), rN * (1 - 0.35 * s), yA1 + (yB1 - yA1) * s];
+                phase(1.5, (s) => neck(s * 0.5), true);
+                phase(1.5, (s) => neck(0.5 + s * 0.5), true);
+                phase(1, (s) => [nx + g.lw * 0.3 * smooth(s), rC0 + (rG - rC0) * s, yB1 + (yg - yB1) * smooth(s)], true);
+                const rD = Math.min(g.T.w * 0.45, nx + g.lw * 0.3 - g.cx - g.rw);
+                phase(1.25, (s) => [nx + g.lw * 0.3, rG + (rD - rG) * Math.pow(s, 0.85), yg], true);
+                return p;
+            },
+        },
+        {
+            id: 'smoke', name: 'Smoke signal',
+            desc: 'A wisp rises out of the asterisk\'s hub and drifts right above the words, curling into bigger and bigger rings, and trails off at the top right.',
+            build(g) {
+                const y = (f) => g.top.y0 + g.th * f;
+                const p = pen(g.cx, g.cy);
+                p.curve([[g.cx + g.rw * 0.35, g.cy - g.R * 0.5], [g.cx - g.rw * 0.25, g.cy - g.R], [g.cx + g.rw * 0.4, y(0.62)], [g.cx + g.W * 0.05, y(0.42)]]);
+                const curl = (x, foot, r, drift) => {
+                    p.curve([[x - drift / 2 - r * 0.6, foot - r * 0.12], [x - drift / 2, foot]]);
+                    p.fn((t) => {
+                        const a = Math.PI / 2 - t * TAU;
+                        return [x + r * Math.cos(a) + drift * (t - 0.5), foot - r + r * Math.sin(a)];
+                    }, Math.ceil(r * 2.6), true);
+                };
+                curl(g.left.x0 + g.lw * 0.15, y(0.66), g.th * 0.12, g.th * 0.08);
+                curl(g.T.l + g.T.w * 0.22, y(0.58), g.th * 0.16, g.th * 0.1);
+                curl(g.T.l + g.T.w * 0.62, y(0.66), g.th * 0.21, g.th * 0.12);
+                curl(Math.min(g.gap.cx + g.W * 0.05, g.W - g.e - g.th * 0.6), y(0.62), g.th * 0.25, g.th * 0.14);
+                return p.curve([[g.W - g.e - g.W * 0.1, y(0.4)], [g.W - g.e - g.W * 0.05, y(0.3)], [g.W - g.e - g.rw * 0.5, y(0.12), 1]]);
+            },
+        },
+        {
+            id: 'great-wave', name: 'Great wave',
+            desc: 'Ripples on the right build into a swell under the title and break into a curling crest, Hokusai-style, that closes on step 05.',
+            build(g) {
+                const yS = g.bot.y1 - g.bh * 0.06, yC = g.bot.y0 + 2, Hw = yS - yC;
+                const Rc = Hw * 0.5, xc = g.T.l + g.T.w * 0.32;
+                const xr = g.W - g.e - g.rw * 0.5, xb = Math.min(xc + Hw * 1.9, xr - g.W * 0.2);
+                const p = pen(xr, yS);
+                const n = 3, rp = (xr - xb) / n, pk = 0.62;
+                // Ripples travel left, so each one's steep face is on its left
+                const bump = (t) => (t < pk ? Math.pow(Math.sin(Math.PI / 2 * t / pk), 1.3) : Math.pow(Math.cos(Math.PI / 2 * (t - pk) / (1 - pk)), 0.8));
+                for (let i = 0; i < n; i++) {
+                    const a = xr - rp * i, h = g.bh * (0.1 + 0.08 * i);
+                    p.fn((t) => [a - rp * t, yS - h * bump(t)], Math.ceil(rp / 2.5), i !== 1);
+                }
+                const back = (t) => [xb + (xc - xb) * t, yS - Hw * (1 - Math.pow(1 - t, 2.2))];
+                p.fn((t) => back(t * 0.5), 80, true);
+                p.fn((t) => back(0.5 + t * 0.5), 80, true);
+                p.fn((t) => {
+                    const a = -Math.PI / 2 - t * TAU * 1.6, r = Rc * (1 - 0.8 * Math.pow(t, 0.9));
+                    return [xc + r * Math.cos(a), yC + Rc + r * Math.sin(a)];
+                }, 360, true);
+                p.decor = (ctx) => {
+                    const fw = g.W * 0.055, fh = g.bh * 0.3, fx = xc - Rc - fw - g.rw, fb = yS + g.rw * 0.5;
+                    ctx.strokeStyle = 'rgba(244, 242, 234, 0.42)';
+                    ctx.lineWidth = 1;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(fx - fw, fb);
+                    ctx.lineTo(fx - fw * 0.16, fb - fh);
+                    ctx.lineTo(fx + fw * 0.16, fb - fh);
+                    ctx.lineTo(fx + fw, fb);
+                    ctx.moveTo(fx - fw * 0.42, fb - fh * 0.58);
+                    [-0.26, -0.12, 0.02, 0.16, 0.3, 0.42].forEach((u, j) => ctx.lineTo(fx + fw * u, fb - fh * (j % 2 ? 0.62 : 0.5)));
+                    ctx.stroke();
+                };
+                return p;
+            },
+        },
+        {
+            id: 'lissajous', name: 'Lissajous braid',
+            desc: 'A 2:7 Lissajous figure woven across the top of the slide, a fifth of the period per step, closing into a braid over the words.',
+            build(g) {
+                const xa = g.T.l - g.m, xb = g.W - g.e - g.rw * 0.5;
+                const xc = (xa + xb) / 2, ax = (xb - xa) / 2, yc = (g.top.y0 + g.top.y1) / 2, ay = g.th / 2 - 2;
+                const at = (t) => [xc + ax * Math.sin(2 * t + Math.PI / 4), yc + ay * Math.sin(7 * t)];
+                const s = at(0);
+                const p = pen(s[0], s[1]);
+                for (let q = 0; q < 5; q++) p.fn((t) => at(TAU * (q + t) / 5), 260, true);
+                return p;
+            },
+        },
+        {
+            id: 'bloom', name: 'Bloom',
+            desc: 'A stem climbs the gap between the title and the skills and opens into a five-petal flower above them, a petal per step, with a dot at its heart.',
+            build(g) {
+                const fx = g.gap.cx, fy = g.top.y0 + g.th * 0.5, R = g.th * 0.48, rmin = 0.36;
+                const gw = g.gap.x1 - g.gap.x0;
+                const p = pen(fx + gw * 0.1, g.H - g.e);
+                p.curve([[fx - gw * 0.12, g.bot.y0 + g.bh * 0.5]]);
+                leaf(p, -Math.PI + 0.75, g.bh * 0.44, Math.min(g.bh * 0.22, g.rw * 1.9));
+                p.curve([[fx + gw * 0.08, g.bot.y0 - 4], [fx - gw * 0.06, g.cy], [fx, g.top.y1], [fx, fy + rmin * R]]);
+                const r = (a) => R * (rmin + (1 - rmin) * Math.pow(Math.abs(Math.sin(2.5 * (a - Math.PI / 2))), 0.72));
+                for (let k = 0; k < 5; k++) {
+                    p.fn((t) => {
+                        const a = Math.PI / 2 + (k + t) * TAU / 5;
+                        return [fx + r(a) * Math.cos(a), fy + r(a) * Math.sin(a)];
+                    }, 150, k < 4);
+                }
+                return p.line(fx, fy).pad(g.rw * 0.7).mark();
+            },
+        },
+        {
+            id: 'hexagram', name: 'Unicursal hexagram',
+            desc: 'Fired from the asterisk\'s lower arm, the ribbon runs under the title and draws a one-stroke six-pointed star beneath the skills, echoing the asterisk.',
+            build(g) {
+                const rh = g.bh / 2 - 2, hy = (g.bot.y0 + g.bot.y1) / 2;
+                const hx = g.W - g.e - g.rw * 0.5 - rh * 0.866 - g.W * 0.05;
+                const V = [-90, -30, 30, 90, 150, 210].map((d) => [hx + rh * Math.cos(d * Math.PI / 180), hy + rh * Math.sin(d * Math.PI / 180)]);
+                const a = Math.PI / 3, s = [g.cx + g.R * 1.04 * Math.cos(a), g.cy + g.R * 1.04 * Math.sin(a)];
+                const p = pen(s[0], s[1]);
+                p.curve([[s[0] + g.W * 0.06, g.bot.y0 + g.bh * 0.62], [g.T.l + g.T.w * 0.5, hy + rh * 0.78], [V[4][0] - rh * 0.5, V[4][1] + rh * 0.12], [V[4][0], V[4][1], 1]]);
+                return p.lines([V[0], [V[2][0], V[2][1], 1], [V[5][0], V[5][1], 1], V[3], [V[1][0], V[1][1], 1], [V[4][0], V[4][1], 1]]);
+            },
+        },
+        {
+            id: 'rollercoaster', name: 'Rollercoaster',
+            desc: 'A chain lift over the asterisk, a near-vertical first drop beside the title, a loop-the-loop and camelback hills under the words, then into the brakes.',
+            build(g) {
+                const yS = g.top.y0 + g.th * 0.52, yCr = g.top.y0 + 4, xCr = g.left.x0 + g.lw * 0.22;
+                const yg = g.bot.y1 - g.bh * 0.08, xe = g.W - g.e - g.rw * 0.5;
+                const p = pen(g.e * 0.6 + g.rw, yS);
+                p.line(g.cx + g.R * 0.25, yS);
+                p.curve([[xCr - g.lw * 0.25, yCr + g.th * 0.1], [xCr, yCr, 1], [xCr + g.lw * 0.32, yCr + g.th * 0.3],
+                    [g.left.x1 - g.rw * 0.3, g.top.y1 + (g.bot.y0 - g.top.y1) * 0.55], [g.left.x1 + g.lw * 0.12, g.bot.y0 + g.bh * 0.42],
+                    [g.left.x1 + g.lw * 0.7, yg], [g.T.l + g.T.w * 0.12, yg, 1]]);
+                const bL = (yg - g.bot.y0 - 2) / 2, aL = bL * 0.3, x0L = g.T.l + g.T.w * 0.2;
+                p.line(x0L, yg);
+                p.fn((t) => {
+                    const u = t * TAU;
+                    return [x0L + aL * u + bL * Math.sin(u), yg - bL * (1 - Math.cos(u))];
+                }, 220, true);
+                const xh0 = x0L + aL * TAU + g.W * 0.03, hw = (xe - g.W * 0.12 - xh0) / 2;
+                [0.62, 0.4].forEach((h, i) => {
+                    const a = xh0 + hw * i;
+                    p.fn((t) => [a + hw * t, yg - (yg - g.bot.y0 - 2) * h * Math.pow(Math.sin(Math.PI * t), 2)], Math.ceil(hw / 2.5), i === 1);
+                });
+                p.line(xe, yg, 1);
+                const pts = p.pts;
+                p.decor = (ctx) => {
+                    const yG = g.H - g.e * 0.45, pad = 4;
+                    const blocked = (x, y0) => [g.T, g.K].some((r) => x > r.l - pad && x < r.r + pad && yG > r.t && y0 < r.b) ||
+                        (Math.abs(x - g.cx) < g.R * 1.15 && y0 < g.cy + g.R) || (x > x0L - bL * 1.1 && x < x0L + aL * TAU + bL * 1.1);
+                    ctx.strokeStyle = 'rgba(244, 242, 234, 0.22)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(g.e * 0.5, yG);
+                    ctx.lineTo(g.W - g.e * 0.5, yG);
+                    let lastX = -Infinity;
+                    pts.forEach((q) => {
+                        if (Math.abs(q[0] - lastX) < g.W * 0.022 || q[1] > yG - g.rw) return;
+                        if (blocked(q[0], q[1])) return;
+                        lastX = q[0];
+                        const x = Math.round(q[0]) + 0.5;
+                        ctx.moveTo(x, q[1] + g.rw * 0.5);
+                        ctx.lineTo(x, yG);
+                    });
+                    ctx.stroke();
+                };
+                return p;
+            },
+        },
+        {
+            id: 'fishing-cast', name: 'Fishing cast',
+            desc: 'The asterisk\'s upper arm is the rod: the line casts in a long arc over the title, drops through the gap, and the float and hook land in the water.',
+            build(g) {
+                const a = -Math.PI / 3, tip = [g.cx + g.R * 1.06 * Math.cos(a), g.cy + g.R * 1.06 * Math.sin(a)];
+                const yW = g.bot.y0 + g.bh * 0.3, x = g.gap.cx, hr = g.bh * 0.11;
+                const p = pen(tip[0], tip[1]);
+                p.curve([[tip[0] + g.W * 0.07, g.top.y0 + g.th * 0.38, 1], [g.T.l + g.T.w * 0.45, g.top.y0 + g.th * 0.05, 1],
+                    [x - g.W * 0.03, g.top.y0 + g.th * 0.34], [x, g.top.y1, 1], [x, yW]]);
+                p.pad(g.rw * 0.6).mark();
+                p.line(x, yW + g.bh * 0.4);
+                const yH = p.at()[1];
+                p.arc(x - hr, yH, hr, hr, 0, Math.PI * 1.2, true);
+                p.decor = (ctx) => {
+                    ctx.strokeStyle = 'rgba(244, 242, 234, 0.26)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for (let px = g.left.x0; px <= g.W - g.e; px += 3) {
+                        const py = yW + Math.sin(px / 11) * 1.4;
+                        if (px === g.left.x0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.stroke();
+                    [1.7, 2.6, 3.6].forEach((f, i) => {
+                        ctx.strokeStyle = 'rgba(244, 242, 234, ' + (0.42 - i * 0.11) + ')';
+                        ctx.beginPath();
+                        ctx.ellipse(x, yW, g.rw * f, g.rw * f * 0.24, 0, 0, TAU);
+                        ctx.stroke();
+                    });
+                };
+                return p;
+            },
+        },
+        {
+            id: 'kite', name: 'Kite',
+            desc: 'A string rises past the asterisk to a kite above the title; frame and spars draw in, and its bow-tied tail streams out to the right.',
+            build(g) {
+                const tilt = 0.22, kl = g.th * 0.94, kw = kl * 0.68, cb = 0.68;
+                const B = [g.T.l + g.T.w * 0.14, g.top.y1 - 3];
+                const K = (u, v) => [B[0] + u * Math.cos(tilt) - v * Math.sin(tilt), B[1] + u * Math.sin(tilt) + v * Math.cos(tilt)];
+                const Tp = K(0, -kl), L = K(-kw / 2, -kl * cb), Rt = K(kw / 2, -kl * cb);
+                const p = pen(g.left.x0 + g.lw * 0.3, g.bot.y1 - g.bh * 0.06);
+                p.curve([[g.left.x0 + g.lw * 0.55, g.cy + g.H * 0.08], [g.left.x1 - g.rw * 0.8, g.top.y1 - g.th * 0.1], [B[0], B[1], 1]]);
+                p.lines([L, Tp, Rt, [B[0], B[1], 1], Tp, L, [Rt[0], Rt[1], 1], B]);
+                const E = [g.W - g.e - g.rw * 0.5, g.top.y0 + g.th * 0.3];
+                const dx = E[0] - B[0], dy = E[1] - B[1], dl = Math.hypot(dx, dy), d = [dx / dl, dy / dl], nv = [-d[1], d[0]];
+                const amp = g.th * 0.13;
+                const at = (u) => {
+                    const o = amp * Math.sin(u * TAU * 2.5) * Math.pow(Math.min(1, u / 0.3), 1.5);
+                    return [B[0] + dx * u + nv[0] * o, B[1] + dy * u + nv[1] * o];
+                };
+                const bs = g.rw * 1.15;
+                const bow = (u) => {
+                    const q = at(u), q2 = at(u + 0.004), tl = Math.hypot(q2[0] - q[0], q2[1] - q[1]) || 1;
+                    const t = [(q2[0] - q[0]) / tl, (q2[1] - q[1]) / tl], n = [-t[1], t[0]];
+                    const P = (a, b) => [q[0] + n[0] * a + t[0] * b, q[1] + n[1] * a + t[1] * b];
+                    p.lines([P(bs, bs * 0.55), P(bs, -bs * 0.55), q, P(-bs, bs * 0.55), P(-bs, -bs * 0.55), q]);
+                };
+                let u0 = 0;
+                [0.3, 0.5, 0.7].forEach((u, i) => {
+                    p.fn((t) => at(u0 + (u - u0) * t), 80);
+                    bow(u);
+                    if (i === 1) p.mark();
+                    u0 = u;
+                });
+                return p.fn((t) => at(u0 + (1 - u0) * t), 80, true);
+            },
+        },
+        {
+            id: 'hilbert', name: 'Hilbert strip',
+            desc: 'Five order-2 Hilbert curves chained under the words with filleted corners, one block per step, like a space-filling circuit.',
+            build(g) {
+                const xs = g.left.x0, sp = g.W - g.e - g.rw * 0.5 - xs;
+                const c = Math.min(g.bh / 3, sp / 20.2);
+                const y0 = (g.bot.y0 + g.bot.y1) / 2 + c * 1.5, x0 = xs + (sp - c * 20.2) / 2 + c * 0.6;
+                const list = [];
+                for (let b = 0; b < 5; b++) {
+                    for (let d = 0; d < 16; d++) {
+                        const q = d2xy(4, d);
+                        list.push([x0 + (b * 4 + q[0]) * c, y0 - q[1] * c, d === 15 && b < 4 ? 1 : 0]);
+                    }
+                }
+                list.push([x0 + 19.6 * c, y0, 1]);
+                return pen(x0 - c * 0.6, y0).rounded(list, c * 0.4);
+            },
+        },
+        {
+            id: 'equalizer', name: 'Equalizer',
+            desc: 'A run of pill-topped level bars along the bottom of the slide, climbing like a spectrum analyser as the steps play through.',
+            build(g) {
+                const xa = g.left.x0, xb = g.W - g.e - g.rw * 0.5;
+                const base = g.bot.y1 - 2, Hm = base - g.bot.y0 - 2;
+                const bw = g.rw * 2.1, gp = g.rw * 2, pitch = bw + gp;
+                const n = Math.floor((xb - xa + gp) / pitch), off = xa + (xb - xa - (n * pitch - gp)) / 2;
+                const rnd = mulberry32(0xe9a1);
+                const ends = [1, 2, 3, 4, 5].map((k) => Math.round(n * k / 5) - 1);
+                const list = [];
+                for (let i = 0; i < n; i++) {
+                    const u = i / (n - 1), h = Hm * clamp((0.3 + 0.7 * u) * (0.5 + 0.5 * rnd()) + 0.12, 0.2, 1);
+                    const x = off + i * pitch;
+                    if (i) list.push([x, base]);
+                    list.push([x, base - h], [x + bw, base - h], [x + bw, base, ends.indexOf(i) >= 0 ? 1 : 0]);
+                }
+                return pen(off, base).rounded(list, bw / 2);
+            },
+        },
     ];
 
     // ---------- cards
@@ -973,15 +1420,16 @@
         this.route = route;
         this.marks = marks;
 
-        let minClear = Infinity, inside = true;
+        let minClear = Infinity, inside = true, at = null;
         for (let j = 0; j < route.xs.length; j++) {
-            const x = route.xs[j], y = route.ys[j];
-            minClear = Math.min(minClear, rectDist(x, y, g.T), rectDist(x, y, g.K));
+            const x = route.xs[j], y = route.ys[j], c = Math.min(rectDist(x, y, g.T), rectDist(x, y, g.K));
+            if (c < minClear) { minClear = c; at = [Math.round(x), Math.round(y)]; }
             if (x < g.rw * 0.5 || x > W - g.rw * 0.5 || y < g.rw * 0.5 || y > H - g.rw * 0.5) inside = false;
         }
         this.report = {
             n: this.i + 1, id: this.d.id, name: this.d.name, W, H,
-            minClear: +minClear.toFixed(1), need: +g.m.toFixed(1), ok: minClear >= g.m - 0.75 && inside, inside,
+            minClear: +minClear.toFixed(1), need: +g.m.toFixed(1), ok: minClear >= g.m - 0.75 && inside, inside, at,
+            T: [g.T.l, g.T.t, g.T.r, g.T.b].map(Math.round),
             L: Math.round(route.L), marks: marks.map(Math.round),
         };
 
@@ -1139,7 +1587,7 @@
         if (SHEET) doc.body.classList.add('is-sheet');
         doc.documentElement.style.setProperty('--rs-star', STAR_SVG);
         DESIGNS.forEach((d, i) => {
-            if (SOLO && SOLO !== i + 1) return;
+            if ((SOLO && SOLO !== i + 1) || i + 1 < FROM) return;
             cards.push(new Card(d, i, host));
         });
         const count = doc.getElementById('rsCount');
