@@ -1,7 +1,8 @@
 // Projects -> Skills: row 16's asterisk drops straight down its own column into slide 04, then turns like a wheel.
 // While the stage is stuck, one gesture (wheel flick, trackpad swipe, touch swipe, key) is one 60° detent and one
 // category swap; the first detent up and the last detent down hand the page back to normal scrolling.
-// GLITCH (pixel-bug.js) is leashed to the star's rim while the stage is stuck, then handed back to wandering.
+// GLITCH (pixel-bug.js) is leashed to Lusion's ribbon route while the stage is stuck, travelling a quarter of it per
+// detent and leaving dead pixels behind it until reverse steps eat them back; then it's handed back to wandering.
 (function (root) {
     'use strict';
 
@@ -153,8 +154,149 @@
         return z;
     }
 
+    // Lusion's section-2 ribbon, traced from lusion.co (1024x504 frames) in the prototype (cea88f4), as stage fractions.
+    // It is never drawn: it is GLITCH's route, and the damage trail it leaves.
+    const RIBBON = [[-0.06, 0.14], [0.12, 0.1], [0.27, 0.22], [0.31, 0.46], [0.26, 0.68], [0.12, 0.74], [0.05, 0.6], [0.12, 0.42],
+        [0.3, 0.3], [0.46, 0.1], [0.56, 0.06], [0.68, 0.24], [0.8, 0.27], [0.91, 0.25], [0.96, 0.45], [0.97, 0.72], [1.04, 1.06]];
+
+    // Uniform Catmull-Rom through the points (the prototype's bezier controls), mapped into the stage inset by `margin`
+    // so the bug is never clamped off its own trail, sampled densely, cut to the on-screen stretch (the ribbon enters
+    // off the left edge and leaves off the bottom-right corner), then parameterised by arc length.
+    function createRoute(pts, w, h, margin) {
+        const P = pts.map((q) => [margin + q[0] * (w - 2 * margin), margin + q[1] * (h - 2 * margin)]);
+        const SEG = 64;
+        const raw = [];
+        for (let i = 0; i < P.length - 1; i++) {
+            const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+            const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+            const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+            for (let j = i ? 1 : 0; j <= SEG; j++) {
+                const t = j / SEG, u = 1 - t;
+                raw.push([
+                    u * u * u * p1[0] + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * p2[0],
+                    u * u * u * p1[1] + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * p2[1],
+                ]);
+            }
+        }
+        const inb = (q) => q[0] >= margin && q[0] <= w - margin && q[1] >= margin && q[1] <= h - margin;
+        let a = raw.findIndex(inb), b = -1;
+        for (let i = raw.length - 1; i >= 0; i--) if (inb(raw[i])) { b = i; break; }
+        if (a < 0 || b <= a) {
+            a = 0;
+            b = raw.length - 1;
+        }
+        const xs = [], ys = [], cum = [];
+        let L = 0;
+        for (let i = a; i <= b; i++) {
+            if (xs.length) L += Math.hypot(raw[i][0] - xs[xs.length - 1], raw[i][1] - ys[ys.length - 1]);
+            xs.push(raw[i][0]);
+            ys.push(raw[i][1]);
+            cum.push(L);
+        }
+        const n = xs.length;
+        const pos = (s) => {
+            s = Math.max(0, Math.min(L, s));
+            let lo = 0, hi = n - 1;
+            while (hi - lo > 1) {
+                const mid = (lo + hi) >> 1;
+                if (cum[mid] <= s) lo = mid;
+                else hi = mid;
+            }
+            const f = cum[hi] > cum[lo] ? (s - cum[lo]) / (cum[hi] - cum[lo]) : 0;
+            return [xs[lo] + (xs[hi] - xs[lo]) * f, ys[lo] + (ys[hi] - ys[lo]) * f];
+        };
+        // Tangent from a short chord, so heading doesn't snap at sample joints
+        const atS = (s) => {
+            const p = pos(s), q0 = pos(s - 6), q1 = pos(s + 6);
+            return { x: p[0], y: p[1], a: Math.atan2(q1[1] - q0[1], q1[0] - q0[0]) };
+        };
+        return { L, atS, at: (t) => atS(t * L) };
+    }
+
+    function mulberry32(seed) {
+        let a = seed | 0;
+        return () => {
+            a = (a + 0x6D2B79F5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    // Dead-pixel damage along a route, seeded so the same stage always breaks the same way. Cells sit on a `cell`-px grid
+    // and each grid cell is owned by the first stamp that reaches it, so drawing every cell with s <= progress grows and
+    // erases the trail without re-rolling anything. Kinds: 0 dead, 1 RGB sub-pixels, 2 magenta, 3 cyan, 4 green, 5 red,
+    // 6 blue, 7 hot white, 8 dim.
+    const DAMAGE_ZONES = [
+        [0.34, [60, 6, 3, 3, 2, 1, 1, 6, 18]],     // dead patch
+        [0.46, [12, 26, 14, 14, 14, 5, 5, 8, 2]],  // stuck sub-pixels
+        [0.2, [18, 32, 9, 10, 4, 3, 2, 22, 0]],    // burn-in
+    ];
+    function buildDamage(route, o) {
+        const rnd = mulberry32(o.seed || 0x5ced04);
+        const c = o.cell;
+        const owned = new Map();
+        const cells = [], tears = [];
+        const ph1 = rnd() * 6.283, ph2 = rnd() * 6.283;
+        const pick = (weights) => {
+            let r = rnd() * weights.reduce((x, y) => x + y, 0);
+            for (let i = 0; i < weights.length; i++) if ((r -= weights[i]) < 0) return i;
+            return 0;
+        };
+        // Dead clusters overwrite whatever kind already owns a cell (keeping its s), so they punch through the band
+        const put = (gx, gy, s, k, over) => {
+            const key = (gx + 4096) * 8192 + (gy + 4096);
+            const had = owned.get(key);
+            if (had) {
+                if (over) {
+                    had.k = k;
+                    had.f = false;
+                }
+                return;
+            }
+            const cell = { gx, gy, s, k, f: k !== 0 && k !== 8 && rnd() < 0.3 };
+            owned.set(key, cell);
+            cells.push(cell);
+        };
+        let zone = DAMAGE_ZONES[1][1], zoneUntil = -1;
+        for (let s = 0; s <= route.L; s += c * 0.9) {
+            const p = route.atS(s);
+            const nx = -Math.sin(p.a), ny = Math.cos(p.a);
+            const wob = 0.5 + 0.3 * Math.sin(s / 90 + ph1) + 0.2 * Math.sin(s / 37 + ph2);
+            const hw = (o.bandMin + (o.bandMax - o.bandMin) * wob) / 2;
+            if (s >= zoneUntil) {
+                const r = rnd();
+                zone = r < DAMAGE_ZONES[0][0] ? DAMAGE_ZONES[0][1] : r < DAMAGE_ZONES[0][0] + DAMAGE_ZONES[1][0] ? DAMAGE_ZONES[1][1] : DAMAGE_ZONES[2][1];
+                zoneUntil = s + 30 + rnd() * 110;
+            }
+            for (let off = -hw * 1.6; off <= hw * 1.6; off += c) {
+                const r = Math.abs(off) / hw;
+                const fill = r < 0.45 ? 0.9 : r < 1 ? 0.9 - (r - 0.45) * 1.25 : 0.06;
+                if (rnd() >= fill) continue;
+                put(Math.floor((p.x + nx * off + (rnd() - 0.5) * c) / c), Math.floor((p.y + ny * off + (rnd() - 0.5) * c) / c), s, pick(zone));
+            }
+            if (rnd() < 0.035) {
+                const w = 2 + Math.floor(rnd() * 4), hh = 1 + Math.floor(rnd() * 3);
+                const gx = Math.floor((p.x + nx * (rnd() - 0.5) * hw) / c) - (w >> 1), gy = Math.floor((p.y + ny * (rnd() - 0.5) * hw) / c) - (hh >> 1);
+                for (let i = 0; i < w; i++) for (let j = 0; j < hh; j++) put(gx + i, gy + j, s, 0, true);
+            }
+            if (rnd() < 0.016) {
+                tears.push({
+                    s,
+                    gx: Math.floor((p.x - rnd() * hw * 2) / c),
+                    gy: Math.floor((p.y + (rnd() - 0.5) * hw * 2) / c),
+                    len: 4 + Math.floor(rnd() * 22),
+                    dx: (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 3)),
+                    h: rnd() < 0.55 ? 0.5 : 1,
+                    k: rnd() < 0.6 ? 7 : 2 + Math.floor(rnd() * 3),
+                });
+            }
+        }
+        return { cells, tears };
+    }
+
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone };
+        module.exports = { createIntent, createZone, createRoute, buildDamage, RIBBON };
         return;
     }
 
@@ -185,7 +327,6 @@
     ];
 
     const ARM = Math.PI / 3;          // one detent: the asterisk's six arms repeat every 60°
-    const STRIDE_REF = ARM * 1.5;     // rad/s that counts as a full walking stride for the bug
     const LOCK = 0.86;                // s a detent owns the input; the swap below settles inside it
     const T_OUT = 0.24, CAP_OUT = 0.06, T_IN = 0.52, CAP_IN = 0.12;
     const SHIFT = 135;                // % of a glyph's line box; clears the mask's 0.12em/0.2em padding either way
@@ -194,8 +335,15 @@
     const STEP_VH = 0.3;
     const APP_URL = '/wp-content/themes/lamalama2025/dist/assets/app-DjHRamTc.js';
 
-    const st = { travel: 0, travelT: 0, wheel: 0, angle: 0, vel: 0 };
+    const st = { travel: 0, travelT: 0, wheel: 0, angle: 0 };
     const rail = { p: 0, tl: 0, tr: 0, sl: 0, sr: 0 };
+    // GLITCH's progress along the route: detent k of N rests at k / (N - 1), so detent 1 is the start and N the end
+    const path = { t: 0 };
+    const dmgCanvas = track.querySelector('.sk-damage');
+    const dmgCtx = dmgCanvas ? dmgCanvas.getContext('2d') : null;
+    let route = null, damage = null, buckets = null, fringe = null, routeKey = '';
+    let cellDev = 5, dmgScale = 1, pathTween = null, pathDir = 1, dmgDrawn = -1, dmgDirty = true;
+    let flickerOff = null, tearJolt = null, nextFlicker = 0;
     let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03, A = 0, B = 0, gapPx = 18;
     let geo = [];
     let visible = false, drawn = -1, detached = false, railDirty = true;
@@ -328,6 +476,12 @@
         if (fill) fill.kill();
         const g = geo[Math.max(k, 0)];
         fill = gsap.to(rail, Object.assign({ p: (k + 1) / N, duration: 0.9, ease: 'power3.out', onUpdate: () => { railDirty = true; } }, g || {}));
+        const pt = Math.max(k, 0) / (N - 1);
+        if (pt !== path.t) {
+            pathDir = pt > path.t ? 1 : -1;
+            if (pathTween) pathTween.kill();
+            pathTween = gsap.to(path, { t: pt, duration: LOCK, ease: 'power2.inOut' });
+        }
         if (k >= 0 && leashed) say(CAT_LINES[k]);
     }
 
@@ -439,6 +593,7 @@
         const scr = scroller.getBoundingClientRect();
         A = Math.round(tr.top - scr.top + scroller.scrollTop);
         B = A + Math.round(track.offsetHeight - scroller.clientHeight);
+        buildTrail();
 
         if (reduced) return;
         // Before it sticks the stage rides the track's top edge, so the star's start offset is measured from there
@@ -488,18 +643,125 @@
         });
     }
 
-    // GLITCH starts in the top V of the star and rides the wheel; x is clamped so the left arc stays on screen.
-    // Viewport coordinates, read per bug frame so it stays glued to the stage.
-    function orbit() {
+    // ---------- the route and the damage GLITCH leaves on it
+
+    // The route maps the ribbon onto the stage box; the damage grid is snapped to whole backing pixels (5 CSS px cells
+    // at 1x, 10 device px at 2x), and the backing store is capped at 2x since the look is deliberately coarse.
+    function buildTrail() {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        if (!w || !h) return;
+        const scale = Math.min(2, root.devicePixelRatio || 1);
+        const key = w + 'x' + h + '@' + scale;
+        if (key === routeKey) return;
+        routeKey = key;
+        dmgScale = scale;
+        cellDev = Math.max(3, Math.round(5 * scale));
+        route = createRoute(RIBBON, w, h, 36);
+        damage = buildDamage(route, { cell: cellDev / scale, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04 });
+        buckets = Array.from({ length: 9 }, () => []);
+        fringe = [];
+        damage.cells.forEach((c) => {
+            buckets[c.k].push(c);
+            if (c.f) fringe.push(c);
+        });
+        flickerOff = null;
+        tearJolt = null;
+        if (dmgCanvas) {
+            dmgCanvas.width = Math.round(w * scale);
+            dmgCanvas.height = Math.round(h * scale);
+        }
+        dmgDirty = true;
+    }
+
+    const DMG_FILL = ['#000', '', '#ff00ff', '#00ffff', '#00ff41', '#ff1a1a', '#1f4bff', '#ffffff', '#2b2b2b'];
+    const SUB = ['#ff0000', '#00ff00', '#0000ff'];
+
+    function drawTrail(sNow) {
+        const ctx = dmgCtx;
+        ctx.clearRect(0, 0, dmgCanvas.width, dmgCanvas.height);
+        if (!damage || sNow <= 0) return;
+        const cd = cellDev, fr = Math.max(1, Math.round(dmgScale));
+        const off = flickerOff;
+        // RGB fringe: red and cyan ghosts a device pixel either side of a third of the lit cells
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ff0040';
+        for (let i = 0; i < fringe.length && fringe[i].s <= sNow; i++) ctx.fillRect(fringe[i].gx * cd - fr, fringe[i].gy * cd, cd, cd);
+        ctx.fillStyle = '#00e5ff';
+        for (let i = 0; i < fringe.length && fringe[i].s <= sNow; i++) ctx.fillRect(fringe[i].gx * cd + fr, fringe[i].gy * cd, cd, cd);
+        ctx.globalAlpha = 1;
+        for (let k = 0; k < 9; k++) {
+            const list = buckets[k];
+            if (k === 1) {
+                const w3 = Math.max(1, Math.floor(cd / 3));
+                for (let sp = 0; sp < 3; sp++) {
+                    ctx.fillStyle = SUB[sp];
+                    for (let i = 0; i < list.length && list[i].s <= sNow; i++) {
+                        if (off && off.has(list[i])) continue;
+                        ctx.fillRect(list[i].gx * cd + sp * w3, list[i].gy * cd, sp === 2 ? cd - 2 * w3 : w3, cd);
+                    }
+                }
+                continue;
+            }
+            ctx.fillStyle = DMG_FILL[k];
+            for (let i = 0; i < list.length && list[i].s <= sNow; i++) {
+                if (off && off.has(list[i])) continue;
+                ctx.fillRect(list[i].gx * cd, list[i].gy * cd, cd, cd);
+            }
+        }
+        if (off) {
+            ctx.fillStyle = '#000';
+            off.forEach((c) => { if (c.s <= sNow) ctx.fillRect(c.gx * cd, c.gy * cd, cd, cd); });
+        }
+        // Tear slivers: a displaced scanline with a hard red/cyan split
+        damage.tears.forEach((t) => {
+            if (t.s > sNow) return;
+            const x = (t.gx + t.dx + (tearJolt === t ? t.dx * 2 : 0)) * cd, y = t.gy * cd;
+            const w = t.len * cd, h = Math.max(fr, Math.round(cd * t.h));
+            ctx.globalAlpha = 0.75;
+            ctx.fillStyle = '#ff0040';
+            ctx.fillRect(x - 2 * fr, y, w, h);
+            ctx.fillStyle = '#00e5ff';
+            ctx.fillRect(x + 2 * fr, y, w, h);
+            ctx.globalAlpha = 0.92;
+            ctx.fillStyle = DMG_FILL[t.k];
+            ctx.fillRect(x, y, w, h);
+        });
+        ctx.globalAlpha = 1;
+    }
+
+    // A few lit pixels die and come back, and once in a while a tear jumps; throttled, and only while the stage is seen
+    function flicker(sNow, t) {
+        if (t < nextFlicker) return false;
+        nextFlicker = t + 110 + Math.random() * 90;
+        let lo = 0, hi = damage.cells.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (damage.cells[mid].s <= sNow) lo = mid + 1;
+            else hi = mid;
+        }
+        const n = lo;
+        flickerOff = new Set();
+        const count = Math.min(18, Math.ceil(n * 0.006));
+        for (let i = 0; i < count; i++) {
+            const c = damage.cells[Math.floor(Math.random() * n)];
+            if (c && c.k !== 0 && c.k !== 8) flickerOff.add(c);
+        }
+        tearJolt = null;
+        if (Math.random() < 0.06) {
+            const live = damage.tears.filter((tr) => tr.s <= sNow);
+            if (live.length) tearJolt = live[Math.floor(Math.random() * live.length)];
+        }
+        return true;
+    }
+
+    // GLITCH rides the route at the live path progress, facing along the tangent in the direction it's travelling.
+    // Viewport coordinates, read per bug frame so it stays glued to the stage; it flies while a detent is moving it.
+    function routeTarget() {
+        if (!route) return null;
         const r = stage.getBoundingClientRect();
-        const th = st.angle - Math.PI / 2;
-        const R = S * 0.44 + 40;
-        const m = Math.max(-1, Math.min(1, st.vel / STRIDE_REF));
-        return {
-            x: r.left + Math.max(34, Math.min(W - 34, cx + R * Math.cos(th))),
-            y: r.top + Math.max(40, Math.min(H - 40, H / 2 + R * Math.sin(th))),
-            heading: th + (Math.PI / 2) * m,
-        };
+        const p = route.at(path.t);
+        const moving = !!(pathTween && pathTween.isActive());
+        return { x: r.left + p.x, y: r.top + p.y, heading: pathDir > 0 ? p.a : p.a + Math.PI, lift: moving ? 1 : 0 };
     }
 
     function leashOff() {
@@ -643,20 +905,50 @@
 
         st.travel += (st.travelT - st.travel) * (1 - Math.exp(-s * 14));
         if (Math.abs(st.travelT - st.travel) < 1e-4) st.travel = st.travelT;
-        const a = st.wheel * ARM;
-        st.vel += ((a - st.angle) / s - st.vel) * (1 - Math.exp(-s * 10));
-        st.angle = a;
+        st.angle = st.wheel * ARM;
         if (visible || st.travel !== drawn) {
             render();
             drawn = st.travel;
         }
         if (railDirty && (visible || rail.p === 0)) renderRail();
+        if (dmgCtx && damage && visible) {
+            const sNow = path.t * route.L;
+            if (sNow > 0 && flicker(sNow, now())) dmgDirty = true;
+            if (dmgDirty || sNow !== dmgDrawn) {
+                drawTrail(sNow);
+                dmgDrawn = sNow;
+                dmgDirty = false;
+            }
+        }
         // pixel-bug mounts after the intro, so the hand-over waits for its API rather than racing it
         if (wantLeash && !leashed && typeof root.__pixelBugLeash === 'function') {
-            root.__pixelBugLeash(orbit);
+            root.__pixelBugLeash(routeTarget);
             leashed = true;
             if (shown >= 0) say(CAT_LINES[shown]);
         }
+    }
+
+    // Reduced motion: no stepping, so the trail is drawn whole and still, and GLITCH is parked on the route's end
+    // whenever that point is on screen (pixel-bug places a leashed bug without animating it under reduced motion).
+    function reducedTrail() {
+        path.t = 1;
+        if (dmgCtx && damage) drawTrail(route.L);
+        const sync = () => {
+            if (!route || typeof root.__pixelBugLeash !== 'function') return;
+            const r = stage.getBoundingClientRect();
+            const e = route.at(1);
+            const y = r.top + e.y;
+            const on = y > 0 && y < scroller.clientHeight;
+            if (on && !leashed) {
+                root.__pixelBugLeash(routeTarget);
+                leashed = true;
+            } else if (!on && leashed) {
+                leashOff();
+            }
+        };
+        scroller.addEventListener('scroll', sync, { passive: true });
+        setInterval(sync, 1000);
+        sync();
     }
 
     function init() {
@@ -666,11 +958,15 @@
             st.travel = 1;
             measure();
             render();
-            root.addEventListener('resize', () => {
+            reducedTrail();
+            const redo = () => {
                 syncHeight();
                 measure();
                 render();
-            }, { passive: true });
+                if (dmgCtx && damage) drawTrail(route.L);
+            };
+            root.addEventListener('resize', redo, { passive: true });
+            if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(redo);
             return;
         }
 

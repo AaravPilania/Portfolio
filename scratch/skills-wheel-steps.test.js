@@ -261,4 +261,94 @@ test('input is ignored when free or when the classifier said no', () => {
     assert.strictEqual(z.step, 0);
 });
 
+// ---------- route + damage
+
+const { createRoute, buildDamage, RIBBON } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+const SIZES = [[1920, 1080], [1366, 768], [390, 844]];
+
+test('route stays inside the stage margin and runs the ribbon\'s direction', () => {
+    SIZES.forEach(([w, h]) => {
+        const r = createRoute(RIBBON, w, h, 36);
+        for (let i = 0; i <= 200; i++) {
+            const p = r.at(i / 200);
+            assert.ok(p.x >= 35.5 && p.x <= w - 35.5 && p.y >= 35.5 && p.y <= h - 35.5, w + 'x' + h + ' t=' + i / 200 + ' -> ' + p.x.toFixed(1) + ',' + p.y.toFixed(1));
+        }
+        const a = r.at(0), b = r.at(1);
+        assert.ok(a.x < w * 0.1 && a.y < h * 0.25, 'starts top-left: ' + a.x.toFixed(0) + ',' + a.y.toFixed(0));
+        assert.ok(b.x > w * 0.85 && b.y > h * 0.6, 'ends bottom-right: ' + b.x.toFixed(0) + ',' + b.y.toFixed(0));
+        assert.ok(r.L > (w + h), 'long enough: ' + r.L.toFixed(0));
+    });
+});
+
+test('route is arc-length parameterised: equal t steps are equal distances along it', () => {
+    const r = createRoute(RIBBON, 1920, 1080, 36);
+    const K = 400;
+    let worst = 0;
+    for (let i = 0; i < K; i++) {
+        const p = r.at(i / K), q = r.at((i + 1) / K);
+        worst = Math.max(worst, Math.abs(Math.hypot(q.x - p.x, q.y - p.y) - r.L / K) / (r.L / K));
+    }
+    assert.ok(worst < 0.02, 'chord vs arc error ' + (worst * 100).toFixed(2) + '%');
+});
+
+test('route tangent points along the direction of travel', () => {
+    const r = createRoute(RIBBON, 1920, 1080, 36);
+    for (let i = 1; i < 100; i++) {
+        const p = r.at(i / 100), q = r.at(i / 100 + 0.002);
+        const d = Math.atan2(q.y - p.y, q.x - p.x);
+        const err = Math.abs(Math.atan2(Math.sin(d - p.a), Math.cos(d - p.a)));
+        assert.ok(err < 0.35, 't=' + i / 100 + ' err ' + err.toFixed(2));
+    }
+});
+
+function dmgFor(w, h) {
+    const r = createRoute(RIBBON, w, h, 36);
+    return { r, d: buildDamage(r, { cell: 5, bandMin: Math.max(14, w * 0.015), bandMax: Math.max(26, w * 0.03), seed: 0x5ced04 }) };
+}
+
+test('damage is deterministic: same stage, same dead pixels', () => {
+    const a = dmgFor(1920, 1080).d, b = dmgFor(1920, 1080).d;
+    assert.strictEqual(JSON.stringify(a), JSON.stringify(b));
+});
+
+test('damage cells and tears are ordered by arc length, so a progress prefix is the trail so far', () => {
+    const { r, d } = dmgFor(1920, 1080);
+    for (let i = 1; i < d.cells.length; i++) assert.ok(d.cells[i].s >= d.cells[i - 1].s);
+    for (let i = 1; i < d.tears.length; i++) assert.ok(d.tears[i].s >= d.tears[i - 1].s);
+    assert.ok(d.cells[d.cells.length - 1].s <= r.L);
+    const keys = new Set(d.cells.map((c) => c.gx + ',' + c.gy));
+    assert.strictEqual(keys.size, d.cells.length, 'one owner per grid cell');
+});
+
+test('damage hugs the route in a 1.5-3vw band with ragged edges', () => {
+    const w = 1920, h = 1080;
+    const { r, d } = dmgFor(w, h);
+    const pts = [];
+    for (let i = 0; i <= 2000; i++) pts.push(r.at(i / 2000));
+    const near = (x, y) => pts.reduce((m, p) => Math.min(m, Math.hypot(p.x - x, p.y - y)), Infinity);
+    let far = 0, within = 0;
+    const sample = d.cells.filter((c, i) => i % 7 === 0 && c.k !== 0);
+    sample.forEach((c) => {
+        const dist = near((c.gx + 0.5) * 5, (c.gy + 0.5) * 5);
+        far = Math.max(far, dist);
+        if (dist <= w * 0.015 + 5) within++;
+    });
+    assert.ok(far <= w * 0.03 * 0.8 + 10, 'farthest lit cell ' + far.toFixed(1) + 'px');
+    assert.ok(within / sample.length > 0.8, 'most cells inside the band: ' + (within / sample.length * 100).toFixed(0) + '%');
+});
+
+test('damage mixes dead, sub-pixel, stuck and hot pixels, plus a few tears', () => {
+    const { d } = dmgFor(1920, 1080);
+    const count = Array(9).fill(0);
+    d.cells.forEach((c) => count[c.k]++);
+    const n = d.cells.length;
+    assert.ok(n > 2000 && n < 20000, 'cell count ' + n);
+    assert.ok(count[0] / n > 0.1, 'dead ' + count[0]);
+    assert.ok(count[1] / n > 0.1, 'rgb ' + count[1]);
+    assert.ok((count[2] + count[3] + count[4]) / n > 0.1, 'stuck ' + (count[2] + count[3] + count[4]));
+    assert.ok(count[7] / n > 0.03, 'hot ' + count[7]);
+    assert.ok(d.tears.length >= 4, 'tears ' + d.tears.length);
+    console.log('     ' + n + ' cells, ' + d.tears.length + ' tears; kinds ' + count.join('/'));
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));

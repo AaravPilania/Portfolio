@@ -791,7 +791,7 @@
                 }
             } else if (leash && !reduced) {
                 // A scene steers it (the slide 04 skills wheel): it chases the target loosely, then locks on by LEASH_MS.
-                // Scroll hovers and speech still play on top; it flies while the target is far and walks once it's close.
+                // Scroll hovers and speech still play on top; it flies while the target is far or the scene asks (lift), and walks once it's close.
                 wob *= 0.8;
                 lastActive = now;
                 if (act && act.type === 'fly' && act.scroll) {
@@ -819,9 +819,18 @@
                     x = nx;
                     y = ny;
                     if (dt > 0) speed = moved / dt;
+                    if (p.lift) liftTo = Math.max(liftTo, p.lift);
                 }
                 footsteps(dt);
                 state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
+            } else if (leash && reduced) {
+                const p = leash.target(now);
+                if (p) {
+                    x = clampX(p.x);
+                    y = clampY(p.y);
+                    heading = p.heading;
+                }
+                speed = 0;
             } else if (state !== 'sleep' && !reduced) {
                 wob *= 0.8;
                 const near = Math.hypot(mouse.x - x, mouse.y - y) < 26;
@@ -1110,7 +1119,8 @@
             squash = 0.25;
             speak(skin.welcome, now, 'skin', USER);
         };
-        // Scenes can take GLITCH over: target(now) returns { x, y, heading } in viewport px every frame (heading 0 = right).
+        // Scenes can take GLITCH over: target(now) returns { x, y, heading, lift? } in viewport px every frame (heading 0 =
+        // right, lift 1 = fly).
         // Passing null hands it back to wandering from wherever the scene left it.
         window.__pixelBugLeash = (target) => {
             const now = performance.now();

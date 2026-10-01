@@ -32,6 +32,18 @@
     overflow: visible;
 }
 
+/* GLITCH's trail of dead pixels along the (unseen) Lusion ribbon route; under the rail, text and star */
+.sk-damage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
 /* The axis: one hairline through the stage's vertical centre, cut into segments that stop short of the words */
 .sk-rail {
     position: absolute;
