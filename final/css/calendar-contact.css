@@ -1,0 +1,372 @@
+:root {
+    --gc-blue: #1a73e8;
+    --gc-ink: #3c4043;
+    --gc-ink-soft: #70757a;
+    --gc-line: #dadce0;
+    --gc-font: 'Google Sans', Roboto, 'Segoe UI', Arial, sans-serif;
+    /* geometry written by calendar-contact.js so the DOM chrome and the canvas grid share one set of numbers */
+    --gc-top: 64px;
+    --gc-dayh: 80px;
+    --gc-gutter: 64px;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #fff;
+}
+
+body.gc {
+    font-family: var(--gc-font);
+    color: var(--gc-ink);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+}
+
+.gc-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.gc button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+/* ---------- top bar ---------- */
+.gc-top {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: var(--gc-top);
+    display: flex;
+    align-items: center;
+    padding: 0 16px 0 8px;
+    gap: 4px;
+    background: #fff;
+    z-index: 3;
+}
+
+.gc-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    fill: #5f6368;
+    flex: none;
+}
+
+.gc-icon:hover,
+.gc-today:hover,
+.gc-view:hover {
+    background: rgba(60, 64, 67, 0.08);
+}
+
+.gc-brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 28px;
+    color: var(--gc-ink);
+    text-decoration: none;
+    flex: none;
+}
+
+.gc-logo {
+    width: 40px;
+    height: 40px;
+}
+
+.gc-wordmark {
+    font-size: 22px;
+    line-height: 28px;
+    color: #3c4043;
+    letter-spacing: 0;
+}
+
+.gc-today {
+    height: 36px;
+    padding: 0 16px !important;
+    margin-right: 8px;
+    border: 1px solid var(--gc-line) !important;
+    border-radius: 18px;
+    font-size: 14px !important;
+    font-weight: 500;
+    letter-spacing: 0.25px;
+    flex: none;
+}
+
+.gc-nav {
+    display: flex;
+    flex: none;
+}
+
+.gc-nav .gc-icon {
+    width: 32px;
+    height: 32px;
+}
+
+.gc-title {
+    margin-left: 12px;
+    font-size: 22px;
+    line-height: 28px;
+    color: #3c4043;
+    white-space: nowrap;
+}
+
+.gc-spacer {
+    flex: 1;
+}
+
+.gc-view {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    padding: 0 6px 0 14px !important;
+    border: 1px solid var(--gc-line) !important;
+    border-radius: 18px;
+    font-size: 14px !important;
+    font-weight: 500;
+    fill: #5f6368;
+    flex: none;
+}
+
+.gc-avatar {
+    width: 32px;
+    height: 32px;
+    margin-left: 14px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #7e57c2;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    flex: none;
+    box-shadow: 0 0 0 4px #fff, 0 0 0 5px #e8eaed;
+}
+
+/* ---------- day header ---------- */
+.gc-days {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--gc-top);
+    height: var(--gc-dayh);
+    padding-left: var(--gc-gutter);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    background: #fff;
+    border-bottom: 1px solid var(--gc-line);
+    z-index: 2;
+}
+
+.gc-tz {
+    position: absolute;
+    left: 0;
+    bottom: 4px;
+    width: var(--gc-gutter);
+    padding-right: 8px;
+    text-align: right;
+    font-size: 10px;
+    color: var(--gc-ink-soft);
+    letter-spacing: 0.1px;
+}
+
+.gc-day {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 10px;
+    color: var(--gc-ink-soft);
+}
+
+.gc-day::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 14px;
+    border-left: 1px solid var(--gc-line);
+}
+
+.gc-day__name {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.gc-day__num {
+    width: 46px;
+    height: 46px;
+    margin-top: 2px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 26px;
+    line-height: 1;
+    color: var(--gc-ink);
+}
+
+.gc-day.is-today {
+    color: var(--gc-blue);
+}
+
+.gc-day.is-today .gc-day__num {
+    background: var(--gc-blue);
+    color: #fff;
+}
+
+/* ---------- time gutter ---------- */
+.gc-times {
+    position: fixed;
+    left: 0;
+    top: calc(var(--gc-top) + var(--gc-dayh));
+    width: var(--gc-gutter);
+    bottom: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.gc-time {
+    position: absolute;
+    right: 12px;
+    font-size: 10px;
+    line-height: 12px;
+    color: var(--gc-ink-soft);
+    white-space: nowrap;
+    transform: translateY(-50%);
+}
+
+.gc-canvas {
+    position: fixed;
+    left: 0;
+    top: calc(var(--gc-top) + var(--gc-dayh));
+    display: block;
+    z-index: 1;
+}
+
+/* ---------- snackbar (sound hint) ---------- */
+.gc-snack {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 20px 0 16px;
+    border-radius: 4px;
+    background: #323232;
+    color: #fff;
+    fill: #fff;
+    font-family: Roboto, Arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.25px;
+    box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2), 0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.gc-snack[hidden] {
+    display: flex;
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+    visibility: hidden;
+}
+
+/* ---------- narrow: the 3-day view of the mobile app ---------- */
+@media (max-width: 699px) {
+    .gc-top {
+        padding: 0 8px 0 4px;
+    }
+
+    .gc-wordmark,
+    .gc-nav,
+    .gc-today {
+        display: none;
+    }
+
+    .gc-brand {
+        padding-right: 4px;
+    }
+
+    .gc-logo {
+        width: 32px;
+        height: 32px;
+    }
+
+    .gc-title {
+        margin-left: 4px;
+        font-size: 20px;
+    }
+
+    .gc-view {
+        padding: 0 4px 0 10px !important;
+        height: 32px;
+        font-size: 13px !important;
+    }
+
+    .gc-avatar {
+        width: 28px;
+        height: 28px;
+        margin-left: 10px;
+        font-size: 13px;
+    }
+
+    .gc-day {
+        padding-top: 8px;
+    }
+
+    .gc-day__num {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+    }
+
+    .gc-time {
+        right: 6px;
+        font-size: 9px;
+    }
+
+    .gc-tz {
+        display: none;
+    }
+
+    .gc-snack {
+        left: 50%;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        transform: translate3d(-50%, 0, 0);
+        white-space: nowrap;
+    }
+
+    .gc-snack[hidden] {
+        transform: translate3d(-50%, 8px, 0);
+    }
+}
