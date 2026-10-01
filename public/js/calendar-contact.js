@@ -1,5 +1,5 @@
 // Contact page: a Google Calendar week that refines into a 15-minute slot mosaic, books "I'M BUSY RN" glyph by glyph,
-// coarsens back to a week, plays a dance clip through the event palette while the grid refines again, and coarsens into an
+// coarsens back to a week, plays the reel's dance (sampled cell by cell) through the event palette while the grid refines again, and coarsens into an
 // ordinary week before the loop. Every change is a hard state swap on the 137 BPM grid; one 17 s cycle locked to the
 // soundtrack loop.
 (() => {
@@ -15,11 +15,11 @@
     const T = {
         refine: beat(1), empty: beat(1) + 3 * STEP, text: beat(GLYPH_BEATS[0]), textFull: beat(GLYPH_BEATS[8]),
         coarsen: beat(9.5), coarse: beat(9.5) + 3 * STEP, dance: beat(11), refine3: beat(17), refine5: beat(17.5),
-        fine: beat(19), outro: beat(37), outroCoarse: beat(37) + 3 * STEP, week: beat(37.5),
+        sub7: beat(18.25), fine: beat(19), outro: beat(37), outroCoarse: beat(37) + 3 * STEP, week: beat(37.5),
     };
     const GLYPH_T = new Float64Array(GLYPH_BEATS.map(beat));
 
-    // Google Calendar event colours; order matches DISPLAY in scratch/calendar/build-dance.js
+    // Google Calendar event colours; order matches PALETTE in scratch/calendar/reel-build.py
     const PALETTE = ['#53b44b', '#0b8043', '#616161', '#fbfbfb', '#a6c1f6', '#7986cb', '#5482eb', '#3f51b5', '#039be5',
         '#d50000', '#f4511e', '#f6bf26', '#e67c73'];
     const NP = PALETTE.length;
@@ -86,16 +86,20 @@
     };
     const LINES = ["I'M", 'BUSY', 'RN'];
 
-    // Resolution levels: S sub-columns per day, q slots per cell
+    // Rows are counted in 7.5-minute units (U per hour). Resolution levels: S sub-columns per day, q units per cell.
+    const U = 8;
     const LV = [
-        { S: 7, q: 1 }, // 0 full
-        { S: 5, q: 1 }, // 1
-        { S: 3, q: 2 }, // 2
-        { S: 2, q: 4 }, // 3 hour-merged
-        { S: 1, q: 4 }, // 4 one column per day, hour cells
-        { S: 1, q: 1 }, // 5 one column per day, 15-minute slices
-        { S: 3, q: 1 }, // 6
+        { S: 7, q: 2 }, // 0 the reel's grid: 15-minute slots
+        { S: 5, q: 2 }, // 1
+        { S: 3, q: 4 }, // 2
+        { S: 2, q: 8 }, // 3 hour-merged
+        { S: 1, q: 8 }, // 4 one column per day, hour cells
+        { S: 1, q: 2 }, // 5 one column per day, 15-minute slices
+        { S: 3, q: 2 }, // 6
+        { S: 7, q: 2 }, // 7 the dance at full clarity: sub-columns per day set in layout() to keep the reel's cell shape
     ];
+    // Glyphs and dance frames both live on the reel's grid (7 sub-columns/day, 15-minute slots); levels vote over it
+    const TEXT_SC = 7, TEXT_SQ = 2, MAX_SD = 12;
     const M_WEEK = 0, M_EMPTY = 1, M_TEXT = 2, M_DANCE = 3, M_WEEKGRID = 4;
 
     const canvas = document.getElementById('gcCanvas');
@@ -118,23 +122,24 @@
         const top = mobile ? 52 : 56, dayH = mobile ? 50 : 58, gutter = mobile ? 34 : 56;
         const y0 = top + dayH, gw = vw - gutter, gh = vh - y0;
         const pitch = gw / (7 * SUB);
-        // The reel's slots are ~0.9 as tall as a sub-column is wide; keep that as far as 8-12 visible hours allow
-        const hours = Math.max(8, Math.min(12, Math.round(gh / (4 * pitch * 0.91))));
-        const startHour = Math.max(7, Math.min(9, Math.round(12.5 - hours / 2)));
-        const R = hours * 4, slotH = gh / R, dayW = gw / 7;
+        // The reel's 10 hours, so its dance frames land on our slots row for row
+        const hours = 10, startHour = 8;
+        const R = hours * U, unitH = gh / R, slotH = unitH * 2, dayW = gw / 7;
+        // Reel cells are 1.09 as wide as tall; portrait screens trade some of that for showing more of the dancer
+        const sd = Math.max(4, Math.min(MAX_SD, Math.round(dayW / (slotH * 1.09) * (gw < gh ? 1.9 : 1))));
         const ys = new Int32Array(R + 1);
-        for (let r = 0; r <= R; r++) ys[r] = Math.round(r * slotH * dpr);
-        const gx = Math.max(1, Math.round(pitch * dpr * 0.11));
-        const gy = Math.max(1, Math.round(slotH * dpr * 0.1));
+        for (let r = 0; r <= R; r++) ys[r] = Math.round(r * unitH * dpr);
         const fs = Math.max(7, Math.min(11, Math.round(Math.min(pitch, slotH) * 0.33)));
         G = {
-            vw, vh, dpr, mobile, top, dayH, gutter, y0, gw, gh, pitch, hours, startHour, R, slotH, dayW, ys, gx, gy, fs,
+            vw, vh, dpr, mobile, top, dayH, gutter, y0, gw, gh, pitch, hours, startHour, R, unitH, slotH, dayW, ys, fs, sd,
             W: Math.round(vw * dpr), H: Math.round(gh * dpr),
-            cr: pitch * dpr >= 24 ? 2 : 1,
             padX: Math.max(1, Math.round(2.5 * dpr)), padY: Math.max(1, Math.round(2 * dpr)),
             labelH: Math.ceil(fs * 1.3 * dpr),
         };
-        G.levels = LV.map(buildLevel);
+        G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : lv, i));
+        // Dance refine steps (1 -> 3 -> 5 -> 7 sub-columns, then the finest) skip any that would not be coarser
+        G.danceLv = [5, 6, 1, 0, 7].map((l) => (l !== 7 && LV[l].S >= sd ? 7 : l));
+        G.outroLv = sd > 7 ? [0, 1, 2, 4] : [2, 3, 4, 4];
 
         canvas.width = G.W;
         canvas.height = G.H;
@@ -157,7 +162,7 @@
         }
         timesEl.innerHTML = th;
 
-        const cells = 7 * SUB * R;
+        const cells = 7 * MAX_SD * R;
         G.evC = new Uint8Array(cells); G.evX = new Int32Array(cells); G.evY = new Int32Array(cells);
         G.evW = new Int32Array(cells); G.evH = new Int32Array(cells); G.evT = new Uint8Array(cells); G.evR = new Uint8Array(cells);
         G.order = new Uint16Array(cells); G.bucket = new Uint16Array(NP + 1);
@@ -173,47 +178,43 @@
         lastKey = -1;
     }
 
-    // Column edges, free-time event breaks (random 1-8 slot lengths, realigned every 2 hours) and the fine-column span
-    // each cell votes over
+    // Column edges, gaps, and free-time event breaks (random lengths up to 2 hours, realigned every 2 hours)
     function buildLevel({ S, q }, li) {
-        const { gutter, dayW, dpr, R, startHour } = G;
+        const { gutter, dayW, dpr, R, startHour, unitH } = G;
         const C = 7 * S, Rq = R / q;
         const xs = new Int32Array(C + 1);
         for (let k = 0; k <= C; k++) xs[k] = Math.round((gutter + (Math.floor(k / S) + (k % S) / S) * dayW) * dpr);
-        const f0 = new Uint8Array(C), f1 = new Uint8Array(C);
-        for (let k = 0; k < C; k++) {
-            const d = Math.floor(k / S), s = k % S;
-            f0[k] = d * SUB + Math.floor(s * SUB / S);
-            f1[k] = d * SUB + Math.floor((s + 1) * SUB / S);
-        }
+        const colW = dayW / Math.max(S, SUB) * dpr;
+        const gx = Math.max(1, Math.round(colW * 0.11)), gy = Math.max(1, Math.round(Math.min(q, 2) * unitH * dpr * 0.1));
         let seed = 97 + li * 131;
         const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
         const brkField = new Uint8Array(C * Rq), brkInk = new Uint8Array(C * Rq);
-        const fineInk = q === 1 && S >= 5;
+        const fineInk = q <= 2 && S >= 5;
         for (let c = 0; c < C; c++) {
             for (let r = 0; r < Rq; r++) {
-                const slot = startHour * 4 + r * q;
-                if (slot % 8 === 0 || r === 0) {
+                const unit = startHour * U + r * q;
+                if (unit % (2 * U) === 0 || r === 0) {
                     brkField[c * Rq + r] = 1;
                     brkInk[c * Rq + r] = 1;
                     let len = 1;
-                    while (r + len < Rq && (startHour * 4 + (r + len) * q) % 8) len++;
+                    while (r + len < Rq && (startHour * U + (r + len) * q) % (2 * U)) len++;
                     if (len > 1) {
-                        const cuts = len >= 6 ? (rand() < 0.6 ? 1 : 2) : rand() < 0.6 ? 1 : 0;
+                        const cuts = len >= 12 ? 2 + (rand() < 0.5 ? 1 : 0) : len >= 6 ? 1 + (rand() < 0.4 ? 1 : 0) : rand() < 0.6 ? 1 : 0;
                         for (let k = 0; k < cuts; k++) brkField[c * Rq + r + 1 + Math.floor(rand() * (len - 1))] = 1;
                     }
                 }
-                if (fineInk && (slot + c) % 2 === 0) brkInk[c * Rq + r] = 1;
+                // booked cells run at most 30 minutes on the reel's grid, 15 on the finest
+                if (fineInk && ((q === 1 ? unit : unit >> 1) + c) % 2 === 0) brkInk[c * Rq + r] = 1;
             }
         }
-        const labelW = Math.max(1, Math.floor(dayW * dpr / S) - G.gx - G.padX);
-        return { S, q, C, Rq, xs, f0, f1, brkField, brkInk, labelW };
+        const labelW = Math.max(1, Math.floor(dayW * dpr / S) - gx - G.padX);
+        return { S, q, C, Rq, xs, gx, gy, cr: colW >= 24 ? 2 : 1, brkField, brkInk, labelW };
     }
 
     // The ordinary week: events plus free-time fillers so every slot in view is booked
     function buildWeek() {
         const { R, startHour } = G;
-        const lo = startHour * 4, hi = lo + R;
+        const lo = startHour * 4, hi = lo + R / 2;
         const list = [];
         let fill = 0;
         for (let d = 0; d < 7; d++) {
@@ -228,7 +229,10 @@
         }
         const id = new Int16Array(7 * R);
         list.forEach((e, i) => {
-            for (let s = Math.max(lo, e.s); s < Math.min(hi, e.e); s++) id[e.day * R + s - lo] = i;
+            for (let s = Math.max(lo, e.s); s < Math.min(hi, e.e); s++) {
+                id[e.day * R + (s - lo) * 2] = i;
+                id[e.day * R + (s - lo) * 2 + 1] = i;
+            }
         });
         G.week = list;
         G.weekId = id;
@@ -236,8 +240,8 @@
     }
 
     function buildGlyphs() {
-        const { R } = G;
-        const C = 7 * SUB;
+        const R = G.R / TEXT_SQ;
+        const C = 7 * TEXT_SC;
         const width = (s) => [...s].reduce((w, ch, i) => w + GLYPHS[ch][0].length + (i ? (ch === "'" || s[i - 1] === "'" ? 1 : 2) : 0), 0);
         const gap = Math.max(1, Math.min(6, Math.floor((R - 24) / 4)));
         let y = Math.floor((R - (24 + gap * 2)) / 2);
@@ -260,26 +264,24 @@
         G.glyph = glyph;
     }
 
-    // Each fine cell votes over 3x3 samples of the clip; the clip's 4:3 canvas is fitted to the grid height (overscanning
-    // narrow screens up to 1.6x their width)
+    // Dance frames are reel cells (49 x 40): rows map onto our slots, and the finest level shows the 49 reel columns
+    // one to one, centred (or, when it has fewer columns, in a window that follows the dancer)
     function buildSampler() {
         G.samples = null;
         if (!dance) return;
-        const { R, gw, gh, pitch, slotH } = G;
-        const C = 7 * SUB;
-        // Landscape grids are wider than the reel's 1.26 card, so the clip is widened a little to fill comparable ground
-        const aspect = dance.w / dance.h * (gw > gh ? 1.15 : 1);
-        const dw = Math.min(gh * aspect, gw * 1.6), dh = dw / aspect;
-        const vx = (gw - dw) / 2, vy = (gh - dh) / 2;
-        const s = new Int32Array(C * R * 9);
-        for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
-            for (let k = 0; k < 9; k++) {
-                const px = (c + ((k % 3) + 0.5) / 3) * pitch, py = (r + (Math.floor(k / 3) + 0.5) / 3) * slotH;
-                const u = Math.floor((px - vx) / dw * dance.w), v = Math.floor((py - vy) / dh * dance.h);
-                s[(c * R + r) * 9 + k] = u < 0 || v < 0 || u >= dance.w || v >= dance.h ? -1 : v * dance.w + u;
-            }
+        const FR = G.R / TEXT_SQ, srow = new Int32Array(FR);
+        for (let r = 0; r < FR; r++) srow[r] = Math.min(dance.h - 1, Math.floor(r * dance.h / FR)) * dance.w;
+        const lv = G.levels[7], C = lv.C, W = dance.w;
+        const off = C >= W ? Math.floor((W - C) / 2) : 0;
+        const map = new Int32Array(C * FR);
+        for (let c = 0; c < C; c++) for (let r = 0; r < FR; r++) {
+            const u = c + off;
+            map[c * FR + r] = u < 0 || u >= W ? -1 : u * FR + r;
         }
-        G.samples = s;
+        lv.map = map;
+        lv.shift = new Int32Array(dance.n);
+        if (C < W) for (let f = 0; f < dance.n; f++) lv.shift[f] = Math.max(0, Math.min(W - C, Math.round(dance.cx[f] - C / 2))) * FR;
+        G.samples = srow;
         G.fineFrame = -1;
     }
 
@@ -289,7 +291,7 @@
         const { labelH, fs, dpr, padX, R, startHour } = G;
         const atlas = document.createElement('canvas');
         atlas.width = Math.max(...G.levels.map((l) => l.labelW));
-        atlas.height = (TITLES.length + R) * 2 * labelH;
+        atlas.height = (TITLES.length + R / 2) * 2 * labelH;
         const a = atlas.getContext('2d');
         a.textBaseline = 'top';
         const dy = Math.round(0.1 * fs * dpr);
@@ -298,7 +300,7 @@
             for (let ink = 0; ink < 2; ink++) { a.fillStyle = INK[ink]; a.fillText(t, 0, (i * 2 + ink) * labelH + dy); }
         });
         a.font = `400 ${fs * dpr}px Roboto, Arial, sans-serif`;
-        for (let r = 0; r < R; r++) {
+        for (let r = 0; r < R / 2; r++) {
             const min = (startHour * 4 + r) * 15, h = Math.floor(min / 60);
             const t = ((h + 11) % 12) + 1 + ':' + String(min % 60).padStart(2, '0') + (h < 12 ? ' AM' : ' PM');
             for (let ink = 0; ink < 2; ink++) { a.fillStyle = INK[ink]; a.fillText(t, 0, ((TITLES.length + r) * 2 + ink) * labelH + dy); }
@@ -309,38 +311,34 @@
 
     // ---------------------------------------------------------------- content
     function danceFine(f) {
+        G.fineSC = TEXT_SC; G.fineSQ = TEXT_SQ; G.fineRows = G.R / TEXT_SQ;
         if (G.fineFrame === f) return;
-        const { R } = G;
-        const n = 7 * SUB * R, s = G.samples, out = G.fine, votes = G.votes;
-        const base = f * dance.w * dance.h, fr = dance.frames;
-        for (let i = 0; i < n; i++) {
-            votes.fill(0);
-            for (let k = 0; k < 9; k++) {
-                const idx = s[i * 9 + k];
-                const v = idx < 0 ? FIELD : fr[base + idx];
-                votes[v] += v === FIELD ? 8 : 10;
-            }
-            let best = 0;
-            for (let v = 1; v < NP; v++) if (votes[v] > votes[best]) best = v;
-            out[i] = best;
-        }
+        const FR = G.fineRows, W = dance.w, srow = G.samples, out = G.fine, fr = dance.frames, base = f * W * dance.h;
+        for (let c = 0; c < W; c++) for (let r = 0; r < FR; r++) out[c * FR + r] = fr[base + srow[r] + c];
         G.fineFrame = f;
     }
 
     function textFine(g) {
-        const { R } = G;
-        const n = 7 * SUB * R, glyph = G.glyph, out = G.fine;
+        G.fineSC = TEXT_SC; G.fineSQ = TEXT_SQ; G.fineRows = G.R / TEXT_SQ;
+        const n = 7 * TEXT_SC * G.fineRows, glyph = G.glyph, out = G.fine;
         for (let i = 0; i < n; i++) out[i] = glyph[i] && glyph[i] <= g ? BASIL : FIELD;
         G.fineFrame = -2 - g;
     }
 
-    // Cell colours and merge keys for one level
+    // Cell colours and merge keys for one level; content cells vote into coarser level cells
     function fillCells(lv, mode) {
         const { R } = G;
-        const { C, Rq, q, f0, f1 } = lv;
+        const { C, Rq, q, S } = lv;
         const col = G.cellCol, key = G.cellKey, fine = G.fine, votes = G.votes;
+        const SC = G.fineSC, SQ = G.fineSQ, FR = G.fineRows, direct = S === SC && q === SQ;
+        if (mode === M_DANCE && lv.map) {
+            const map = lv.map, sh = lv.shift[G.fineFrame];
+            for (let i = 0; i < C * Rq; i++) col[i] = key[i] = map[i] < 0 ? FIELD : fine[map[i] + sh];
+            return;
+        }
         for (let c = 0; c < C; c++) {
-            const d = Math.floor(c / lv.S);
+            const d = Math.floor(c / S), s = c % S;
+            const f0 = d * SC + Math.floor(s * SC / S), f1 = Math.max(f0 + 1, d * SC + Math.floor((s + 1) * SC / S));
             for (let r = 0; r < Rq; r++) {
                 const i = c * Rq + r;
                 if (mode === M_WEEKGRID) {
@@ -348,12 +346,13 @@
                     col[i] = G.weekCol[id]; key[i] = id;
                 } else if (mode === M_EMPTY) {
                     col[i] = FIELD; key[i] = FIELD;
-                } else if (lv.S === SUB && q === 1) {
-                    col[i] = key[i] = fine[c * R + r];
+                } else if (direct) {
+                    col[i] = key[i] = fine[c * FR + r];
                 } else {
+                    const r0 = Math.floor(r * q / SQ), r1 = Math.max(r0 + 1, Math.floor((r + 1) * q / SQ));
                     votes.fill(0);
-                    for (let fc = f0[c]; fc < f1[c]; fc++) for (let fr = r * q; fr < r * q + q; fr++) {
-                        const v = fine[fc * R + fr];
+                    for (let fc = f0; fc < f1; fc++) for (let fr = r0; fr < r1; fr++) {
+                        const v = fine[fc * FR + fr];
                         votes[v] += v === FIELD ? 7 : 10;
                     }
                     let best = 0;
@@ -374,8 +373,8 @@
     }
 
     function drawMosaic(lv) {
-        const { ys, gx, gy, cr, padX, padY, labelH, minLabelW } = G;
-        const { C, Rq, q, xs, brkField, brkInk } = lv;
+        const { ys, padX, padY, labelH, minLabelW } = G;
+        const { C, Rq, q, xs, gx, gy, cr, brkField, brkInk } = lv;
         const col = G.cellCol, key = G.cellKey;
         const EC = G.evC, EX = G.evX, EY = G.evY, EW = G.evW, EH = G.evH, ET = G.evT;
         const gxa = gx >> 1, gxb = gx - gxa, gya = gy >> 1, gyb = gy - gya;
@@ -389,9 +388,9 @@
                 while (e < Rq && key[c * Rq + e] === k && !brk[c * Rq + e]) e++;
                 const y = ys[r * q] + gyb;
                 EC[n] = v; EX[n] = x; EY[n] = y; EW[n] = w;
-                EH[n] = ys[e * q] - ys[r * q] - gy - ((e * q + G.startHour * 4) % 4 === 0 && e < Rq ? 1 : 0);
+                EH[n] = ys[e * q] - ys[r * q] - gy - ((e * q + G.startHour * U) % U === 0 && e < Rq ? 1 : 0);
                 ET[n] = (c * 7 + r * 13 + k * 5) % TITLES.length;
-                G.evR[n] = r * q;
+                G.evR[n] = (r * q) >> 1;
                 n++;
                 r = e;
             }
@@ -438,9 +437,9 @@
     }
 
     function nowLine() {
-        const { dpr, slotH, startHour, R } = G;
+        const { dpr, slotH, startHour, gh } = G;
         const y = Math.round((NOW_HOUR - startHour) * 4 * slotH * dpr);
-        if (y < 0 || y > Math.round(R * slotH * dpr)) return;
+        if (y < 0 || y > Math.round(gh * dpr)) return;
         const xs = G.levels[0].xs, x0 = xs[TODAY * SUB], x1 = xs[TODAY * SUB + SUB];
         ctx.fillStyle = '#ea4335';
         ctx.fillRect(x0, y - Math.round(dpr), x1 - x0, Math.max(2, Math.round(2 * dpr)));
@@ -455,8 +454,8 @@
             const off = document.createElement('canvas');
             off.width = G.W; off.height = G.H;
             const c = off.getContext('2d', { alpha: false });
-            const { ys, dpr, gx, gy, startHour, R } = G;
-            const xs = G.levels[4].xs, lo = startHour * 4;
+            const { ys, dpr, startHour, R } = G;
+            const { xs, gx } = G.levels[4], gy = G.levels[0].gy, lo = startHour * 4;
             c.fillStyle = '#fff';
             c.fillRect(0, 0, G.W, G.H);
             c.fillStyle = GAP_BG;
@@ -464,7 +463,7 @@
             const fs = Math.round((G.mobile ? 9 : 12) * dpr), pad = Math.round((G.mobile ? 2 : 6) * dpr);
             c.textBaseline = 'top';
             for (const ev of G.week) {
-                const r0 = Math.max(0, ev.s - lo), r1 = Math.min(R, ev.e - lo);
+                const r0 = Math.max(0, (ev.s - lo) * 2), r1 = Math.min(R, (ev.e - lo) * 2);
                 const x = xs[ev.day] + (gx - (gx >> 1)), w = xs[ev.day + 1] - xs[ev.day] - gx;
                 const y = ys[r0] + (gy - (gy >> 1)), h = ys[r1] - ys[r0] - gy;
                 c.fillStyle = PALETTE[ev.c];
@@ -520,7 +519,8 @@
         } else {
             sMode = M_DANCE;
             sArg = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
-            sLevel = t < T.refine3 ? 5 : t < T.refine5 ? 6 : t < T.fine ? 1 : t < T.outro ? 0 : COARSEN[Math.min(3, stepIn(t, T.outro))];
+            const dl = G.danceLv;
+            sLevel = t < T.refine3 ? dl[0] : t < T.refine5 ? dl[1] : t < T.sub7 ? dl[2] : t < T.fine ? dl[3] : t < T.outro ? dl[4] : G.outroLv[Math.min(3, stepIn(t, T.outro))];
         }
         return sMode * 100000 + sLevel * 10000 + sArg;
     }
@@ -592,7 +592,19 @@
         for (let i = 0; i < size; i++) frames[i] = raw[i];
         for (let i = size; i < n * size; i++) frames[i] = raw[i] ^ frames[i - size];
         for (let i = 0; i < n * size; i++) frames[i] = remap[frames[i]];
-        dance = { w, h, n, frames };
+        // Per-frame dancer centre, averaged over +-8 frames so a narrow window glides instead of jittering
+        const cen = new Float64Array(n), cx = new Float64Array(n);
+        for (let f = 0; f < n; f++) {
+            let sx = 0, sn = 0;
+            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { sx += i % w; sn++; }
+            cen[f] = sn ? sx / sn + 0.5 : w / 2;
+        }
+        for (let f = 0; f < n; f++) {
+            let sum = 0, k = 0;
+            for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; k++; }
+            cx[f] = sum / k;
+        }
+        dance = { w, h, n, frames, cx };
         if (G) { buildSampler(); lastKey = -1; }
     }
 
@@ -625,8 +637,7 @@
     window.__calendarContact = {
         P: T, LOOP, BEAT,
         time: () => cycleTime(performance.now()),
-        scene: (t) => { scene(t); return ['week', 'empty', 'text', 'dance', 'weekgrid'][sMode] + '@' + LV[sLevel].S + 'x' + LV[sLevel].q + ':' + sArg; },
-        freeze: (t) => { frozen = t; lastKey = -1; },
+        scene: (t) => { scene(t); return ['week', 'empty', 'text', 'dance', 'weekgrid'][sMode] + '@' + G.levels[sLevel].S + 'x' + G.levels[sLevel].q + ':' + sArg; },        freeze: (t) => { frozen = t; lastKey = -1; },
         bench: (t) => { const a = performance.now(); lastKey = -1; render(t); return performance.now() - a; },
         ready: () => !!(dance && G.samples),
         perfReset: () => { perfI = 0; perfJ = 0; lastTs = 0; },

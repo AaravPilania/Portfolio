@@ -3,7 +3,7 @@ new Promise((res) => {
     const end = performance.now() + 19000;
     function f(ts) {
         const t = __calendarContact.time(), k = __calendarContact.scene(t);
-        const m = k.match(/^dance@\d+x1:(\d+)/);
+        const m = k.match(/^dance@\d+x\d:(\d+)/);
         if (m) {
             if (last !== null && m[1] !== last) { gaps.push(ts - lastT); lastT = ts; }
             if (last === null) lastT = ts;
