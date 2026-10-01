@@ -504,4 +504,35 @@ test('ribbon reads as signal red, broken by stuck sub-pixels, hot white, dead cl
     console.log('     ' + n + ' cells; kinds ' + count.join('/'));
 });
 
+test('the goggles stay calm: plan.calm spans both loops, and there the band is red with only the odd stuck sub-pixel', () => {
+    ['1920x1080', '1366x768', '390x844'].forEach((key) => {
+        const { plan, ribbonW } = planFor(key);
+        const [a, b] = plan.calm;
+        assert.ok(a > 0 && a < plan.marks[1] && b === plan.marks[2], key + ' calm ' + a + '..' + b);
+        const cell = Math.max(3, ribbonW / 7), half = ribbonW / 2;
+        const plain = ribbonCells(plan.route, { cell, half, seed: 0x5ced04 });
+        const calm = ribbonCells(plan.route, { cell, half, seed: 0x5ced04, calm: plan.calm });
+        const count = Array(11).fill(0);
+        let n = 0;
+        calm.forEach((c, i) => {
+            const inside = c.s >= a && c.s <= b;
+            if (!inside) return assert.strictEqual(c.k, plain[i].k, key + ' outside the loops is untouched');
+            n++;
+            count[c.k]++;
+        });
+        assert.ok(n > 50, key + ' cells in the loops ' + n);
+        [0, 2, 3, 4, 7, 10].forEach((k) => assert.strictEqual(count[k], 0, key + ' kind ' + k + ' in the loops'));
+        assert.ok(count[1] / n < 0.06, key + ' sub-pixels ' + count[1] + '/' + n);
+    });
+});
+
+test('the eye loops ring the sockets: centreline at 62 video px, so a narrowed band clears the eye corners and brows', () => {
+    const { plan, ribbonW } = planFor('1920x1080');
+    const k = Math.max(1920 / 1440, 1080 / 1920);
+    plan.lens.forEach((l) => {
+        assert.ok(Math.abs(l.r - 62 * k) < 0.5, 'lens r ' + l.r.toFixed(1));
+        assert.ok(l.r - ribbonW * 0.55 / 2 > 50 * k, 'inner edge ' + (l.r - ribbonW * 0.275).toFixed(1));
+    });
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));

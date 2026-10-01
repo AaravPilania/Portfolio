@@ -217,7 +217,7 @@
 
     // The backdrop behind this slide is a still portrait (videos/services-bg.mp4, 1440x1920). Its eyes in video pixels,
     // and the radius each loop's round is flown at: the eye socket plus a little, so the ribbon rims it.
-    const PORTRAIT = { w: 1440, h: 1920, eyes: [[655, 682], [816, 694]], lens: 58 };
+    const PORTRAIT = { w: 1440, h: 1920, eyes: [[655, 682], [816, 694]], lens: 62 };
 
     // Where the backdrop draws a video pixel: its grid shader covers the viewport (u_size = innerWidth x innerHeight)
     // with the video centred, at u_scale 1 once its intro zoom has settled
@@ -392,7 +392,7 @@
             else minClear = Math.min(minClear, d);
         }
         return {
-            route, pts: P, s0: 0, s1: route.L, marks: [0, K[i1e], K[i2e], K[iTouch], route.L], box, clear: m,
+            route, pts: P, s0: 0, s1: route.L, marks: [0, K[i1e], K[i2e], K[iTouch], route.L], calm: [K[i1s], K[i2e]], box, clear: m,
             minClear, lensClear, lens: lens.map((l) => ({ x: l.x, y: l.y, r: l.r })), onEyes, lensOk, stacked, ok: minClear >= m - 1,
         };
     }
@@ -475,6 +475,15 @@
                 run(cell.gx, cell.gy, 3 + Math.floor(rnd() * 6), t < 0.45 ? 7 : t < 0.75 ? 3 : 1);
             }
         });
+        // Round the eyes (s within o.calm) the band stays in the red family: no dead or hot cells beside the dark sockets,
+        // only the odd stuck sub-pixel. Its own stream, so the rest of the ribbon breaks exactly as without it.
+        if (o.calm) {
+            const q = mulberry32((o.seed || 0x5ced04) ^ 0x9e3779b9), REDS = [5, 6, 8, 9];
+            cells.forEach((cell) => {
+                if (cell.s < o.calm[0] || cell.s > o.calm[1] || REDS.includes(cell.k)) return;
+                cell.k = cell.k === 1 && q() < 0.2 ? 1 : REDS[Math.floor(q() * REDS.length)];
+            });
+        }
         return cells;
     }
 
@@ -537,7 +546,7 @@
     let W = 0, H = 0, S = 0, cx = 0, srcY = 0, srcS = 0.03, A = 0, B = 0, gapPx = 18;
     let geo = [];
     let visible = false, drawn = -1, detached = false, railDirty = true;
-    let wantLeash = false, leashed = false;
+    let wantLeash = false, leashed = false, navHidden = false;
     let shown = -1, swap = null, spin = null, fill = null;
     let appMod = null, nativeTween = null, animUntil = 0, dragging = false, nudgeAfterTouch = 0;
 
@@ -899,7 +908,7 @@
             star: starAt, eyes: eyes && eyes.pts, eyeR: eyes ? eyes.r : 0,
         });
         route = plan.route;
-        ribbon = ribbonCells(route, { cell: cellCss, half: ribbonW / 2, seed: 0x5ced04 });
+        ribbon = ribbonCells(route, { cell: cellCss, half: ribbonW / 2, seed: 0x5ced04, calm: calmSpan() });
         flickCells = null;
         dmgDirty = true;
         if (!dmgCanvas) return;
@@ -945,6 +954,22 @@
         ctx.globalCompositeOperation = 'source-over';
     }
 
+    // Round the eyes the band narrows to CALM_W of its width, easing in and out over CALM_RAMP widths either side, so
+    // the goggles frame the sockets and brows instead of burying them
+    const CALM_W = 0.55, CALM_RAMP = 3;
+    function calmSpan() {
+        if (!plan || !plan.calm) return null;
+        const T = ribbonW * CALM_RAMP;
+        return [plan.calm[0] - T, plan.calm[1] + T];
+    }
+    function widthAt(s) {
+        const c = plan && plan.calm;
+        if (!c) return ribbonW;
+        const T = ribbonW * CALM_RAMP;
+        const u = Math.max(0, Math.min(1, s < c[0] ? (s - c[0] + T) / T : s > c[1] ? (c[1] + T - s) / T : 1));
+        return ribbonW * (1 - (1 - CALM_W) * u * u * (3 - 2 * u));
+    }
+
     // The ribbon up to arc length sNow: a round-capped stroke at one pixel per cell, hardened to whole cells, scaled up
     // without smoothing so its edge steps cell by cell, then filled with the broken-screen texture (source-in), the
     // flicker painted only where the ribbon is (source-atop), and a red/cyan ghost slipped out either side behind it.
@@ -957,17 +982,31 @@
         m.lineWidth = ribbonW * k;
         m.lineCap = 'round';
         m.lineJoin = 'round';
-        m.strokeStyle = '#fff';
-        m.beginPath();
+        m.strokeStyle = m.fillStyle = '#fff';
         const end = Math.min(sNow, route.L);
-        for (let s = 0; s < end; s += cellCss) {
+        const [a, b] = calmSpan() || [end, end];
+        const seg = (s0, s1) => {
+            if (s1 <= s0) return;
+            m.beginPath();
+            for (let s = s0; s < s1; s += cellCss) {
+                const p = route.atS(s);
+                if (s === s0) m.moveTo(p.x * k, p.y * k);
+                else m.lineTo(p.x * k, p.y * k);
+            }
+            const q = route.atS(s1);
+            m.lineTo(q.x * k, q.y * k);
+            m.stroke();
+        };
+        seg(0, Math.min(end, a));
+        seg(Math.max(0, b), end);
+        const dot = (s) => {
             const p = route.atS(s);
-            if (s === 0) m.moveTo(p.x * k, p.y * k);
-            else m.lineTo(p.x * k, p.y * k);
-        }
-        const q = route.atS(end);
-        m.lineTo(q.x * k, q.y * k);
-        m.stroke();
+            m.beginPath();
+            m.arc(p.x * k, p.y * k, widthAt(s) * k / 2, 0, Math.PI * 2);
+            m.fill();
+        };
+        for (let s = Math.max(0, a); s < Math.min(end, b); s += cellCss * 0.5) dot(s);
+        if (end > a && end < b) dot(end);
         const img = m.getImageData(0, 0, maskC.width, maskC.height), d = img.data;
         for (let i = 3; i < d.length; i += 4) {
             d[i - 3] = d[i - 2] = d[i - 1] = 255;
@@ -1011,14 +1050,16 @@
         const n = lo;
         flickCells = [];
         if (!n) return true;
-        const count = Math.min(16, Math.ceil(n * 0.004));
+        const count = Math.min(16, Math.ceil(n * 0.004)), calm = calmSpan();
+        const quiet = (c) => calm && c.s >= calm[0] && c.s <= calm[1];
         for (let i = 0; i < count; i++) {
             const c = ribbon[Math.floor(Math.random() * n)];
+            if (quiet(c)) continue;
             flickCells.push([c.gx, c.gy, 1, Math.random() < 0.6 ? '#120205' : '#fff6f0']);
         }
         if (Math.random() < 0.08) {
             const c = ribbon[Math.floor(Math.random() * n)];
-            flickCells.push([c.gx - 2, c.gy, 4 + Math.floor(Math.random() * 5), Math.random() < 0.5 ? '#fff6f0' : '#18f0ff']);
+            if (!quiet(c)) flickCells.push([c.gx - 2, c.gy, 4 + Math.floor(Math.random() * 5), Math.random() < 0.5 ? '#fff6f0' : '#18f0ff']);
         }
         return true;
     }
@@ -1186,6 +1227,10 @@
         const held = zone.pinned || (y > A && y < B);
         if (held && !wantLeash) wantLeash = true;
         else if (!held && wantLeash) leashOff();
+        if (held !== navHidden) {
+            navHidden = held;
+            document.body.classList.toggle('sk-nav-hidden', held);
+        }
 
         st.travel += (st.travelT - st.travel) * (1 - Math.exp(-s * 14));
         if (Math.abs(st.travelT - st.travel) < 1e-4) st.travel = st.travelT;

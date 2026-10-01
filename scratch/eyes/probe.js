@@ -61,6 +61,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40, nativeVirtualKeyCode: 40 });
     }
     await sleep(+(process.env.WAIT || 5000));
+    if (process.env.HIDE) await evaluate(`document.querySelectorAll(${JSON.stringify(process.env.HIDE)}).forEach((el) => el.style.setProperty('visibility', 'hidden', 'important'))`);
     await evaluate(`(() => {
         const E = [[0.4549, 0.3552], [0.5667, 0.3615]];
         const w = innerWidth, h = innerHeight, c = w / h, i = 1440 / 1920;
@@ -102,6 +103,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.log(info);
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(process.env.OUT ? path.resolve(process.env.OUT) : path.join(__dirname, 'probe-' + W + '.png'), Buffer.from(shot.data, 'base64'));
+    // NAV=1 logs the fixed nav chrome's state here, then scrolls back above the stage (BACK_SHOT, if set, is shot there)
+    const nav = () => evaluate(`JSON.stringify({ hidden: document.body.classList.contains('sk-nav-hidden'),
+        els: ['.ll-header .js-menu', '.ll-header .js-sticky-items'].map((s) => { const e = document.querySelector(s), c = getComputedStyle(e), r = e.getBoundingClientRect();
+            return [s, c.opacity, c.visibility, c.pointerEvents, c.translate, Math.round(r.top)]; }),
+        dot: (() => { const d = document.querySelector('.site-cursor-dot'); const c = getComputedStyle(d); return [c.backgroundColor, c.zIndex, c.opacity]; })() })`);
+    if (process.env.NAV) {
+        console.log('nav on stage', await nav());
+        await evaluate(`(() => { const s = document.querySelector('.js-scroller'); const st = document.querySelector('#skWheel'); s.scrollTop = Math.max(0, s.scrollTop + st.getBoundingClientRect().top - s.clientHeight * 1.5); })()`);
+        await sleep(250);
+        console.log('nav 250ms after leaving', await nav());
+        await sleep(1500);
+        console.log('nav after leaving', await nav());
+        if (process.env.BACK_SHOT) fs.writeFileSync(path.resolve(process.env.BACK_SHOT), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    }
     ws.close();
     try { chrome.kill(); } catch (e) { /* gone */ }
     await sleep(300);
