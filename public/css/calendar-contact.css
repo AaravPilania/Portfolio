@@ -200,7 +200,7 @@ body.gc {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding-top: 10px;
+    padding-top: 5px;
     color: var(--gc-ink-soft);
 }
 
@@ -222,13 +222,13 @@ body.gc {
 }
 
 .gc-day__num {
-    width: 46px;
-    height: 46px;
-    margin-top: 2px;
+    width: 34px;
+    height: 34px;
+    margin-top: 1px;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    font-size: 26px;
+    font-size: 22px;
     line-height: 1;
     color: var(--gc-ink);
 }
@@ -341,18 +341,24 @@ body.gc {
     }
 
     .gc-day {
-        padding-top: 8px;
+        padding-top: 5px;
+    }
+
+    .gc-day__name {
+        font-size: 9px;
+        line-height: 13px;
+        letter-spacing: 0.4px;
     }
 
     .gc-day__num {
-        width: 36px;
-        height: 36px;
-        font-size: 20px;
+        width: 26px;
+        height: 26px;
+        font-size: 15px;
     }
 
     .gc-time {
-        right: 6px;
-        font-size: 9px;
+        right: 4px;
+        font-size: 8px;
     }
 
     .gc-tz {

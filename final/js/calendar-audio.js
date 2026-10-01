@@ -2,6 +2,7 @@
 // drive it later through setMuted() without touching the animation.
 //   CalendarAudio.init(url, loopSeconds) -> Promise (resolves once decoded)
 //   CalendarAudio.time()      -> seconds since the loop started (audio-hardware clock), or null while silent
+//   CalendarAudio.timeAt(t)   -> the same, at performance.now()-based timestamp t
 //   CalendarAudio.onStart(fn) -> fn() whenever playback (re)starts, so visuals can restart in sync
 //   CalendarAudio.setMuted(b) / isRunning()
 window.CalendarAudio = (() => {
@@ -51,6 +52,14 @@ window.CalendarAudio = (() => {
     return {
         init,
         time: () => (source ? ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) - startAt : null),
+        // Audible position at a performance.now() timestamp (e.g. a rAF time). currentTime advances in audio-callback
+        // chunks; the output timestamp pairs it with the performance clock so frame-to-frame steps stay even.
+        timeAt(now) {
+            if (!source) return null;
+            const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+            if (ts && ts.performanceTime > 0 && ts.contextTime > 0) return ts.contextTime + (now - ts.performanceTime) / 1000 - startAt;
+            return ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) - startAt;
+        },
         loopLength: () => loop,
         isRunning: () => !!source,
         isBlocked: () => !!ctx && !source,
