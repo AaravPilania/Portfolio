@@ -266,13 +266,13 @@ test('input is ignored when free or when the classifier said no', () => {
 const { planRoute, ribbonCells, eyeSpots, legS, PORTRAIT } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
 
 // Slide 04 measured on the page with the stage stuck (scratch/sixth-arm/probe.js): `words` is the union of every
-// category's counter and title, `list` of every right column (the Experience one is the tallest), starX the asterisk's
-// centre. Phones stack it all in one column.
+// category's counter and title, `list` of every right column, starX the asterisk's centre. Phones stack it all in one
+// column.
 const LAYOUTS = {
-    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 367, r: 1866, b: 718 }, starX: 68 },
-    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 245, r: 1324, b: 527 }, starX: 48 },
-    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 128, r: 992, b: 391 }, starX: 36 },
-    '390x844': { w: 390, h: 844, words: { l: 172, t: 289, r: 370, b: 433 }, list: { l: 173, t: 354, r: 343, b: 534 }, starX: 30 },
+    '1920x1080': { w: 1920, h: 1080, words: { l: 549, t: 397, r: 1308, b: 659 }, list: { l: 1558, t: 412, r: 1866, b: 673 }, starX: 68 },
+    '1366x768': { w: 1366, h: 768, words: { l: 390, t: 278, r: 930, b: 469 }, list: { l: 1087, t: 286, r: 1324, b: 487 }, starX: 48 },
+    '1024x515': { w: 1024, h: 515, words: { l: 293, t: 171, r: 697, b: 321 }, list: { l: 800, t: 178, r: 992, b: 341 }, starX: 36 },
+    '390x844': { w: 390, h: 844, words: { l: 172, t: 305, r: 370, b: 433 }, list: { l: 173, t: 373, r: 340, b: 520 }, starX: 30 },
 };
 const DESKTOP = ['1920x1080', '1366x768', '1024x515'];
 const INSET = 36;

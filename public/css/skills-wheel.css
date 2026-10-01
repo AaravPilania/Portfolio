@@ -164,59 +164,6 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
 }
 .sk-set li { display: block; margin: 0; padding: 0; }
 
-/* Experience: the same column, with IBM Plex Mono label rows between the prose rows. Monospace keeps the figures
-   row's columns over their labels. */
-.sk-set .sk-mono {
-    font: 500 clamp(10px, 0.62vw, 12px)/1.62 var(--sk-mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-.sk-set .sk-gap { margin-top: 0.55rem; }
-.sk-set .sk-dim { opacity: 0.62; }
-/* A full line box tall, like a glyph, so the swap's yPercent shift carries it clear of its mask */
-.sk-pulse {
-    height: 1.62em;
-    margin-right: 0.7em;
-    vertical-align: top;
-    align-items: center;
-}
-.sk-set .sk-pulse { display: inline-flex; }
-.sk-pulse::before {
-    content: '';
-    display: block;
-    margin-top: 0.05em;
-    width: 0.62em;
-    height: 0.62em;
-    border-radius: 50%;
-    background: currentColor;
-    animation: sk-pulse 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-}
-@keyframes sk-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.25; }
-}
-
-/* The wheel closed: a hairline ring through the six arm tips, shown once the asterisk has turned a full 360° */
-.sk-seal {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    z-index: 2;
-    width: var(--sk-S, 55vmin);
-    height: var(--sk-S, 55vmin);
-    margin-top: calc(var(--sk-S, 55vmin) / -2);
-    transform-origin: 50% 50%;
-    will-change: transform;
-}
-.sk-seal i {
-    position: absolute;
-    inset: calc(var(--sk-S, 55vmin) / 24);
-    border: 1px solid var(--sk-sun);
-    border-radius: 50%;
-    opacity: 0;
-    transform: scale(0.86);
-}
-
 /* Per-glyph masks: each word (title) or item (skills) clips its own glyphs. The padding gives ascenders, descenders and
    side bearings room inside the clip; the equal negative margin keeps every row exactly one line-height tall. */
 .sk-mk {
@@ -254,11 +201,6 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
     .ll-section--services .sk-title { font-size: calc(clamp(1.9rem, 8vw, 3rem) * var(--sk-fit, 1)); }
     .sk-kicker { margin-bottom: 0.7rem; }
     .sk-set { text-align: left; font-size: 13px; }
-    /* Keeps the Experience column inside the skills lists' width, so the phone route's dive keeps its strip */
-    .sk-set .sk-mono { font-size: 9.5px; letter-spacing: 0.03em; }
-    /* and short enough to start below the ribbon's bridge between the goggles; the full section follows right after */
-    .sk-set .sk-gap { margin-top: 0.35rem; }
-    .sk-set .sk-wide { display: none; }
 }
 
 /* Reduced motion: no sticky wheel or stepping; the star sits in the slide and every category is listed statically */
@@ -266,8 +208,7 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
     .sk { height: auto; }
     .sk__stage { position: relative; height: auto; min-height: var(--sk-h, 100vh); }
     .sk-star { opacity: 1; }
-    .sk-rail, .sk-seal { display: none; }
-    .sk-pulse::before { animation: none; }
+    .sk-rail { display: none; }
     .sk-legacy { position: relative; inset: auto; padding: 16vh var(--sk-pad) 10vh var(--sk-tx, 29%); }
     .sk:not(.is-live) .sk-cat + .sk-cat { visibility: visible; }
     .sk-cat {

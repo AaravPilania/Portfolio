@@ -2,7 +2,7 @@
 // The first detent is the EXPERTISE intro (the star at rest, no counter, nothing drawn); after it, one gesture (wheel
 // flick, trackpad swipe, touch swipe, key) is one 60° detent and one category swap; the first detent up and the last
 // detent down hand the page back to normal scrolling. Six categories (the five skill sets, then EXPERIENCE) turn the
-// six-armed star through a full 360°, and the last one closes it with a ring through the arm tips.
+// six-armed star through a full 360°, and the last one settles it heavier.
 // GLITCH (pixel-bug.js) is leashed to a paper plane's flight while the stage is stuck: take-off past the asterisk, a
 // loop round each of the backdrop portrait's eyes (a pair of goggles), a dive between the words and the skills, and a
 // landing. It flies in to the take-off on the intro, flies one leg per category and lays a solid ribbon of broken
@@ -526,8 +526,6 @@
     const scroller = doc.querySelector('.js-scroller');
     const stage = track.querySelector('.sk__stage');
     const star = track.querySelector('.sk-star');
-    const seal = track.querySelector('.sk-seal');
-    const sealRing = seal && seal.querySelector('i');
     const railSegs = [...track.querySelectorAll('.sk-rail__seg')];
     const container = track.parentElement;
     const cats = [...track.querySelectorAll('.sk-cat')];
@@ -548,11 +546,6 @@
     ]);
     // Categories are numbered after the intro: the wheel and the rail stay at rest on it and count from the first one
     const nth = (k) => Math.max(0, k + 1 - INTRO);
-    // An internship's last day ('YYYY-MM-DD') counts as still running until the visitor's local midnight after it
-    const ended = (end) => {
-        const p = String(end || '').split('-').map(Number);
-        return p.length === 3 && Date.now() >= new Date(p[0], p[1] - 1, p[2] + 1).getTime();
-    };
 
     const ARM = Math.PI / 3;          // one detent: the asterisk's six arms repeat every 60°
     const LOCK = 0.86;                // s a detent owns the input; the swap below settles inside it
@@ -629,19 +622,10 @@
         const titleChars = kickChars.concat(splitInto(title, label, false));
         const items = [];
         set.querySelectorAll('li').forEach((li) => {
-            const live = li.classList.contains('sk-status') && !ended(li.dataset.end);
-            if (li.classList.contains('sk-status') && !live && li.dataset.done) li.textContent = li.dataset.done;
             const t = li.textContent.trim();
-            if (!li.hasAttribute('aria-label')) li.setAttribute('aria-label', t);
+            li.setAttribute('aria-label', t);
             li.textContent = '';
-            const chars = splitInto(li, t, true);
-            if (live) {
-                const dot = doc.createElement('span');
-                dot.className = 'sk-ch sk-pulse';
-                li.firstChild.insertBefore(dot, li.firstChild.firstChild);
-                chars.unshift(dot);
-            }
-            items.push(...chars);
+            items.push(...splitInto(li, t, true));
         });
         return { cat, title: titleChars, items, all: titleChars.concat(items), titleEl: title, setEl: set };
     });
@@ -696,21 +680,6 @@
 
     // ---------- the swap: outgoing glyphs clear their masks before the incoming set rises into the same masks
 
-    // The ring flashes in as the last arm overshoots and holds, faint, while the wheel rests closed
-    let ring = null, ringOn = false;
-    function closeRing(on, rev) {
-        if (!sealRing || on === ringOn) return;
-        ringOn = on;
-        if (ring) ring.kill();
-        if (!on) {
-            ring = gsap.to(sealRing, { opacity: 0, scale: 0.9, duration: 0.32, ease: 'power2.in' });
-            return;
-        }
-        ring = gsap.timeline({ delay: rev ? 0.1 : 0.5 })
-            .fromTo(sealRing, { opacity: 0, scale: 0.86 }, { opacity: 0.95, scale: 1.035, duration: 0.55, ease: 'power3.out' })
-            .to(sealRing, { opacity: 0.42, scale: 1, duration: 0.9, ease: 'sine.inOut' });
-    }
-
     const each = (cap, n, rev) => ({ each: Math.min(0.016, cap / Math.max(1, n - 1)), from: rev ? 'end' : 'start' });
 
     function show(k, dir) {
@@ -737,7 +706,6 @@
         if (spin) spin.kill();
         const full = nth(k) === N - INTRO && N - INTRO === 6;
         spin = gsap.to(st, full && !rev ? { wheel: nth(k), duration: 1.25, ease: 'back.out(2.4)' } : { wheel: nth(k), duration: 0.9, ease: 'back.out(1.2)' });
-        closeRing(full, rev);
         if (fill) fill.kill();
         const g = geo[Math.max(k, 0)];
         fill = gsap.to(rail, Object.assign({ p: nth(k) / (N - INTRO), duration: 0.9, ease: 'power3.out', onUpdate: () => { railDirty = true; } }, g || {}));
@@ -932,7 +900,6 @@
             if (srcIndex) srcIndex.classList.toggle('sk-detached', on);
         }
         star.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) rotate(' + (60 * e + st.angle * 180 / Math.PI) + 'deg) scale(' + (srcS + (1 - srcS) * e) + ')';
-        if (seal) seal.style.transform = 'translate3d(' + (cx - S / 2) + 'px,' + (srcY * (1 - e)) + 'px,0) scale(' + (srcS + (1 - srcS) * e) + ')';
     }
 
     // Three 100%-wide segments, each placed and cut to length by transform alone; progress fills the visible length

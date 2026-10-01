@@ -50,7 +50,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     };
     const shot = async (name, clip) => {
         const s = await send('Page.captureScreenshot', Object.assign({ format: 'png' }, clip ? { clip: Object.assign({ scale: 1 }, clip) } : {}));
-        fs.writeFileSync(path.join(OUT, name + '-' + W + '.png'), Buffer.from(s.data, 'base64'));
+        fs.writeFileSync(path.join(OUT, (process.env.TAG ? process.env.TAG + '-' : '') + name + '-' + W + '.png'), Buffer.from(s.data, 'base64'));
     };
     await send('Page.enable');
     await send('Runtime.enable');
@@ -84,7 +84,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             seal: seal ? (+getComputedStyle(seal).opacity).toFixed(2) : null,
             navHidden: document.body.classList.contains('sk-nav-hidden'), menu: cs ? [cs.opacity, cs.visibility] : null,
             bug: br ? [Math.round(br.left + br.width / 2), Math.round(br.top + br.height / 2)] : null,
-            say: (document.querySelector('.pb-say, .pb-bubble, [class*="pb-"][class*="say"]') || {}).textContent || '' };
+            say: (document.querySelector('.pb-say, .pb-bubble, [class*="pb-"][class*="say"]') || {}).textContent || '',
+            bubble: (() => { const b = document.querySelector('.pb-bubble'); if (!b) return null; const r = b.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom), b.classList.contains('is-below') ? 'below' : 'above', +getComputedStyle(b).opacity]; })() };
     })())`;
     const LAYOUT = `JSON.stringify((() => {
         const tr = document.getElementById('skWheel'), cats = [...tr.querySelectorAll('.sk-cat')];
@@ -97,7 +98,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         return { fit: tr.style.getPropertyValue('--sk-fit'), tw: tr.style.getPropertyValue('--sk-tw'), xpTitle: title, xpSet: set,
             overlap, inView: set && set.t >= 0 && set.b <= innerHeight && set.l >= 0 && set.r <= innerWidth,
             setL: sets.map((s) => s && s.l), setR: sets.map((s) => s && s.r), setH: sets.map((s) => s && s.b - s.t), titleR: titles.map((t) => t && t.r),
-            status: xp.querySelector('.sk-status').getAttribute('aria-label'), pulse: !!xp.querySelector('.sk-pulse') };
+            rows: [...xp.querySelectorAll('.sk-set li')].map((li) => li.getAttribute('aria-label')), seal: !!tr.querySelector('.sk-seal') };
     })())`;
     const cur = () => evaluate(`document.querySelector('.js-scroller').scrollTop`);
     const key = async (k) => {
