@@ -1,4 +1,4 @@
-// Contact page: a calendar week on the green free-time field that refines into a 15-minute slot mosaic, books "I'M BUSY RN"
+// Contact page: a calendar week on signature yellow that refines into a 15-minute slot mosaic, books "I'M BUSY RN"
 // glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
@@ -23,19 +23,21 @@
     const GLYPH_T = new Float64Array(GLYPH_BEATS.map(beat));
 
     // Google Calendar event colours, in the order of PALETTE in scratch/calendar/reel-build.py: the dance file is
-    // mapped onto these by nearest colour
+    // mapped onto these by nearest colour, then drawn in PALETTE
     const SRC = ['#53b44b', '#0b8043', '#616161', '#fbfbfb', '#a6c1f6', '#7986cb', '#5482eb', '#3f51b5', '#039be5',
         '#d50000', '#f4511e', '#f6bf26', '#e67c73'];
-    const PALETTE = SRC;
+    // Free time is the signature yellow; folds and booked glyphs are the site's void ink; banana is deepened to amber
+    // because it would vanish on yellow
+    const PALETTE = ['#ffed29', '#121316', '#5d5e65', '#fbfaf3', '#a6c1f6', '#7986cb', '#5482eb', '#2f3fa3', '#039be5',
+        '#e5484d', '#ff6a1f', '#c98500', '#e67c73'];
     const NP = PALETTE.length;
     const FIELD = 0, BASIL = 1;
     const COL = { field: 0, basil: 1, graphite: 2, lavender: 5, blueberry: 7, peacock: 8, tomato: 9, tangerine: 10, banana: 11, flamingo: 12 };
-    const GAP_BG = '#d4f5da';
-    const VOID = '#121316';
+    const GAP_BG = '#fff7cf';
     const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
     const DARK_INK = PALETTE.map((h) => { const [r, g, b] = rgbOf(h); return 0.299 * r + 0.587 * g + 0.114 * b > 125; });
-    // light ink, dark ink, and the ink of free-time labels
-    const INK = ['rgba(255,255,255,0.9)', 'rgba(32,33,36,0.78)', 'rgba(32,33,36,0.78)'];
+    // light ink, dark ink, and a quieter dark ink for free time so the meetings read first
+    const INK = ['rgba(255,255,255,0.9)', 'rgba(18,19,22,0.8)', 'rgba(18,19,22,0.3)'];
     const NI = INK.length;
     const inkOf = (v) => (v === FIELD ? 2 : DARK_INK[v] ? 1 : 0);
 
@@ -115,7 +117,6 @@
     const canvas = document.getElementById('gcCanvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const timesEl = document.getElementById('gcTimes');
-    const panel = document.getElementById('ct');
     const snack = document.getElementById('gcSnack');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -139,15 +140,23 @@
         const vw = window.innerWidth, vh = window.innerHeight;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const mobile = vw < 700;
-        // The contact panel is the calendar's sidebar on wide screens and a bottom sheet on phones
-        const pr = panel ? panel.getBoundingClientRect() : { width: 0, height: 0 };
-        const gutter = mobile ? 26 : Math.round(pr.width);
-        const gh = mobile ? Math.max(240, vh - Math.round(pr.height)) : vh;
-        const gw = vw - gutter;
-        const pitch = gw / (7 * SUB);
+        const gh = vh;
         // The reel's 10 hours, so its dance frames land on our slots row for row
         const hours = 10, startHour = 8;
-        const R = hours * U, unitH = gh / R, slotH = unitH * 2, dayW = gw / 7;
+        const R = hours * U, unitH = gh / R, slotH = unitH * 2;
+
+        let th = '';
+        for (let h = 1; h < hours; h++) {
+            const hh = startHour + h;
+            th += `<div class="gc-time" style="top:${(h * 4 * slotH).toFixed(2)}px">${((hh + 11) % 12) + 1} ${hh < 12 ? 'AM' : 'PM'}</div>`;
+        }
+        timesEl.innerHTML = th;
+        // The time column is exactly as wide as its widest label plus its padding and hairline
+        const tcs = getComputedStyle(timesEl);
+        let labelW = 0;
+        for (const el of timesEl.children) labelW = Math.max(labelW, el.getBoundingClientRect().width);
+        const gutter = Math.ceil(labelW + parseFloat(tcs.paddingLeft) + parseFloat(tcs.paddingRight) + parseFloat(tcs.borderRightWidth));
+        const gw = vw - gutter, pitch = gw / (7 * SUB), dayW = gw / 7;
         // Reel cells are 1.09 as wide as tall; portrait screens trade some of that for showing more of the dancer
         const sd = Math.max(4, Math.min(MAX_SD, Math.round(dayW / (slotH * 1.09) * (gw < gh ? 1.9 : 1))));
         const ys = new Int32Array(R + 1);
@@ -169,14 +178,6 @@
         canvas.style.height = gh + 'px';
         const root = document.documentElement.style;
         root.setProperty('--gc-gutter', gutter + 'px');
-        root.setProperty('--gc-gh', gh + 'px');
-
-        let th = '';
-        for (let h = 1; h < hours; h++) {
-            const hh = startHour + h;
-            th += `<div class="gc-time" style="top:${(h * 4 * slotH).toFixed(2)}px">${((hh + 11) % 12) + 1} ${hh < 12 ? 'AM' : 'PM'}</div>`;
-        }
-        timesEl.innerHTML = th;
 
         const cells = 7 * MAX_SD * R, cols = 7 * MAX_SD;
         G.evC = new Uint8Array(cells); G.evX = new Int32Array(cells); G.evY = new Int32Array(cells);
@@ -605,7 +606,7 @@
     // ---------------------------------------------------------------- drawing
     function clearGrid(cx) {
         const x0 = G.levels[0].xs[0];
-        cx.fillStyle = VOID;
+        cx.fillStyle = '#fff';
         cx.fillRect(0, 0, x0, G.H);
         cx.fillStyle = GAP_BG;
         cx.fillRect(x0, 0, G.W - x0, G.H);
@@ -691,7 +692,7 @@
         if (nowHour < startHour || nowHour > startHour + hours) return;
         const y = Math.round((nowHour - startHour) * 4 * slotH * dpr);
         const xs = G.levels[0].xs, x0 = xs[today * SUB], x1 = xs[today * SUB + SUB];
-        ctx.fillStyle = '#ea4335';
+        ctx.fillStyle = '#e5484d';
         ctx.fillRect(x0, y - Math.round(dpr), x1 - x0, Math.max(2, Math.round(2 * dpr)));
         ctx.beginPath();
         ctx.arc(x0, y, 5 * dpr, 0, Math.PI * 2);
@@ -916,11 +917,8 @@
     reduceMotion.addEventListener?.('change', () => { lastKey = -1; });
     setInterval(() => { readNow(); lastKey = -1; }, 30000);
     if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(() => {
-            // the panel's width can settle once its fonts arrive
-            if (panel && Math.round(panel.getBoundingClientRect().width) !== G.gutter && !G.mobile) layout();
-            buildAtlas(); G.weekCache = null; lastKey = -1;
-        });
+        // the hour labels' width, and so the column, settles once Roboto arrives
+        document.fonts.ready.then(layout);
     }
 
     loadDance('data/calendar-dance.bin').catch(() => {});

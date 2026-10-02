@@ -5,74 +5,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Contact — Aarav Pilania</title>
-    <meta name="description" content="Contact Aarav Pilania, creative developer in New Delhi. The calendar says I'm busy — book a slot anyway.">
-    <meta name="theme-color" content="#121316">
+    <meta name="description" content="Contact Aarav Pilania, creative developer in New Delhi. The calendar is full — a week of meetings that turns into a dance.">
+    <meta name="theme-color" content="#ffed29">
     <meta property="og:title" content="Contact — Aarav Pilania">
-    <meta property="og:description" content="I'm busy rn. A calendar week that schedules itself into a dance — and still has a slot for you.">
+    <meta property="og:description" content="I'm busy rn. A calendar week that schedules itself into a dance.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="preload" href="/fonts/Brier-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preload" href="data/calendar-dance.bin" as="fetch" crossorigin>
     <link rel="stylesheet" href="css/calendar-contact.css">
 </head>
 
 <body class="gc">
-    <p class="gc-sr">Beside the contact details, a fully booked calendar week: the meetings split into tiny time slots, spell out "I'm busy rn", then stretch and slide to become a dancing figure before being cancelled back into free time.</p>
-
-    <aside class="ct" id="ct" aria-labelledby="ctTitle">
-        <div class="ct__body">
-            <div class="ct__head">
-                <a class="ct__home" href="index.html"><span aria-hidden="true">←</span> Aarav Pilania</a>
-                <p class="ct__status"><span class="ct__dot" aria-hidden="true"></span>Open to work</p>
-            </div>
-
-            <h1 class="ct__title" id="ctTitle"><span class="gc-sr">Contact: </span>Book a slot<span class="ct__stop" aria-hidden="true">.</span></h1>
-            <p class="ct__lede">The calendar says I'm busy. It always does. There's still a slot for anything worth building.</p>
-
-            <div class="ct__actions">
-                <a class="ct__cta js-mail" href="mailto:aaravpilania2006@gmail.com?subject=Booking%20a%20slot" data-subject="Booking a slot">
-                    <span class="ct__plus" aria-hidden="true"></span>
-                    <span class="ct__cta-label">Book a slot</span>
-                    <span class="ct__cta-meta" aria-hidden="true">Email ↗</span>
-                </a>
-                <div class="ct__mail">
-                    <a class="ct__addr js-mail" href="mailto:aaravpilania2006@gmail.com">aaravpilania2006@gmail.com</a>
-                    <button class="ct__copy" type="button" id="ctCopy" aria-describedby="ctLive"><span class="ct__copy-label">Copy</span></button>
-                </div>
-            </div>
-
-            <div class="ct__month" id="ctMonth" aria-hidden="true">
-                <p class="ct__label" id="ctMonthLabel"></p>
-                <div class="ct__month-grid" id="ctMonthGrid"></div>
-            </div>
-
-            <section class="ct__clock" aria-labelledby="ctClockLabel">
-                <p class="ct__label" id="ctClockLabel">Local time · New Delhi</p>
-                <p class="ct__time"><time id="ctTime" datetime="">--:--</time><span class="ct__sec" id="ctSec" aria-hidden="true">:--</span></p>
-                <p class="ct__zone">IST · GMT+5:30 <span id="ctMood">probably awake</span></p>
-            </section>
-
-            <section class="ct__cals ct__cals--mine" aria-labelledby="ctMine">
-                <p class="ct__label" id="ctMine">My calendars</p>
-                <ul>
-                    <li><span class="ct__sw ct__sw--free" aria-hidden="true"></span>Free time</li>
-                    <li><span class="ct__sw ct__sw--busy" aria-hidden="true"></span>Busy rn</li>
-                </ul>
-            </section>
-
-            <section class="ct__cals" aria-labelledby="ctOther">
-                <p class="ct__label" id="ctOther">Other calendars</p>
-                <ul>
-                    <li><a href="https://github.com/AaravPilania" target="_blank" rel="noopener"><span class="ct__sw ct__sw--gh" aria-hidden="true"></span>GitHub<span class="ct__meta">@AaravPilania ↗</span></a></li>
-                    <li><a href="index.html"><span class="ct__sw ct__sw--home" aria-hidden="true"></span>Portfolio<span class="ct__meta">Home ←</span></a></li>
-                </ul>
-            </section>
-
-            <p class="ct__foot"><span>© 2026 Aarav Pilania</span><span>Delhi, IN</span></p>
-        </div>
-        <p class="gc-sr" id="ctLive" aria-live="polite"></p>
-    </aside>
+    <h1 class="gc-sr">Contact — I'm busy rn</h1>
+    <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "I'm busy rn", then stretch and slide to become a dancing figure before being cancelled back into free time.</p>
 
     <div class="gc-times" id="gcTimes" aria-hidden="true"></div>
     <canvas class="gc-canvas" id="gcCanvas" aria-hidden="true"></canvas>
@@ -82,7 +28,6 @@
         <span>Click anywhere for sound</span>
     </div>
 
-    <script src="js/contact-panel.js"></script>
     <script src="js/calendar-audio.js"></script>
     <script src="js/calendar-contact.js"></script>
 </body>
