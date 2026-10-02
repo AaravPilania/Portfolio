@@ -1,0 +1,16 @@
+{
+ "source_start": 138.9659410430839,
+ "samples": 1236222,
+ "bars": 16,
+ "beats": 64,
+ "loop": 28.032244897959185,
+ "beat": 0.43800382653061226,
+ "source_bars": "79-94",
+ "start_beat": 316,
+ "seam_corr": 0.6363,
+ "xf_ms": 12.0,
+ "pad": 0.5,
+ "decoder_lag": 0,
+ "snr_db": 19.7,
+ "size": 465649
+}

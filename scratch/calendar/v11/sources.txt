@@ -1,0 +1,23 @@
+Contact v11: source research for extending the dance (Oct 2026)
+
+Original: https://www.youtube.com/watch?v=3eRBFkxgG7g  "Gypsy kid dancing at club can't be bothered. 1997." (74 s,
+640x480 25 fps). Segment from Vadim Bespalov's "Delo vkusa - KoZa" (Kharkiv, club Disco 2000, 1997); camera and edit by
+Bespalov. Interview with the same kid (different outfit, no dance): https://youtu.be/ChDRtXQzFdY
+Know Your Meme: https://knowyourmeme.com/memes/dancing-russian-kid-dancing-romani-kid (no longer cut known)
+
+Downloaded and frame-matched against the original (cand-match.py: every frame, 32x24 grey, best normalised correlation,
+mirrored too; < 0.8 = footage the original lacks):
+  iW4x6W9Tu2I "Russian kid dancing at club (Full+)" 239 s  -> kid footage is all orig 304-1607; extra runs are another
+                                                             clip (124-149 s) and a split-screen (168-239 s)
+  bA4R8Nca_84 "russian kid in the club dancing" 83 s       -> orig 3-1842 + freeze/zoom effects only
+  p0YXGfQNbgE "KoZa 1997: Diving into the Movement. Kharkiv. Disco 2000 Club." 439 s (Bespalov's own channel)
+                                                           -> no frame of the kid (best match < 0.85 everywhere)
+  TfeNEBj9Grw "Dj Slava Flash. 1997. Kharkov, club Disco 2000" 324 s -> interview, no kid
+  also seen via search: _yRJsecDjjc (AI 4K 50 fps upscale of the same 74 s), YT2VjfG7iDw (30 min loop),
+  0oHCDEZp9AI / nacRrioFkXw (10 h loops), h7oqtfgvT64 (velocity edit), 4yUux-aYGcI (Swing Man club edit)
+Conclusion: no longer or alternative take is public; everything derives from the 74 s upload.
+
+Inside the original after the reel's continuation (orig 981): 982-1015 the white-trousered dancer covers the kid's right
+half and the camera swings (not reconstructable: half the body hidden for >1 s); 1016-1050 the camera rolls ~90 degrees;
+1036-1136 the kid keeps dancing, full body, the camera rolled ~90 degrees (unobstructed); 1140-1156 a striped arm crosses
+in front; 1176-1180 lost. The extension uses 1044-1121, turned upright (render-tilt.py, tilt sheets in this folder).

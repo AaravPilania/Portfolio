@@ -1,28 +1,30 @@
 // Contact page: a calendar week on signature yellow that refines into a slot mosaic, books "YOUR MOVE" glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
-// display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
-// them into free time and the grid coarsens into the ordinary week. One 12-bar cycle locked to the soundtrack loop.
-// The cursor ink and the beat ripples live in calendar-grain.js; the invite card and its camera booth in
-// calendar-invite.js. The cycle holds on the week until the sound gate is answered, so the first beat is the first frame.
+// display rate, so the meetings themselves stretch, slide, split and merge into the dancer. The dance ends on a held
+// pose on a downbeat; a rising line then cancels it into free time and the grid coarsens into the ordinary week. One
+// 16-bar cycle locked to the soundtrack loop. The cursor ink lives in calendar-grain.js; the invite card and its booth
+// in calendar-invite.js. The cycle holds on the week until the sound gate is answered, so the first beat is the first frame.
 (() => {
     'use strict';
 
-    // Must equal scratch/calendar/v10/loop-rotated.json: 927155 samples at 44.1 kHz, 12 bars of 4 beats, rotated so the
-    // file starts on bar 4 of the original cut (an instrumental phrase). The loop is three like 4-bar phrases, so every
-    // beat below keeps its place in the phrase.
-    const LOOP = 927155 / 44100;
+    // Must equal scratch/calendar/v11/loop16.json: 1236222 samples at 44.1 kHz, 16 bars of 4 beats starting on the
+    // source's bar 79 downbeat (an instrumental phrase). The loop is four like 4-bar phrases, so every beat below keeps
+    // its place in the phrase.
+    const LOOP = 1236222 / 44100;
     const AUDIO_PAD = 0.5;
-    const BEAT = LOOP / 48;
+    const BEAT = LOOP / 64;
     const STEP = BEAT / 8; // a 32nd note: the pace of the resolution steps
     const beat = (n) => n * BEAT;
     const DANCE_FPS = 30;
     const GLYPH_BEATS = [2, 2.5, 3, 3.5, 6, 6.5, 7, 8]; // Y O U R   M O V E
     const NG = GLYPH_BEATS.length;
     const DISSOLVE_STEPS = 8; // sixteenth notes
+    // The dance file's last frame is its final pose and lands on beat 56, a bar's downbeat; it holds there until the
+    // rising line takes it on beat 58 and the week returns on the last bar's downbeat
     const T = {
         refine: beat(1), empty: beat(1) + 3 * STEP, text: beat(GLYPH_BEATS[0]), textFull: beat(GLYPH_BEATS[NG - 1]),
         coarsen: beat(11.5), coarse: beat(11.5) + 3 * STEP, dance: beat(13), refine3: beat(16), refine5: beat(16.5),
-        sub7: beat(17), fine: beat(17.5), dissolve: beat(43.5), outro: beat(45.5), week: beat(45.5) + 3 * STEP,
+        sub7: beat(17), fine: beat(17.5), dissolve: beat(58), outro: beat(60), week: beat(60) + 3 * STEP,
     };
     const GLYPH_T = new Float64Array(GLYPH_BEATS.map(beat));
 
@@ -869,33 +871,6 @@
         return true;
     }
 
-    // ---------------------------------------------------------------- beat puffs
-    // Where the dancer is on screen, in css px; null while there is nobody to throw ink off
-    function dancerCentre(t) {
-        if (!dance || !G.samples || t < T.dance || t >= T.dissolve) return null;
-        const f = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
-        if (dance.mass[f] < 12) return null;
-        const lv = G.levels[7], C = lv.C, W = dance.w;
-        const col = dance.cx[f] - (C >= W ? Math.floor((W - C) / 2) : lv.shift[f] / (G.R / REEL_SQ));
-        if (col < 0 || col >= C) return null;
-        const i = Math.floor(col);
-        return [(lv.xs[i] + (col - i) * (lv.xs[i + 1] - lv.xs[i])) / G.dpr, dance.cy[f] / dance.h * G.gh];
-    }
-
-    // Every beat a small ripple off the dancer, a firmer one on each bar's downbeat
-    const PUFF_BEAT = 0.45, PUFF_DOWN = 0.8;
-    let lastBeat = -1;
-    function beatPuff(t) {
-        const b = Math.floor(t / BEAT);
-        if (b === lastBeat) return;
-        const first = lastBeat < 0;
-        lastBeat = b;
-        if (first || !grain.trail) return;
-        const down = b % 4 === 0;
-        const p = dancerCentre(t);
-        if (p) grain.puff(p[0], p[1], down ? PUFF_DOWN : PUFF_BEAT);
-    }
-
     // ?t=<seconds> pins the cycle to one moment (stills, debugging)
     let frozen = parseFloat(new URLSearchParams(location.search).get('t'));
     if (!Number.isFinite(frozen)) frozen = null;
@@ -910,10 +885,7 @@
         // Sampled half a frame ahead so each step lands within +-half a vsync of its beat instead of up to a whole one late
         const t = reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2);
         const drew = render(t);
-        if (grain) {
-            beatPuff(t);
-            grain.frame(drew, ts);
-        }
+        if (grain) grain.frame(drew, ts);
         if (drew || (grain && grain.active)) perfDraw[perfI++ % PERF_N] = performance.now() - a;
         if (lastTs) {
             perfDelta[perfJ++ % PERF_N] = ts - lastTs;
@@ -949,22 +921,18 @@
         for (let i = size; i < n * size; i++) frames[i] = raw[i] ^ frames[i - size];
         for (let i = 0; i < n * size; i++) frames[i] = remap[frames[i]];
         // Per-frame dancer centre, averaged over +-8 frames so a narrow window glides instead of jittering
-        const cen = new Float64Array(n), ceny = new Float64Array(n), cx = new Float64Array(n), cy = new Float64Array(n);
-        const mass = new Uint16Array(n);
+        const cen = new Float64Array(n), cx = new Float64Array(n);
         for (let f = 0; f < n; f++) {
-            let sx = 0, sy = 0, sn = 0;
-            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { sx += i % w; sy += Math.floor(i / w); sn++; }
+            let sx = 0, sn = 0;
+            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { sx += i % w; sn++; }
             cen[f] = sn ? sx / sn + 0.5 : w / 2;
-            ceny[f] = sn ? sy / sn + 0.5 : h / 2;
-            mass[f] = sn;
         }
         for (let f = 0; f < n; f++) {
-            let sum = 0, sumy = 0, k = 0;
-            for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; sumy += ceny[j]; k++; }
+            let sum = 0, k = 0;
+            for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; k++; }
             cx[f] = sum / k;
-            cy[f] = sumy / k;
         }
-        dance = { w, h, n, frames, cx, cy, mass };
+        dance = { w, h, n, frames, cx };
         if (G) { buildSampler(); lastKey = -1; }
     }
 
@@ -1014,9 +982,9 @@
         CalendarAudio.init('audio/calendar-loop.mp3', LOOP, AUDIO_PAD).catch(() => {});
     }
     const askGate = () => sound.gate({
-        kicker: 'Soundtrack · 21 s loop',
+        kicker: 'Soundtrack · 28 s loop',
         title: 'This calendar dances.',
-        body: 'A week of meetings, scored to twelve bars of Alice Deejay\u2019s Better Off Alone on repeat. Best with sound.',
+        body: 'A week of meetings, scored to sixteen bars of Alice Deejay\u2019s Better Off Alone on repeat. Best with sound.',
         foot: window.matchMedia('(pointer: coarse)').matches ? 'Switch it any time, top right.' : 'Switch it any time, top right, or press M.',
         onChoose: (s) => begin(s, true),
     });
@@ -1045,8 +1013,7 @@
         bench: (t) => { const a = performance.now(); lastKey = -1; render(t); return performance.now() - a; },
         pieces: () => G.tw.n,
         ready: () => !!(dance && G.samples),
-        centre: (t) => dancerCentre(t),
-        puff: (t, amp = PUFF_DOWN) => { const p = dancerCentre(t); if (p && grain) grain.puff(p[0], p[1], amp); return p; },
+        frames: () => (dance ? dance.n : 0),
         started: () => wallStart !== null,
         perfReset: () => { perfI = 0; perfJ = 0; lastTs = 0; },
         perf: () => ({

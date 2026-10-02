@@ -2,8 +2,8 @@
 // from the last position to this one, so fast strokes stay unbroken); the ink bleeds into its neighbours and dries
 // over about a second. The field prints onto the calendar as a halftone: round dots on a 45 degree screen, sized by
 // the ink under each dot, near-black over the light paper and off-white over the dancer and the ochre glyphs, and
-// its slope bends the calendar beneath like a lens of wet ink. Beats ring out of the dancer as expanding halftone
-// ripples. At rest the GL canvas is hidden and the 2D calendar shows through untouched.
+// its slope bends the calendar beneath like a lens of wet ink. Only pointer (mouse, pen, touch) movement lays ink.
+// At rest the GL canvas is hidden and the 2D calendar shows through untouched.
 (() => {
     'use strict';
 
@@ -14,7 +14,6 @@
     const LIFE_MS = 1700;    // after the last stamp the field is dry; the canvas hides
     const MAX_SEG = 16;      // stamps folded into one frame
     const LENS = 7;          // css px of refraction per unit of ink slope
-    const RIPPLE_MS = 190;
     const INK_DARK = [18 / 255, 19 / 255, 22 / 255];
     const INK_LIGHT = [244 / 255, 242 / 255, 234 / 255];
     const LUMA_SPLIT = 0.6;
@@ -25,7 +24,7 @@ void main() {
     gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-    // One pass: bleed, dry, then add this frame's stamps. A stamp is a capsule (p0 -> p1, radius) or a ring.
+    // One pass: bleed, dry, then add this frame's stamps. A stamp is a capsule (p0 -> p1) with an amount and a radius.
     const INK = `#version 300 es
 precision highp float;
 uniform sampler2D u_prev;
@@ -34,7 +33,7 @@ uniform float u_bleed;
 uniform float u_cell;
 uniform int u_n;
 uniform vec4 u_seg[${MAX_SEG}];
-uniform vec4 u_par[${MAX_SEG}];
+uniform vec2 u_par[${MAX_SEG}];
 out vec4 FragColor;
 float ink(ivec2 p) {
     ivec2 s = textureSize(u_prev, 0);
@@ -51,9 +50,8 @@ void main() {
         vec2 a = u_seg[i].xy, b = u_seg[i].zw, ab = b - a;
         float h = clamp(dot(x - a, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
         float d = length(x - a - ab * h);
-        vec4 q = u_par[i];
-        float w = q.z > 0.5 ? exp(-pow((d - q.y) / q.w, 2.0)) : exp(-d * d / (q.y * q.y));
-        v += w * q.x;
+        vec2 q = u_par[i];
+        v += exp(-d * d / (q.y * q.y)) * q.x;
     }
     FragColor = vec4(min(v, 1.0), 0.0, 0.0, 1.0);
 }`;
@@ -118,9 +116,8 @@ void main() {
     let simW = 0, simH = 0, simTex = [null, null], simFbo = [null, null], simIdx = 0;
     let vw = 0, vh = 0, dpr = 1;
     let shown = false, dirty = true, lastNow = 0, lastStamp = -Infinity, last = null;
-    const segs = new Float32Array(MAX_SEG * 4), pars = new Float32Array(MAX_SEG * 4);
+    const segs = new Float32Array(MAX_SEG * 4), pars = new Float32Array(MAX_SEG * 2);
     let nSeg = 0;
-    const ripples = [];
     const PERF_N = 2048, perf = new Float32Array(PERF_N);
     let perfI = 0;
 
@@ -222,16 +219,16 @@ void main() {
     }
 
     // ------------------------------------------------------------ stamps
-    function stamp(x0, y0, x1, y1, amount, radius, ring, width) {
+    function stamp(x0, y0, x1, y1, amount, radius) {
         if (nSeg >= MAX_SEG) {
             // out of slots this frame: stretch the last capsule to reach the new point
-            const j = (MAX_SEG - 1) * 4;
-            if (!ring && !pars[j + 2]) { segs[j + 2] = x1; segs[j + 3] = y1; pars[j] = Math.min(0.9, Math.max(pars[j], amount)); }
+            const j = MAX_SEG - 1;
+            segs[j * 4 + 2] = x1; segs[j * 4 + 3] = y1; pars[j * 2] = Math.min(0.9, Math.max(pars[j * 2], amount));
             return;
         }
-        const j = nSeg++ * 4;
-        segs[j] = x0; segs[j + 1] = y0; segs[j + 2] = x1; segs[j + 3] = y1;
-        pars[j] = amount; pars[j + 1] = radius; pars[j + 2] = ring ? 1 : 0; pars[j + 3] = width || 1;
+        const j = nSeg++;
+        segs[j * 4] = x0; segs[j * 4 + 1] = y0; segs[j * 4 + 2] = x1; segs[j * 4 + 3] = y1;
+        pars[j * 2] = amount; pars[j * 2 + 1] = radius;
     }
 
     function bindPointer() {
@@ -253,20 +250,7 @@ void main() {
         document.addEventListener('pointerout', (e) => { if (!e.relatedTarget) last = null; }, { passive: true });
     }
 
-    // A ripple of ink from a viewport point (css px, y down); amp 1 is a downbeat
-    function puff(x, y, amp = 1) {
-        if (!ok || reduceMotion.matches) return;
-        ripples.push({ x, y: vh - y, amp, t0: -1 });
-    }
-
     function step(dt, now) {
-        for (let i = ripples.length - 1; i >= 0; i--) {
-            const r = ripples[i];
-            if (r.t0 < 0) r.t0 = now;
-            const age = now - r.t0;
-            if (age > RIPPLE_MS) { ripples.splice(i, 1); continue; }
-            stamp(r.x, r.y, r.x, r.y, 0.16 * r.amp * (1 - age / RIPPLE_MS), 12 + age * 0.26 * (0.7 + 0.3 * r.amp), true, 5 + age * 0.02);
-        }
         if (nSeg) lastStamp = now;
         const w = 1 - simIdx;
         gl.bindFramebuffer(gl.FRAMEBUFFER, simFbo[w]);
@@ -281,7 +265,7 @@ void main() {
         gl.uniform1f(u.u_cell, CELL);
         gl.uniform1i(u.u_n, nSeg);
         gl.uniform4fv(u.u_seg, segs);
-        gl.uniform4fv(u.u_par, pars);
+        gl.uniform2fv(u.u_par, pars);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         simIdx = w;
@@ -305,8 +289,8 @@ void main() {
         const dt = lastNow ? Math.min(50, now - lastNow) : 16.6;
         lastNow = now;
         if (drew) dirty = true;
-        if (reduceMotion.matches) { nSeg = 0; ripples.length = 0; }
-        const live = nSeg > 0 || ripples.length > 0 || now - lastStamp < LIFE_MS;
+        if (reduceMotion.matches) nSeg = 0;
+        const live = nSeg > 0 || now - lastStamp < LIFE_MS;
         if (!live) {
             if (shown) { glCanvas.style.visibility = 'hidden'; shown = false; }
             return;
@@ -329,7 +313,7 @@ void main() {
         get enabled() { return ok; },
         get trail() { return ok && !reduceMotion.matches; },
         get active() { return shown; },
-        layout, frame, puff,
+        layout, frame,
         perf: () => {
             const v = Array.from(perf.subarray(0, Math.min(perfI, PERF_N))).sort((x, y) => x - y);
             const at = (p) => (v.length ? +v[Math.min(v.length - 1, Math.floor(v.length * p))].toFixed(2) : null);

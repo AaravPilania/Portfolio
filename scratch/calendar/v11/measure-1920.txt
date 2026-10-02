@@ -1,0 +1,11 @@
+ready true audio running true loop 28.032244897959185
+wrap at raw audio 28.0373 from 28.0304 to 0.0050
+wrap at raw audio 56.0710 from 28.0317 to 0.0065
+frames 8931 rAF interval p50 6.9 p95 7.1 max 27.8
+dance steps 1142 vsyncs between consecutive steps {"2":1,"3":3,"4":221,"5":914,"1331":2}
+dance step error vs audio (ms): min -4.05 p5 -3.16 p50 -0 p95 3.15 max 9.68  |err|<=10ms 100.0%
+final pose (frame 565 ) reached at beat 55.997 , first state change after it at beat 57.993
+beat-grid state changes 65 error vs 32nd grid (ms): min -3.47 p50 -0.9 max 3.45
+loop wraps 2 scene order week > weekgrid > empty > text > dance > weekgrid > week > weekgrid > empty > text > dance > weekgrid > week > weekgrid > empty > text > dance
+page perf {"draws":6060,"drawP50":0.4,"drawP95":1.1,"drawMax":3.4,"frames":8935,"rafP50":6.9,"rafP95":7.1,"rafMax":27.8,"over33":0}
+errors: none

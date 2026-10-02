@@ -1,0 +1,11 @@
+colour agreement on dancer cells: train 0.915  held-out n201-267 0.749
+overlap n201-267 (held out: fitted on n123-200): all-cell agreement 0.889, dancer-union colour agreement 0.621, silhouette IoU 0.814
+overlap n201-267 (shipped ours.npz, fitted on the whole overlap): all-cell agreement 0.926, dancer-union colour agreement 0.741, silhouette IoU 0.828
+Lab kid mean main [ 71.7 129.1 121.6] rolled [ 48.  128.4 126.5]  std main [61.  10.3 18.7] rolled [49.8  7.9 14.4]
+spike fixed 1047 769 -> 392
+dancer cells: main 940-981 median 550, rolled median 452
+colour share main 900-981: [0.    0.163 0.229 0.182 0.145 0.044 0.054 0.165 0.001 0.003 0.    0.002
+ 0.01 ]
+colour share rolled      : [0.    0.183 0.217 0.154 0.05  0.029 0.045 0.287 0.022 0.003 0.    0.002
+ 0.008]
+done

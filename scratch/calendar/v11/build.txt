@@ -1,0 +1,9 @@
+566 frames = 18.867 s; beat = 13.140 frames; B->C cut at page 473 (beat 48.997); final pose page 565 (beat 55.998)
+segments: [('reel', 0, 254), ('orig', 255, 472), ('roll', 473, 565)]
+cell change per step: reel median 0.197, p90 0.286, max 0.381
+join DJ repeat (reel 65 -> 13): 0.366 cells changed, silhouette IoU 0.760
+join reel n267 -> orig 797: 0.048 cells changed, silhouette IoU 0.862
+join orig 978 -> roll 1044 (beat 49): 0.273 cells changed, silhouette IoU 0.555
+rolled shot steps: median 0.105, p90 0.135; repeats 15/92
+dancer cells: page 0 432  orig 978 544  roll 1044 462  final pose 536
+gzip 110561 B
