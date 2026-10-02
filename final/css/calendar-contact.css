@@ -52,6 +52,15 @@ body.gc {
     z-index: 1;
 }
 
+/* the slide-4 dot grid over the calendar grid only; sized and placed by calendar-grain.js */
+.gc-grain {
+    position: fixed;
+    top: 0;
+    display: block;
+    z-index: 1;
+    pointer-events: none;
+}
+
 /* ---------- time column ---------- */
 .gc-times {
     position: fixed;

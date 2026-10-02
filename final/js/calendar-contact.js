@@ -1,4 +1,4 @@
-// Contact page: a calendar week on signature yellow that refines into a slot mosaic, books "PING? PONG!" glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
+// Contact page: a calendar week on signature yellow that refines into a slot mosaic, books "YOUR MOVE" glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
 // them into free time and the grid coarsens into the ordinary week. One 12-bar cycle locked to the soundtrack loop.
@@ -12,7 +12,7 @@
     const STEP = BEAT / 8; // a 32nd note: the pace of the resolution steps
     const beat = (n) => n * BEAT;
     const DANCE_FPS = 30;
-    const GLYPH_BEATS = [2, 2.5, 3, 3.5, 4, 6, 6.5, 7, 7.5, 8]; // P I N G ?   P O N G !
+    const GLYPH_BEATS = [2, 2.5, 3, 3.5, 6, 6.5, 7, 8]; // Y O U R   M O V E
     const NG = GLYPH_BEATS.length;
     const DISSOLVE_STEPS = 8; // sixteenth notes
     const T = {
@@ -78,19 +78,19 @@
         'Retro', 'Deep Work', 'Coffee Chat', 'Hiring Sync', 'Office Hours', 'Planning', 'Gym', 'Weekly', 'Product Review',
         'Mentoring', 'Team Lunch', 'Demo', 'Email', 'Notes', 'Prep'];
     // Titles of the meetings that spell the glyphs
-    const PINGS = ['Ping', 'Pong', 'DM', 'Hi!', 'Slack', 'Inbox', 'Reply', 'Say hi', 'Ping?', 'Coffee?'];
+    const PINGS = ['Your turn', 'Ping', 'RSVP', 'Slot open', 'Hi?', 'Your call', 'Make a move'];
 
     // 5x7 bitmap glyphs: '#' is one glyph pixel, booked as one sub-column by G.textPu row units
     const GLYPHS = {
-        P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
-        I: ['###', '.#.', '.#.', '.#.', '.#.', '.#.', '###'],
-        N: ['#...#', '#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#'],
-        G: ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.###.'],
+        Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
         O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
-        '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
-        '!': ['#', '#', '#', '#', '#', '.', '#'],
+        U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+        R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+        M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+        V: ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+        E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
     };
-    const LINES = ['PING?', 'PONG!'];
+    const LINES = ['YOUR', 'MOVE'];
     const LINE_GAP = 2; // glyph pixels between lines
     const lineWidth = (s) => [...s].reduce((w, ch, i) => w + GLYPHS[ch][0].length + (i ? 1 : 0), 0);
     const TEXT_W = Math.max(...LINES.map(lineWidth)), TEXT_H = LINES.length * 7 + (LINES.length - 1) * LINE_GAP;
@@ -123,6 +123,7 @@
     const timesEl = document.getElementById('gcTimes');
     const snack = document.getElementById('gcSnack');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const grain = window.CalendarGrain && CalendarGrain.enabled ? CalendarGrain : null;
 
     let G = null;          // layout
     let dance = null;      // { w, h, n, frames: Uint8Array(n*w*h) } in PALETTE indices
@@ -192,6 +193,9 @@
         canvas.style.height = gh + 'px';
         const root = document.documentElement.style;
         root.setProperty('--gc-gutter', gutter + 'px');
+        // keep mask for the grain filter: dancer and glyph blocks white, the rest black
+        G.mask = grain ? grain.layout({ canvas, x0: G.levels[0].xs[0], W: G.W, H: G.H, vw, vh: gh, dpr }) : null;
+        G.keep = false;
 
         const cells = 7 * MAX_SD * R, cols = 7 * MAX_SD;
         G.evC = new Uint8Array(cells); G.evX = new Int32Array(cells); G.evY = new Int32Array(cells);
@@ -569,17 +573,21 @@
             JT[i] = (f & 1 ? 0 : 1 - e) + (f & 2 ? 0 : e);
             JB[i] = (f & 4 ? 0 : 1 - e) + (f & 8 ? 0 : e);
         }
-        // two layers (meetings being overwritten, then the rest), each: gaps punched into the free time, then ink
-        const order = tw.order, under = tw.under;
+        // two layers (meetings being overwritten, then the rest), each: gaps punched into the free time, then ink.
+        // Every piece is dancer or glyph, so the keep mask gets the same rects: gaps black, ink white.
+        const order = tw.order, under = tw.under, mk = G.mask;
+        const fill = mk ? (x, y, w, h) => { ctx.fillRect(x, y, w, h); mk.fillRect(x, y, w, h); } : (x, y, w, h) => ctx.fillRect(x, y, w, h);
         for (let layer = 0; layer < 2; layer++) {
             const j0 = layer ? under : 0, j1 = layer ? n : under;
             ctx.fillStyle = GAP_BG;
+            if (mk) mk.fillStyle = '#000';
             for (let j = j0; j < j1; j++) {
                 const i = order[j];
                 if (Y1[i] - Y0[i] < thin || F[i] & BACKING) continue;
                 const oy = Math.round(Y0[i] - gya * JT[i]);
-                ctx.fillRect(X[i], oy, Wd[i], Math.round(Y1[i] + gyb * JB[i]) - oy);
+                fill(X[i], oy, Wd[i], Math.round(Y1[i] + gyb * JB[i]) - oy);
             }
+            if (mk) mk.fillStyle = '#fff';
             let cur = -1;
             for (let j = j0; j < j1; j++) {
                 const i = order[j];
@@ -588,12 +596,13 @@
                 if (h < 1) continue;
                 if (tw.c[i] !== cur) { cur = tw.c[i]; ctx.fillStyle = PALETTE[cur]; }
                 const x = X[i], w = Wd[i];
-                if (JT[i] < 0.5 || JB[i] < 0.5 || w <= cr * 2 || h <= cr * 2) { ctx.fillRect(x, y, w, h); continue; }
-                ctx.fillRect(x + cr, y, w - cr * 2, h);
-                ctx.fillRect(x, y + cr, w, h - cr * 2);
-                if (cr === 2) ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+                if (JT[i] < 0.5 || JB[i] < 0.5 || w <= cr * 2 || h <= cr * 2) { fill(x, y, w, h); continue; }
+                fill(x + cr, y, w - cr * 2, h);
+                fill(x, y + cr, w, h - cr * 2);
+                if (cr === 2) fill(x + 1, y + 1, w - 2, h - 2);
             }
         }
+        if (mk) G.keep = true;
         const { labelH, padX, padY, minLabelW } = G, lw = lv.labelW, atlas = G.atlas;
         if (lw >= minLabelW) {
             for (let i = 0; i < n; i++) {
@@ -823,10 +832,18 @@
         buildTweens(lv, G.runA, G.runB);
     }
 
+    function maskClear() {
+        if (!G.keep) return;
+        G.keep = false;
+        G.mask.fillStyle = '#000';
+        G.mask.fillRect(0, 0, G.W, G.H);
+    }
+
     function render(t) {
         const key = scene(t);
         if (sMode === M_DANCE) {
             if (key === lastKey && t === lastT) return false;
+            maskClear();
             const lv = G.levels[sLevel];
             if (key !== lastKey) buildStep(lv, sArg);
             lastKey = key; lastT = t;
@@ -838,6 +855,7 @@
         }
         if (key === lastKey) return false;
         lastKey = key;
+        maskClear();
         if (sMode === M_WEEK) {
             drawWeek();
             nowLine();
@@ -872,7 +890,10 @@
         const a = performance.now();
         // Sampled half a frame ahead so each step lands within +-half a vsync of its beat instead of up to a whole one late
         const drew = render(reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2));
-        if (drew) perfDraw[perfI++ % PERF_N] = performance.now() - a;
+        if (drew) {
+            if (grain) grain.draw(G.keep);
+            perfDraw[perfI++ % PERF_N] = performance.now() - a;
+        }
         if (lastTs) {
             perfDelta[perfJ++ % PERF_N] = ts - lastTs;
             frameDt += (Math.min(34, Math.max(6, ts - lastTs)) - frameDt) * 0.05;
