@@ -1,0 +1,9 @@
+ready true phases {"refine":0.438,"empty":0.602,"text":0.876,"textFull":3.504,"coarsen":5.037,"coarse":5.201,"dance":5.694,"refine3":7.008,"refine5":7.227,"sub7":7.446,"fine":7.665,"dissolve":19.053,"outro":19.929,"week":20.093}
+shot dance+8 = 13.694 dance@7x2:240 p-1920-0.png
+audio {"running":true,"blocked":false,"loop":21.02392290249433,"snackHidden":true}
+loop wraps 0 scene order text@x: > dance@x: > dance@x:/dissolve > weekgrid@x: > week@x:
+visual-vs-audio clock delta 0.0122
+pre undefined
+raf {"frames":1442,"mean":6.94,"p95":7,"max":7.6,"over25":0,"slow":[],"longTasks":[]} from t = 9.13
+eval {"perf":{"draws":513,"drawP50":0.4,"drawP95":0.9,"drawMax":2.3,"frames":1442,"rafP50":6.9,"rafP95":7,"rafMax":7.6,"over33":0},"pieces":768,"benchFineP95":0.8,"benchFineP50":0.4}
+errors: none
