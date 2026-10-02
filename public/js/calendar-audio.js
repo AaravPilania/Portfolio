@@ -1,13 +1,15 @@
 // Looping soundtrack + master clock for the calendar page. Kept apart from the renderer so a site-wide sound toggle can
 // drive it later through setMuted() without touching the animation.
-//   CalendarAudio.init(url, loopSeconds) -> Promise (resolves once decoded)
+//   CalendarAudio.init(url, loopSeconds, pad) -> Promise (resolves once decoded); the file holds the loop with `pad`
+//                             seconds of circular padding on both sides, so loop points sit inside identical audio
+//                             whatever priming the MP3 decoder keeps
 //   CalendarAudio.time()      -> seconds since the loop started (audio-hardware clock), or null while silent
 //   CalendarAudio.timeAt(t)   -> the same, at performance.now()-based timestamp t
 //   CalendarAudio.onStart(fn) -> fn() whenever playback (re)starts, so visuals can restart in sync
 //   CalendarAudio.setMuted(b) / isRunning()
 window.CalendarAudio = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
-    let ctx = null, gain = null, buffer = null, source = null, startAt = 0, loop = 0, muted = false;
+    let ctx = null, gain = null, buffer = null, source = null, startAt = 0, loop = 0, pad = 0, muted = false;
     const starters = new Set();
     const unlockEvents = ['pointerdown', 'touchend', 'keydown', 'click', 'wheel'];
 
@@ -16,12 +18,12 @@ window.CalendarAudio = (() => {
         source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = true;
-        source.loopStart = 0;
-        source.loopEnd = loop;
+        source.loopStart = pad;
+        source.loopEnd = pad + loop;
         source.connect(gain);
-        // Scheduled slightly ahead so the first sample and the visual clock's zero coincide
+        // Scheduled slightly ahead so the loop's first sample and the visual clock's zero coincide
         startAt = ctx.currentTime + 0.05;
-        source.start(startAt);
+        source.start(startAt, pad);
         unlockEvents.forEach((e) => window.removeEventListener(e, unlock, true));
         starters.forEach((fn) => fn());
     }
@@ -34,9 +36,11 @@ window.CalendarAudio = (() => {
         else play();
     }
 
-    async function init(url, loopSeconds) {
+    async function init(url, loopSeconds, padSeconds = 0) {
         if (!AC) return;
-        ctx = new AC({ latencyHint: 'interactive' });
+        // At the file's own rate the decoded buffer is not resampled, so the loop points land on exact samples
+        try { ctx = new AC({ latencyHint: 'interactive', sampleRate: 44100 }); } catch (e) { ctx = new AC({ latencyHint: 'interactive' }); }
+        pad = padSeconds;
         gain = ctx.createGain();
         gain.gain.value = muted ? 0 : 1;
         gain.connect(ctx.destination);
@@ -44,7 +48,7 @@ window.CalendarAudio = (() => {
         unlockEvents.forEach((e) => window.addEventListener(e, unlock, { capture: true, passive: true }));
         const data = await (await fetch(url)).arrayBuffer();
         buffer = await new Promise((res, rej) => ctx.decodeAudioData(data, res, rej));
-        loop = Math.min(loopSeconds, buffer.duration);
+        loop = Math.min(loopSeconds, buffer.duration - 2 * pad);
         if (ctx.state === 'running') play();
         else unlock();
     }

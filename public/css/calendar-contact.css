@@ -5,9 +5,9 @@
     --gc-line: #dadce0;
     --gc-font: 'Google Sans', Roboto, 'Segoe UI', Arial, sans-serif;
     /* geometry written by calendar-contact.js so the DOM chrome and the canvas grid share one set of numbers */
-    --gc-top: 64px;
-    --gc-dayh: 80px;
-    --gc-gutter: 64px;
+    --gc-top: 40px;
+    --gc-dayh: 28px;
+    --gc-gutter: 34px;
 }
 
 *,
@@ -59,15 +59,15 @@ body.gc {
     height: var(--gc-top);
     display: flex;
     align-items: center;
-    padding: 0 16px 0 8px;
-    gap: 4px;
+    padding: 0 10px 0 2px;
+    gap: 2px;
     background: #fff;
     z-index: 3;
 }
 
 .gc-icon {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     display: grid;
     place-items: center;
     border-radius: 50%;
@@ -84,32 +84,32 @@ body.gc {
 .gc-brand {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding-right: 28px;
+    gap: 4px;
+    padding-right: 18px;
     color: var(--gc-ink);
     text-decoration: none;
     flex: none;
 }
 
 .gc-logo {
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
 }
 
 .gc-wordmark {
-    font-size: 22px;
-    line-height: 28px;
+    font-size: 18px;
+    line-height: 24px;
     color: #3c4043;
     letter-spacing: 0;
 }
 
 .gc-today {
-    height: 36px;
-    padding: 0 16px !important;
-    margin-right: 8px;
+    height: 28px;
+    padding: 0 12px !important;
+    margin-right: 4px;
     border: 1px solid var(--gc-line) !important;
-    border-radius: 18px;
-    font-size: 14px !important;
+    border-radius: 14px;
+    font-size: 13px !important;
     font-weight: 500;
     letter-spacing: 0.25px;
     flex: none;
@@ -121,16 +121,8 @@ body.gc {
 }
 
 .gc-nav .gc-icon {
-    width: 32px;
-    height: 32px;
-}
-
-.gc-title {
-    margin-left: 12px;
-    font-size: 22px;
-    line-height: 28px;
-    color: #3c4043;
-    white-space: nowrap;
+    width: 28px;
+    height: 28px;
 }
 
 .gc-spacer {
@@ -141,29 +133,29 @@ body.gc {
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 36px;
-    padding: 0 6px 0 14px !important;
+    height: 28px;
+    padding: 0 4px 0 12px !important;
     border: 1px solid var(--gc-line) !important;
-    border-radius: 18px;
-    font-size: 14px !important;
+    border-radius: 14px;
+    font-size: 13px !important;
     font-weight: 500;
     fill: #5f6368;
     flex: none;
 }
 
 .gc-avatar {
-    width: 32px;
-    height: 32px;
-    margin-left: 14px;
+    width: 26px;
+    height: 26px;
+    margin-left: 10px;
     border-radius: 50%;
     display: grid;
     place-items: center;
     background: #7e57c2;
     color: #fff;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
     flex: none;
-    box-shadow: 0 0 0 4px #fff, 0 0 0 5px #e8eaed;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px #e8eaed;
 }
 
 /* ---------- day header ---------- */
@@ -185,22 +177,21 @@ body.gc {
 .gc-tz {
     position: absolute;
     left: 0;
-    bottom: 4px;
+    bottom: 2px;
     width: var(--gc-gutter);
-    padding-right: 8px;
+    padding-right: 3px;
     text-align: right;
-    font-size: 10px;
+    font-size: 8px;
     color: var(--gc-ink-soft);
-    letter-spacing: 0.1px;
+    letter-spacing: 0;
 }
 
 .gc-day {
     position: relative;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding-top: 5px;
+    justify-content: center;
+    gap: 6px;
     color: var(--gc-ink-soft);
 }
 
@@ -209,7 +200,7 @@ body.gc {
     position: absolute;
     left: 0;
     bottom: 0;
-    height: 14px;
+    height: 8px;
     border-left: 1px solid var(--gc-line);
 }
 
@@ -222,13 +213,12 @@ body.gc {
 }
 
 .gc-day__num {
-    width: 34px;
-    height: 34px;
-    margin-top: 1px;
+    width: 24px;
+    height: 24px;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    font-size: 22px;
+    font-size: 15px;
     line-height: 1;
     color: var(--gc-ink);
 }
@@ -255,9 +245,9 @@ body.gc {
 
 .gc-time {
     position: absolute;
-    right: 12px;
-    font-size: 10px;
-    line-height: 12px;
+    right: 4px;
+    font-size: 9px;
+    line-height: 11px;
     color: var(--gc-ink-soft);
     white-space: nowrap;
     transform: translateY(-50%);
@@ -304,61 +294,66 @@ body.gc {
 /* ---------- narrow: the 3-day view of the mobile app ---------- */
 @media (max-width: 699px) {
     .gc-top {
-        padding: 0 8px 0 4px;
+        padding: 0 6px 0 0;
+        gap: 0;
     }
 
-    .gc-wordmark,
-    .gc-nav,
-    .gc-today {
+    .gc-wordmark {
         display: none;
     }
 
     .gc-brand {
-        padding-right: 4px;
+        padding-right: 6px;
     }
 
     .gc-logo {
-        width: 32px;
-        height: 32px;
+        width: 26px;
+        height: 26px;
     }
 
-    .gc-title {
-        margin-left: 4px;
-        font-size: 20px;
+    .gc-today {
+        height: 26px;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+
+    .gc-nav .gc-icon {
+        width: 26px;
+        height: 26px;
     }
 
     .gc-view {
-        padding: 0 4px 0 10px !important;
-        height: 32px;
-        font-size: 13px !important;
+        padding: 0 2px 0 10px !important;
+        height: 26px;
+        font-size: 12px !important;
     }
 
     .gc-avatar {
-        width: 28px;
-        height: 28px;
-        margin-left: 10px;
-        font-size: 13px;
+        width: 24px;
+        height: 24px;
+        margin-left: 8px;
+        font-size: 12px;
     }
 
     .gc-day {
-        padding-top: 5px;
+        gap: 2px;
     }
 
     .gc-day__name {
-        font-size: 9px;
-        line-height: 13px;
-        letter-spacing: 0.4px;
+        font-size: 8px;
+        line-height: 12px;
+        letter-spacing: 0.2px;
     }
 
     .gc-day__num {
-        width: 26px;
-        height: 26px;
-        font-size: 15px;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
     }
 
     .gc-time {
-        right: 4px;
-        font-size: 8px;
+        right: 2px;
+        font-size: 7px;
     }
 
     .gc-tz {

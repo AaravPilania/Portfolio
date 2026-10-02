@@ -1,21 +1,24 @@
 // Contact page: a Google Calendar week that refines into a 15-minute slot mosaic, books "I'M BUSY RN" glyph by glyph,
-// coarsens back to a week, plays the reel's dance (sampled cell by cell) through the event palette while the grid refines again, and coarsens into an
-// ordinary week before the loop. Every change is a hard state swap on the 137 BPM grid; one 17 s cycle locked to the
-// soundtrack loop.
+// coarsens back to a week, plays the reel's dance (sampled cell by cell, then continued from the source in the reel's
+// style) at its own 30 fps while the grid refines again, sweeps the dancer off column by column into free time and
+// coarsens into the ordinary week. Every change is a hard state swap on the beat grid; one 12-bar cycle locked to the
+// soundtrack loop, which starts on a downbeat.
 (() => {
     'use strict';
 
-    const LOOP = 17;
-    const BEAT = 60 / 137.01;
-    const T0 = 0.09; // first kick of the audio excerpt
+    // Must equal scratch/calendar/v4/audio/loop.json: 927155 samples at 44.1 kHz, 12 bars of 4 beats
+    const LOOP = 927155 / 44100;
+    const AUDIO_PAD = 0.5;
+    const BEAT = LOOP / 48;
     const STEP = BEAT / 8; // a 32nd note: the pace of the resolution steps
-    const beat = (n) => T0 + n * BEAT;
+    const beat = (n) => n * BEAT;
     const DANCE_FPS = 30;
     const GLYPH_BEATS = [2, 2.5, 3, 4, 5, 5.5, 6.5, 7, 8]; // I ' M  B U S Y  R N
+    const SWEEP_STEPS = 8; // sixteenth notes
     const T = {
         refine: beat(1), empty: beat(1) + 3 * STEP, text: beat(GLYPH_BEATS[0]), textFull: beat(GLYPH_BEATS[8]),
-        coarsen: beat(9.5), coarse: beat(9.5) + 3 * STEP, dance: beat(11), refine3: beat(17), refine5: beat(17.5),
-        sub7: beat(18.25), fine: beat(19), outro: beat(37), outroCoarse: beat(37) + 3 * STEP, week: beat(37.5),
+        coarsen: beat(11.5), coarse: beat(11.5) + 3 * STEP, dance: beat(13), refine3: beat(16), refine5: beat(16.5),
+        sub7: beat(17), fine: beat(17.5), sweep: beat(43.5), outro: beat(45.5), week: beat(45.5) + 3 * STEP,
     };
     const GLYPH_T = new Float64Array(GLYPH_BEATS.map(beat));
 
@@ -113,13 +116,14 @@
     let dance = null;      // { w, h, n, frames: Uint8Array(n*w*h) } in PALETTE indices
     let lastKey = -1;
     let wallStart = performance.now();
+    let lastRaw = -Infinity;
 
     // ---------------------------------------------------------------- layout
     function layout() {
         const vw = window.innerWidth, vh = window.innerHeight;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const mobile = vw < 700;
-        const top = mobile ? 52 : 56, dayH = mobile ? 50 : 58, gutter = mobile ? 34 : 56;
+        const top = mobile ? 36 : 40, dayH = mobile ? 24 : 28, gutter = mobile ? 24 : 34;
         const y0 = top + dayH, gw = vw - gutter, gh = vh - y0;
         const pitch = gw / (7 * SUB);
         // The reel's 10 hours, so its dance frames land on our slots row for row
@@ -139,7 +143,6 @@
         G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : lv, i));
         // Dance refine steps (1 -> 3 -> 5 -> 7 sub-columns, then the finest) skip any that would not be coarser
         G.danceLv = [5, 6, 1, 0, 7].map((l) => (l !== 7 && LV[l].S >= sd ? 7 : l));
-        G.outroLv = sd > 7 ? [0, 1, 2, 4] : [2, 3, 4, 4];
 
         canvas.width = G.W;
         canvas.height = G.H;
@@ -156,7 +159,7 @@
         }
         daysEl.innerHTML = html;
         let th = '';
-        for (let h = 0; h < hours; h++) {
+        for (let h = 1; h < hours; h++) {
             const hh = startHour + h;
             th += `<div class="gc-time" style="top:${(h * 4 * slotH).toFixed(2)}px">${((hh + 11) % 12) + 1} ${hh < 12 ? 'AM' : 'PM'}</div>`;
         }
@@ -334,6 +337,15 @@
         if (mode === M_DANCE && lv.map) {
             const map = lv.map, sh = lv.shift[G.fineFrame];
             for (let i = 0; i < C * Rq; i++) col[i] = key[i] = map[i] < 0 ? FIELD : fine[map[i] + sh];
+            if (sSweep) {
+                // reel columns past the sweep front turn into free time
+                const sw = dance.sweep, front = sw.lo + (sw.hi - sw.lo) * sSweep / SWEEP_STEPS;
+                for (let i = 0; i < C * Rq; i++) {
+                    if (map[i] < 0) continue;
+                    const u = Math.floor((map[i] + sh) / G.fineRows);
+                    if (sw.dir > 0 ? u < front : u >= sw.hi + sw.lo - front) col[i] = key[i] = FIELD;
+                }
+            }
             return;
         }
         for (let c = 0; c < C; c++) {
@@ -500,15 +512,16 @@
 
     // ---------------------------------------------------------------- timeline
     // A scene is (mode, level, argument), packed into one number so the per-frame check allocates nothing
-    let sMode = 0, sLevel = 0, sArg = 0;
+    let sMode = 0, sLevel = 0, sArg = 0, sSweep = 0;
     const stepIn = (t, from) => Math.floor((t - from) / STEP);
     const COARSEN = [1, 2, 3, 4];
 
     function scene(t) {
         const ready = dance && G.samples;
-        sArg = 0;
+        sArg = 0; sSweep = 0;
         if (t < T.refine || t >= T.week) { sMode = M_WEEK; sLevel = 0; }
         else if (t < T.empty) { sMode = M_WEEKGRID; sLevel = [2, 1, 0][stepIn(t, T.refine)]; }
+        else if (t >= T.outro) { sMode = M_WEEKGRID; sLevel = [0, 1, 2][Math.min(2, stepIn(t, T.outro))]; }
         else if (t < T.text) { sMode = M_EMPTY; sLevel = 0; }
         else if (t < T.dance || !ready) {
             sMode = M_TEXT;
@@ -520,16 +533,21 @@
             sMode = M_DANCE;
             sArg = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
             const dl = G.danceLv;
-            sLevel = t < T.refine3 ? dl[0] : t < T.refine5 ? dl[1] : t < T.sub7 ? dl[2] : t < T.fine ? dl[3] : t < T.outro ? dl[4] : G.outroLv[Math.min(3, stepIn(t, T.outro))];
+            sLevel = t < T.refine3 ? dl[0] : t < T.refine5 ? dl[1] : t < T.sub7 ? dl[2] : t < T.fine ? dl[3] : dl[4];
+            if (t >= T.sweep) sSweep = Math.min(SWEEP_STEPS, 1 + Math.floor((t - T.sweep) / (BEAT / 4)));
         }
-        return sMode * 100000 + sLevel * 10000 + sArg;
+        return ((sMode * 10 + sLevel) * 16 + sSweep) * 10000 + sArg;
     }
 
-    function cycleTime(now) {
+    function cycleTime(now, probe) {
         const a = window.CalendarAudio && CalendarAudio.timeAt(now);
-        const raw = a !== null && a !== undefined ? a : (now - wallStart) / 1000;
-        const len = (window.CalendarAudio && CalendarAudio.loopLength()) || LOOP;
-        return ((raw % len) + len) % len;
+        let raw = a !== null && a !== undefined ? a : (now - wallStart) / 1000;
+        // the output timestamp jitters by a few ms; never let that step a frame backwards
+        if (!probe) {
+            if (raw < lastRaw && lastRaw - raw < 0.05) raw = lastRaw;
+            lastRaw = raw;
+        }
+        return ((raw % LOOP) + LOOP) % LOOP;
     }
 
     function render(t) {
@@ -556,13 +574,17 @@
     // Rolling cost of render() on frames that drew, and rAF deltas, for the perf check
     const PERF_N = 4096;
     const perfDraw = new Float32Array(PERF_N), perfDelta = new Float32Array(PERF_N);
-    let perfI = 0, perfJ = 0, lastTs = 0;
+    let perfI = 0, perfJ = 0, lastTs = 0, frameDt = 1000 / 60;
 
     function tick(ts) {
         const a = performance.now();
-        const drew = render(reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts));
+        // Sampled half a frame ahead so each step lands within +-half a vsync of its beat instead of up to a whole one late
+        const drew = render(reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2));
         if (drew) perfDraw[perfI++ % PERF_N] = performance.now() - a;
-        if (lastTs) perfDelta[perfJ++ % PERF_N] = ts - lastTs;
+        if (lastTs) {
+            perfDelta[perfJ++ % PERF_N] = ts - lastTs;
+            frameDt += (Math.min(34, Math.max(6, ts - lastTs)) - frameDt) * 0.05;
+        }
         lastTs = ts;
         requestAnimationFrame(tick);
     }
@@ -604,7 +626,12 @@
             for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; k++; }
             cx[f] = sum / k;
         }
-        dance = { w, h, n, frames, cx };
+        // The sweep spans the reel columns the dancer touches while it runs, from the right edge inward
+        let lo = w, hi = 0;
+        for (let f = Math.min(n - 1, Math.floor((T.sweep - T.dance) * DANCE_FPS)); f < n; f++) {
+            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { lo = Math.min(lo, i % w); hi = Math.max(hi, i % w + 1); }
+        }
+        dance = { w, h, n, frames, cx, sweep: { lo: Math.min(lo, hi), hi, dir: -1 } };
         if (G) { buildSampler(); lastKey = -1; }
     }
 
@@ -625,7 +652,7 @@
             snack.hidden = true;
             lastKey = -1;
         });
-        CalendarAudio.init('audio/calendar-loop.mp3', LOOP).catch(() => {});
+        CalendarAudio.init('audio/calendar-loop.mp3', LOOP, AUDIO_PAD).catch(() => {});
         // Only surface the hint if the browser actually held autoplay back
         setTimeout(() => { if (CalendarAudio.isBlocked()) snack.hidden = false; }, 900);
     }
@@ -636,8 +663,11 @@
     };
     window.__calendarContact = {
         P: T, LOOP, BEAT,
-        time: () => cycleTime(performance.now()),
-        scene: (t) => { scene(t); return ['week', 'empty', 'text', 'dance', 'weekgrid'][sMode] + '@' + G.levels[sLevel].S + 'x' + G.levels[sLevel].q + ':' + sArg; },        freeze: (t) => { frozen = t; lastKey = -1; },
+        time: () => cycleTime(performance.now(), true),
+        drawn: () => lastKey,
+        scene: (t) => { scene(t); return ['week', 'empty', 'text', 'dance', 'weekgrid'][sMode] + '@' + G.levels[sLevel].S + 'x' + G.levels[sLevel].q + ':' + sArg + (sSweep ? '/sweep' + sSweep : ''); },
+        key: (t) => scene(t),
+        freeze: (t) => { frozen = t; lastKey = -1; },
         bench: (t) => { const a = performance.now(); lastKey = -1; render(t); return performance.now() - a; },
         ready: () => !!(dance && G.samples),
         perfReset: () => { perfI = 0; perfJ = 0; lastTs = 0; },
