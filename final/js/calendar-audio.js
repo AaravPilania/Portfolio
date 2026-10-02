@@ -1,60 +1,111 @@
-// Looping soundtrack + master clock for the calendar page. Kept apart from the renderer so a site-wide sound toggle can
-// drive it later through setMuted() without touching the animation.
+// Looping soundtrack + master clock for the calendar page. Kept apart from the renderer so the site's sound gate and
+// toggle (sound-toggle.js) drive it without touching the animation.
 //   CalendarAudio.init(url, loopSeconds, pad) -> Promise (resolves once decoded); the file holds the loop with `pad`
 //                             seconds of circular padding on both sides, so loop points sit inside identical audio
-//                             whatever priming the MP3 decoder keeps
+//                             whatever priming the MP3 decoder keeps. Nothing plays until start().
+//   CalendarAudio.start({ muted, at }) -> call from a user gesture: unlocks the context and starts the loop (silent if
+//                             muted, so the clock still runs and unmuting later is instant). at(perfTime) -> loop
+//                             seconds: join the loop at the position the visuals will show when the sound is heard
+//   CalendarAudio.resume()    -> Promise<boolean>: tries to start without a gesture (a returning visitor whose browser
+//                             already allows audio here); false when the browser holds it back
 //   CalendarAudio.time()      -> seconds since the loop started (audio-hardware clock), or null while silent
 //   CalendarAudio.timeAt(t)   -> the same, at performance.now()-based timestamp t
 //   CalendarAudio.onStart(fn) -> fn() whenever playback (re)starts, so visuals can restart in sync
-//   CalendarAudio.setMuted(b) / isRunning()
+//   CalendarAudio.setMuted(b) -> fades over FADE seconds; levels(out) fills out (0..1) with live band levels
 window.CalendarAudio = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
-    let ctx = null, gain = null, buffer = null, source = null, startAt = 0, loop = 0, pad = 0, muted = false;
+    const FADE = 0.45;
+    let ctx = null, gain = null, analyser = null, spectrum = null, buffer = null, source = null;
+    let startAt = 0, loop = 0, pad = 0, muted = false, wanted = false, ready = null, joinAt = null;
     const starters = new Set();
-    const unlockEvents = ['pointerdown', 'touchend', 'keydown', 'click', 'wheel'];
 
     function play() {
-        if (!buffer || source || ctx.state !== 'running') return;
+        if (!wanted || !buffer || source || ctx.state !== 'running') return;
+        // Scheduled slightly ahead so the loop's first sample and the visual clock's zero coincide; a late join enters
+        // the loop where the visuals already are, so nothing restarts
+        const when = ctx.currentTime + 0.05;
+        const lat = ctx.outputLatency || ctx.baseLatency || 0;
+        const at = joinAt ? ((joinAt(performance.now() + (0.05 + lat) * 1000) % loop) + loop) % loop : 0;
+        joinAt = null;
         source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = true;
         source.loopStart = pad;
         source.loopEnd = pad + loop;
         source.connect(gain);
-        // Scheduled slightly ahead so the loop's first sample and the visual clock's zero coincide
-        startAt = ctx.currentTime + 0.05;
-        source.start(startAt, pad);
-        unlockEvents.forEach((e) => window.removeEventListener(e, unlock, true));
+        startAt = when - at;
+        gain.gain.cancelScheduledValues(0);
+        gain.gain.setValueAtTime(0, when);
+        if (!muted) gain.gain.linearRampToValueAtTime(1, when + (at ? FADE : 0.02));
+        source.start(when, pad + at);
         starters.forEach((fn) => fn());
     }
 
-    function unlock() {
+    function make() {
+        if (ctx || !AC) return;
+        // At the file's own rate the decoded buffer is not resampled, so the loop points land on exact samples
+        try { ctx = new AC({ latencyHint: 'interactive', sampleRate: 44100 }); } catch (e) { ctx = new AC({ latencyHint: 'interactive' }); }
+        gain = ctx.createGain();
+        gain.gain.value = 0;
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.6;
+        spectrum = new Uint8Array(analyser.frequencyBinCount);
+        gain.connect(analyser);
+        analyser.connect(ctx.destination);
+        ctx.addEventListener('statechange', play);
+    }
+
+    function init(url, loopSeconds, padSeconds = 0) {
+        if (!AC) return Promise.resolve();
+        make();
+        pad = padSeconds;
+        ready = (async () => {
+            const data = await (await fetch(url)).arrayBuffer();
+            buffer = await new Promise((res, rej) => ctx.decodeAudioData(data, res, rej));
+            loop = Math.min(loopSeconds, buffer.duration - 2 * pad);
+            play();
+        })();
+        return ready;
+    }
+
+    function start(opts = {}) {
         if (!ctx) return;
-        // wheel is not a user activation in most browsers: resume() stays pending and the next real gesture retries
+        muted = !!opts.muted;
+        wanted = true;
+        joinAt = opts.at || null;
         const p = ctx.resume();
         if (p && p.then) p.then(play, () => {});
         else play();
     }
 
-    async function init(url, loopSeconds, padSeconds = 0) {
-        if (!AC) return;
-        // At the file's own rate the decoded buffer is not resampled, so the loop points land on exact samples
-        try { ctx = new AC({ latencyHint: 'interactive', sampleRate: 44100 }); } catch (e) { ctx = new AC({ latencyHint: 'interactive' }); }
-        pad = padSeconds;
-        gain = ctx.createGain();
-        gain.gain.value = muted ? 0 : 1;
-        gain.connect(ctx.destination);
-        ctx.addEventListener('statechange', play);
-        unlockEvents.forEach((e) => window.addEventListener(e, unlock, { capture: true, passive: true }));
-        const data = await (await fetch(url)).arrayBuffer();
-        buffer = await new Promise((res, rej) => ctx.decodeAudioData(data, res, rej));
-        loop = Math.min(loopSeconds, buffer.duration - 2 * pad);
-        if (ctx.state === 'running') play();
-        else unlock();
+    async function resume(opts = {}) {
+        if (!ctx) return false;
+        muted = !!opts.muted;
+        wanted = true;
+        try { await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 350))]); } catch (e) { /* blocked */ }
+        if (ctx.state !== 'running') { wanted = false; return false; }
+        play();
+        return true;
+    }
+
+    // log-spaced bands over the analyser's bins, skipping DC
+    function levels(out) {
+        if (!source || !analyser) { out.fill(0); return out; }
+        analyser.getByteFrequencyData(spectrum);
+        const n = out.length, bins = spectrum.length;
+        for (let i = 0; i < n; i++) {
+            const a = Math.max(1, Math.floor(Math.pow(bins * 0.7, i / n))), b = Math.max(a + 1, Math.floor(Math.pow(bins * 0.7, (i + 1) / n)));
+            let s = 0;
+            for (let k = a; k < b; k++) s += spectrum[k];
+            out[i] = s / ((b - a) * 255);
+        }
+        return out;
     }
 
     return {
-        init,
+        init, start, resume, levels,
+        available: () => !!AC,
         time: () => (source ? ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) - startAt : null),
         // Audible position at a performance.now() timestamp (e.g. a rAF time). currentTime advances in audio-callback
         // chunks; the output timestamp pairs it with the performance clock so frame-to-frame steps stay even.
@@ -66,11 +117,16 @@ window.CalendarAudio = (() => {
         },
         loopLength: () => loop,
         isRunning: () => !!source,
-        isBlocked: () => !!ctx && !source,
+        isMuted: () => muted,
         onStart: (fn) => { starters.add(fn); },
         setMuted(b) {
             muted = !!b;
-            if (gain) gain.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.03);
+            if (!gain) return;
+            const t = ctx.currentTime, g = gain.gain;
+            // hold the current value first so the ramp starts where the sound is, never with a step
+            if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t);
+            else { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); }
+            g.linearRampToValueAtTime(muted ? 0 : 1, t + FADE);
         },
     };
 })();

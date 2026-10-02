@@ -2,12 +2,14 @@
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
 // them into free time and the grid coarsens into the ordinary week. One 12-bar cycle locked to the soundtrack loop.
-// Camera mode (calendar-camera.js) books the visitor's mirrored webcam into the same moving meetings instead of the
-// dancer; the cursor grain, beat puffs and the dissolve between the two live in calendar-grain.js.
+// The cursor ink and the beat ripples live in calendar-grain.js; the invite card and its camera booth in
+// calendar-invite.js. The cycle holds on the week until the sound gate is answered, so the first beat is the first frame.
 (() => {
     'use strict';
 
-    // Must equal scratch/calendar/v4/audio/loop.json: 927155 samples at 44.1 kHz, 12 bars of 4 beats
+    // Must equal scratch/calendar/v10/loop-rotated.json: 927155 samples at 44.1 kHz, 12 bars of 4 beats, rotated so the
+    // file starts on bar 4 of the original cut (an instrumental phrase). The loop is three like 4-bar phrases, so every
+    // beat below keeps its place in the phrase.
     const LOOP = 927155 / 44100;
     const AUDIO_PAD = 0.5;
     const BEAT = LOOP / 48;
@@ -79,11 +81,10 @@
     const TITLES = ['Sync', 'Focus Time', 'Lunch', '1:1', 'Standup', 'Design Review', 'Q3 Planning', 'All Hands', 'Code Review',
         'Retro', 'Deep Work', 'Coffee Chat', 'Hiring Sync', 'Office Hours', 'Planning', 'Gym', 'Weekly', 'Product Review',
         'Mentoring', 'Team Lunch', 'Demo', 'Email', 'Notes', 'Prep'];
-    // Titles of the meetings that spell the glyphs, then the visitor's in camera mode
+    // Titles of the meetings that spell the glyphs
     const PINGS = ['Your turn', 'Ping', 'RSVP', 'Slot open', 'Hi?', 'Your call', 'Make a move'];
-    const YOU = ['You', 'Dance break', 'Busy dancing', 'OOO', 'Groove', 'Live', 'On camera'];
-    const NAMES = TITLES.concat(PINGS, YOU);
-    const PING0 = TITLES.length, YOU0 = PING0 + PINGS.length;
+    const NAMES = TITLES.concat(PINGS);
+    const PING0 = TITLES.length;
 
     // 5x7 bitmap glyphs: '#' is one glyph pixel, booked as one sub-column by G.textPu row units
     const GLYPHS = {
@@ -116,9 +117,7 @@
     const TEXT_LV = 8;
     // Dance frames live on the reel's grid (7 sub-columns/day, 15-minute slots), glyphs on the text level; levels vote
     // over whichever is showing
-    const REEL_SC = 7, REEL_SQ = 2, MAX_SD = 12;
-    // Camera mode's level: fine / mid / coarse rows of 7.5, 15 or 30 minutes, sub-columns keeping the reel's cell shape
-    const CAM_LV = 9, CAM_Q = [1, 2, 4], CAM_MAX_S = 24, MAX_S = Math.max(MAX_SD, CAM_MAX_S), CAM_LABEL_MIN = 16;
+    const REEL_SC = 7, REEL_SQ = 2, MAX_SD = 12, MAX_S = MAX_SD;
     const M_WEEK = 0, M_EMPTY = 1, M_TEXT = 2, M_DANCE = 3, M_WEEKGRID = 4;
     // Same-colour runs at most this many rows apart are the same meeting moving, not a new one
     const MATCH_GAP = 1;
@@ -128,17 +127,15 @@
     const canvas = document.getElementById('gcCanvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const timesEl = document.getElementById('gcTimes');
-    const snack = document.getElementById('gcSnack');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const grain = window.CalendarGrain && CalendarGrain.enabled ? CalendarGrain : null;
-    const camera = window.CalendarCamera || null;
 
     let G = null;          // layout
     let dance = null;      // { w, h, n, frames: Uint8Array(n*w*h) } in PALETTE indices
     let lastKey = -1, lastT = -1;
-    let wallStart = performance.now();
+    // null: held on the week until the gate is answered; then the wall clock stands in until the audio clock runs
+    let wallStart = null;
     let lastRaw = -Infinity;
-    let camOn = false, camCell = 0, camMono = false, camK = -1;
 
     // India keeps one offset all year
     const IST_MS = 5.5 * 3600e3;
@@ -193,7 +190,6 @@
         }
         G.textPu = pu;
         G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : i === TEXT_LV ? { S: ts, q: Math.min(2, pu) } : lv, i));
-        G.levels[CAM_LV] = buildLevel(camSpec(), CAM_LV);
         // Dance refine steps (1 -> 3 -> 5 -> 7 sub-columns, then the finest) skip any that would not be coarser
         G.danceLv = [5, 6, 1, 0, 7].map((l) => (l !== 7 && LV[l].S >= sd ? 7 : l));
 
@@ -229,7 +225,6 @@
         G.field.width = G.W; G.field.height = G.H;
         G.fieldCtx = G.field.getContext('2d', { alpha: false });
         G.fieldLv = -1;
-        G.cam = null;
 
         buildWeek();
         buildGlyphs();
@@ -237,12 +232,6 @@
         buildAtlas();
         G.weekCache = null;
         lastKey = -1;
-        camK = -1;
-    }
-
-    function camSpec() {
-        const q = CAM_Q[camCell];
-        return { S: Math.max(1, Math.min(CAM_MAX_S, Math.round(G.dayW / (q * G.unitH * 1.09)))), q };
     }
 
     function makeRuns(n, cols) {
@@ -476,8 +465,7 @@
         const tw = G.tw, m = tw.n, xs = emitLv.xs, gx = emitLv.gx;
         tw.c[m] = v; tw.x[m] = xs[c] + gx - (gx >> 1); tw.w[m] = xs[c + 1] - xs[c] - gx;
         tw.t0[m] = t0; tw.b0[m] = b0; tw.t1[m] = t1; tw.b1[m] = b1; tw.f[m] = f;
-        tw.ti[m] = camOn ? YOU0 + (c * 7 + v * 5) % YOU.length
-            : v === OCHRE ? PING0 + (c * 3 + Math.floor(t0) * 5) % PINGS.length : (c * 7 + v * 5) % TITLES.length;
+        tw.ti[m] = v === OCHRE ? PING0 + (c * 3 + Math.floor(t0) * 5) % PINGS.length : (c * 7 + v * 5) % TITLES.length;
         tw.o[m] = (((c * 2654435761) ^ (v * 40503)) >>> 0) % 997 / 997;
         tw.n = m + 1;
     }
@@ -616,8 +604,6 @@
             }
         }
         const { labelH, padX, padY, minLabelW } = G, lw = lv.labelW, atlas = G.atlas;
-        // the visitor's finest slots are too narrow to letter: they read as pixels, like a photo
-        if (camOn && lw < CAM_LABEL_MIN * G.dpr) return;
         if (lw >= minLabelW) {
             for (let i = 0; i < n; i++) {
                 if (JT[i] < 0.5 || (F[i] & UNDER && e > 0)) continue;
@@ -824,6 +810,7 @@
 
     function cycleTime(now, probe) {
         const a = window.CalendarAudio && CalendarAudio.timeAt(now);
+        if ((a === null || a === undefined) && wallStart === null) return 0;
         let raw = a !== null && a !== undefined ? a : (now - wallStart) / 1000;
         // the output timestamp jitters by a few ms; never let that step a frame backwards
         if (!probe) {
@@ -882,139 +869,8 @@
         return true;
     }
 
-    // ---------------------------------------------------------------- camera mode
-    // The visitor in four lightness bands of meeting colours under free time, darkest first; each band's first colour
-    // is its neutral, the others take over where the camera sees their hue
-    const CAM_FPS = 30;
-    const BANDS = [
-        [COL.graphite, COL.blueberry, COL.basil],
-        [OCHRE, COL.peacock, COL.basil],
-        [COL.flamingo, COL.lavender],
-        [COL.banana, 4],
-    ];
-    const MONO_BANDS = [[COL.graphite], [OCHRE], [OCHRE], [COL.banana]];
-    const BAND_EDGE = [0.24, 0.5, 0.76];
-    const hueOf = (h) => { const [r, g, b] = rgbOf(h), y = 0.299 * r + 0.587 * g + 0.114 * b, u = r - y, w = b - y, m = Math.hypot(u, w) || 1; return [u / m, w / m]; };
-    const HUE = PALETTE.map(hueOf);
-    const BAND_OF = new Int8Array(NP).fill(-1);
-    BANDS.forEach((b, i) => b.forEach((v) => { if (BAND_OF[v] < 0) BAND_OF[v] = i; }));
-    const FIELD_IN = 0.66, FIELD_OUT = 0.6, CHROMA_MIN = 9, BAND_HOLD = 0.05;
-
-    // One webcam frame (one RGBA pixel per cell, row-major) into cell colours: eased per cell against sensor noise,
-    // auto-levelled, free time above FIELD_IN, a lightness band below it and the band colour nearest the camera's hue
-    // (its neutral when the hue is too weak to trust). Cells near a band edge or a colour tie keep what they were, so
-    // meetings hold still while the visitor does.
-    function camQuantise(lv, px, prevCol, col, key) {
-        const { C, Rq } = lv, n = C * Rq;
-        if (!G.cam || G.cam.n !== n) G.cam = { n, rgb: new Float32Array(n * 3), hist: new Uint32Array(64), lo: 0, hi: 255, fresh: true, cx: -1, cy: -1 };
-        const S = G.cam, rgb = S.rgb, hist = S.hist, k = S.fresh ? 1 : 0.6;
-        hist.fill(0);
-        for (let r = 0; r < Rq; r++) for (let c = 0; c < C; c++) {
-            const p = (r * C + c) * 4, j = (c * Rq + r) * 3;
-            rgb[j] += (px[p] - rgb[j]) * k;
-            rgb[j + 1] += (px[p + 1] - rgb[j + 1]) * k;
-            rgb[j + 2] += (px[p + 2] - rgb[j + 2]) * k;
-            hist[Math.min(63, (0.299 * rgb[j] + 0.587 * rgb[j + 1] + 0.114 * rgb[j + 2]) >> 2)]++;
-        }
-        let acc = 0, lo = -1, hi = 63;
-        for (let b = 0; b < 64; b++) {
-            acc += hist[b];
-            if (lo < 0 && acc > n * 0.03) lo = b;
-            if (acc >= n * 0.97) { hi = b + 1; break; }
-        }
-        const ease = S.fresh ? 1 : 0.08;
-        S.lo += (lo * 4 - S.lo) * ease;
-        S.hi += (hi * 4 - S.hi) * ease;
-        const span = Math.max(32, S.hi - S.lo);
-        const bands = camMono ? MONO_BANDS : BANDS;
-        let sx = 0, sy = 0, sn = 0;
-        for (let c = 0; c < C; c++) for (let r = 0; r < Rq; r++) {
-            const i = c * Rq + r, j = i * 3;
-            const R = rgb[j], B = rgb[j + 2], y = 0.299 * R + 0.587 * rgb[j + 1] + 0.114 * B;
-            const l = (y - S.lo) / span, prev = prevCol ? prevCol[i] : -1;
-            let v;
-            if (l > (prev === FIELD ? FIELD_OUT : FIELD_IN)) v = FIELD;
-            else {
-                const m = l / FIELD_IN;
-                let band = m < BAND_EDGE[0] ? 0 : m < BAND_EDGE[1] ? 1 : m < BAND_EDGE[2] ? 2 : 3;
-                const pb = prev >= 0 ? BAND_OF[prev] : -1;
-                if (pb >= 0 && Math.abs(pb - band) === 1 && Math.abs(m - BAND_EDGE[Math.min(pb, band)]) < BAND_HOLD) band = pb;
-                const list = bands[band];
-                v = list[0];
-                const u = R - y, w = B - y, ch = Math.hypot(u, w);
-                if (list.length > 1 && ch > CHROMA_MIN) {
-                    let best = -2, keep = -2;
-                    for (let q = 1; q < list.length; q++) {
-                        const h = HUE[list[q]], s = (u * h[0] + w * h[1]) / ch;
-                        if (s > best) { best = s; v = list[q]; }
-                        if (list[q] === prev) keep = s;
-                    }
-                    if (best < 0.55) v = list[0];
-                    else if (keep > best - 0.12) v = prev;
-                }
-            }
-            col[i] = key[i] = v;
-            if (v !== FIELD) { sx += c; sy += r; sn++; }
-        }
-        S.fresh = false;
-        const ok = sn > n * 0.04 && sn < n * 0.85;
-        S.cx = ok ? sx / sn : -1;
-        S.cy = ok ? sy / sn : -1;
-    }
-
-    // The dance's own motion: camera frames arrive at 30 fps and each one's meetings travel from the last frame's
-    function renderCam(now) {
-        const lv = G.levels[CAM_LV];
-        const k = Math.floor(now * CAM_FPS / 1000);
-        if (k !== camK) {
-            const px = camera ? camera.grab(lv.C, lv.Rq, G.gw / G.gh) : null;
-            if (px) {
-                const first = camK < 0;
-                let s = G.colA; G.colA = G.colB; G.colB = s;
-                s = G.keyA; G.keyA = G.keyB; G.keyB = s;
-                s = G.runA; G.runA = G.runB; G.runB = s;
-                camQuantise(lv, px, first ? null : G.colA, G.colB, G.keyB);
-                extractRuns(lv, G.colB, G.runB);
-                buildTweens(lv, first ? G.runB : G.runA, G.runB);
-                camK = k;
-            }
-        }
-        drawField(CAM_LV);
-        if (camK >= 0) drawPieces(lv, Math.min(1, now * CAM_FPS / 1000 - camK), -1);
-        return true;
-    }
-
-    function camEnter() {
-        if (grain && !reduceMotion.matches) grain.dissolve(performance.now());
-        camOn = true;
-        camK = -1;
-        G.cam = null;
-    }
-
-    function camExit(instant) {
-        if (!instant && grain && !reduceMotion.matches) grain.dissolve(performance.now());
-        camOn = false;
-        lastKey = -1;
-        G.fineFrame = -1;
-    }
-
-    function camSettings(s) {
-        const cellChanged = s.cell !== camCell, changed = cellChanged || s.mono !== camMono;
-        camCell = s.cell;
-        camMono = s.mono;
-        if (!G || !changed) return;
-        if (camOn && grain && !reduceMotion.matches) grain.dissolve(performance.now());
-        if (cellChanged) {
-            G.levels[CAM_LV] = buildLevel(camSpec(), CAM_LV);
-            G.fieldLv = -1;
-            G.cam = null;
-            buildAtlas();
-        }
-        camK = -1;
-    }
-
     // ---------------------------------------------------------------- beat puffs
-    // Where the dancer (or the visitor) is on screen, in css px; null while there is nobody to throw grain off
+    // Where the dancer is on screen, in css px; null while there is nobody to throw ink off
     function dancerCentre(t) {
         if (!dance || !G.samples || t < T.dance || t >= T.dissolve) return null;
         const f = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
@@ -1026,14 +882,7 @@
         return [(lv.xs[i] + (col - i) * (lv.xs[i + 1] - lv.xs[i])) / G.dpr, dance.cy[f] / dance.h * G.gh];
     }
 
-    function camCentre() {
-        const S = G.cam, lv = G.levels[CAM_LV];
-        if (!S || S.cx < 0) return null;
-        const x0 = lv.xs[0], x1 = lv.xs[lv.C];
-        return [(x0 + (S.cx + 0.5) / lv.C * (x1 - x0)) / G.dpr, (S.cy + 0.5) / lv.Rq * G.gh];
-    }
-
-    // Every beat a small puff off the dancer, a firmer one on each bar's downbeat; the visitor only on downbeats
+    // Every beat a small ripple off the dancer, a firmer one on each bar's downbeat
     const PUFF_BEAT = 0.45, PUFF_DOWN = 0.8;
     let lastBeat = -1;
     function beatPuff(t) {
@@ -1043,7 +892,7 @@
         lastBeat = b;
         if (first || !grain.trail) return;
         const down = b % 4 === 0;
-        const p = camOn ? (down ? camCentre() : null) : dancerCentre(t);
+        const p = dancerCentre(t);
         if (p) grain.puff(p[0], p[1], down ? PUFF_DOWN : PUFF_BEAT);
     }
 
@@ -1060,7 +909,7 @@
         const a = performance.now();
         // Sampled half a frame ahead so each step lands within +-half a vsync of its beat instead of up to a whole one late
         const t = reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2);
-        const drew = camOn ? renderCam(ts) : render(t);
+        const drew = render(t);
         if (grain) {
             beatPuff(t);
             grain.frame(drew, ts);
@@ -1135,22 +984,57 @@
     }
 
     loadDance('data/calendar-dance.bin').catch(() => {});
-    if (camera) camera.attach({ enter: camEnter, exit: camExit, settings: camSettings });
 
-    if (window.CalendarAudio) {
-        CalendarAudio.onStart(() => {
-            snack.hidden = true;
-            lastKey = -1;
-        });
+    // ---------------------------------------------------------------- sound
+    // The gate's answer starts the cycle: with sound, or silently on the same audio clock so unmuting stays in time.
+    // A visitor who already chose this session skips the gate when the browser lets audio start without a gesture.
+    const audio = window.CalendarAudio && CalendarAudio.available() ? CalendarAudio : null;
+    const sound = window.SiteSound || null;
+    let toggle = null;
+    function begin(withSound, viaGesture) {
+        if (wallStart === null) wallStart = performance.now();
+        lastRaw = -Infinity;
+        lastKey = -1;
+        if (audio && viaGesture) audio.start({ muted: !withSound });
+        if (sound && !toggle) {
+            toggle = sound.toggle({
+                muted: !withSound,
+                levels: audio ? (out) => audio.levels(out) : null,
+                onChange: (m) => {
+                    sound.setPref(m ? 'off' : 'on');
+                    if (!audio) return;
+                    if (!audio.isRunning()) audio.start({ muted: m, at: (now) => cycleTime(now, true) });
+                    else audio.setMuted(m);
+                },
+            });
+        }
+    }
+    if (audio) {
+        CalendarAudio.onStart(() => { lastRaw = -Infinity; lastKey = -1; });
         CalendarAudio.init('audio/calendar-loop.mp3', LOOP, AUDIO_PAD).catch(() => {});
-        // Only surface the hint if the browser actually held autoplay back
-        setTimeout(() => { if (CalendarAudio.isBlocked()) snack.hidden = false; }, 900);
+    }
+    const askGate = () => sound.gate({
+        kicker: 'Soundtrack · 21 s loop',
+        title: 'This calendar dances.',
+        body: 'A week of meetings, scored to twelve bars of Alice Deejay\u2019s Better Off Alone on repeat. Best with sound.',
+        foot: window.matchMedia('(pointer: coarse)').matches ? 'Switch it any time, top right.' : 'Switch it any time, top right, or press M.',
+        onChoose: (s) => begin(s, true),
+    });
+    if (!sound || frozen !== null || /[?&]gate=0\b/.test(location.search)) begin(false, false);
+    else {
+        const was = sound.pref();
+        if (was === 'off') begin(false, false);
+        else if (was === 'on' && audio) audio.resume({ muted: false }).then((ok) => (ok ? begin(true, false) : askGate()));
+        else askGate();
     }
 
     const pct = (arr, count, p) => {
         const a = Array.from(arr.subarray(0, Math.min(count, PERF_N))).sort((x, y) => x - y);
         return a.length ? +a[Math.min(a.length - 1, Math.floor(a.length * p))].toFixed(2) : null;
     };
+    // For the invite card's booth: counts in on the same beats the calendar moves to
+    window.CalendarClock = { time: () => cycleTime(performance.now(), true), BEAT, started: () => wallStart !== null };
+
     window.__calendarContact = {
         P: T, LOOP, BEAT,
         time: () => cycleTime(performance.now(), true),
@@ -1161,9 +1045,9 @@
         bench: (t) => { const a = performance.now(); lastKey = -1; render(t); return performance.now() - a; },
         pieces: () => G.tw.n,
         ready: () => !!(dance && G.samples),
-        centre: (t) => (camOn ? camCentre() : dancerCentre(t)),
-        puff: (t, amp = PUFF_DOWN) => { const p = camOn ? camCentre() : dancerCentre(t); if (p && grain) grain.puff(p[0], p[1], amp); return p; },
-        cam: () => ({ on: camOn, level: G.levels[CAM_LV].S + 'x' + G.levels[CAM_LV].q, cells: G.levels[CAM_LV].C * G.levels[CAM_LV].Rq, frame: camK, cell: camCell, mono: camMono }),
+        centre: (t) => dancerCentre(t),
+        puff: (t, amp = PUFF_DOWN) => { const p = dancerCentre(t); if (p && grain) grain.puff(p[0], p[1], amp); return p; },
+        started: () => wallStart !== null,
         perfReset: () => { perfI = 0; perfJ = 0; lastTs = 0; },
         perf: () => ({
             draws: perfI, drawP50: pct(perfDraw, perfI, 0.5), drawP95: pct(perfDraw, perfI, 0.95), drawMax: pct(perfDraw, perfI, 1),

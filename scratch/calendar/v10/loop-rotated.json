@@ -1,0 +1,12 @@
+{
+ "source_start": 131.95761904761906,
+ "samples": 927155,
+ "rotate_beats": 16,
+ "rotate_samples": 309052,
+ "rotate_seconds": 7.007981859410431,
+ "cycle_starts_at_source": 138.96560090702948,
+ "pad": 0.5,
+ "decoder_lag": 0,
+ "snr_db": 19.8,
+ "size": 353636
+}

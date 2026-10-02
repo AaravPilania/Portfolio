@@ -13,63 +13,115 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preload" href="data/calendar-dance.bin" as="fetch" crossorigin>
+    <link rel="preload" href="fonts/Brier-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="css/site-nav.css">
+    <link rel="stylesheet" href="css/sound-toggle.css">
     <link rel="stylesheet" href="css/calendar-contact.css">
 </head>
 
 <body class="gc">
     <h1 class="gc-sr">Contact — Your move</h1>
-    <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "Your move", then stretch and slide to become a dancing figure before being cancelled back into free time. Join the dance turns on your camera and books you into the week the same way; the video never leaves your device.</p>
+    <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "Your move", then stretch and slide to become a dancing figure before being cancelled back into free time.</p>
+
+    <header class="ap-nav">
+        <div class="ap-nav__scrim"></div>
+        <nav class="ap-nav__pill" aria-label="Main">
+            <div class="ap-nav__bar">
+                <button class="ap-nav__hit" type="button" tabindex="-1" aria-hidden="true"></button>
+                <a class="ap-nav__mark" href="index.html" aria-label="Aarav Pilania, home">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 803 644" aria-hidden="true">
+                        <path fill="currentColor" fill-rule="evenodd" d="M 0 644 L 98 644 L 99 359 L 352 359 L 353 644 L 468 644 L 469 440 L 706 440 L 706 341 L 803 339 L 803 95 L 711 94 L 711 0 L 411 0 L 410 95 L 352 94 L 352 0 L 100 0 L 99 95 L 0 95 Z M 468 95 L 662 94 L 663 141 L 712 143 L 712 292 L 663 293 L 662 341 L 469 341 Z M 99 95 L 352 94 L 353 253 L 100 254 Z" />
+                    </svg>
+                </a>
+                <span class="ap-nav__msg" aria-hidden="true">Contact</span>
+                <button class="ap-nav__burger" type="button" aria-expanded="false" aria-controls="apNavMenu" aria-label="Open menu"><i></i><i></i><i></i></button>
+            </div>
+            <div class="ap-nav__menu" id="apNavMenu">
+                <ul class="ap-nav__list">
+                    <li><a class="ap-nav__item" href="index.html#section-projects" style="--i:0">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Work</span></a></li>
+                    <li><a class="ap-nav__item" href="index.html" style="--i:1">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">About</span></a></li>
+                    <li><a class="ap-nav__item" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer" style="--i:2">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">GitHub</span>
+                        <svg class="ap-nav__ext" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="2" y="0" width="8" height="2" /><rect x="8" y="2" width="2" height="4" /><rect x="5" y="3" width="2" height="2" /><rect x="3" y="5" width="2" height="2" /><rect x="0" y="8" width="2" height="2" /><rect x="1" y="7" width="2" height="2" /></g></svg>
+                    </a></li>
+                    <li><a class="ap-nav__item" href="contact.html" aria-current="page" style="--i:3">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><rect x="2" y="2" width="6" height="6" fill="currentColor" /></svg>
+                        <span class="ap-nav__t">Contact</span>
+                        <span class="ap-nav__here" aria-hidden="true">You are here</span>
+                    </a></li>
+                </ul>
+                <div class="ap-nav__actions" style="--i:4">
+                    <button class="ap-nav__btn ap-nav__btn--ghost" type="button" data-copy="aaravpilania2006@gmail.com" style="--i:4">Copy email</button>
+                    <a class="ap-nav__btn ap-nav__btn--paper" href="mailto:aaravpilania2006@gmail.com?subject=A%20call%3F" style="--i:5">Schedule a call</a>
+                    <a class="ap-nav__btn ap-nav__btn--paper" href="mailto:aaravpilania2006@gmail.com?subject=A%20project" style="--i:6">Start a project</a>
+                </div>
+            </div>
+        </nav>
+    </header>
 
     <div class="gc-times" id="gcTimes" aria-hidden="true"></div>
     <canvas class="gc-canvas" id="gcCanvas" aria-hidden="true"></canvas>
 
-    <div class="gc-snack" id="gcSnack" role="status" hidden>
-        <span class="gc-snack__dot" aria-hidden="true"></span>
-        <span>Click anywhere for sound</span>
-    </div>
-
-    <aside class="gc-cam" id="gcCam" aria-label="Join the dance">
-        <section class="gc-cam__card is-open">
-            <button class="gc-cam__head" type="button" aria-expanded="true" aria-controls="gcCamBody">
-                <span>[ Join the dance ]</span>
-                <span class="gc-cam__toggle" aria-hidden="true">( − )</span>
-            </button>
-            <div class="gc-cam__body" id="gcCamBody">
-                <div class="gc-cam__inner">
-                    <p class="gc-cam__note">Book yourself into the week. Your camera stays on this device.</p>
-                    <button class="gc-cam__pill" type="button" id="gcCamGo">
-                        <span class="gc-cam__rec" aria-hidden="true"></span>
-                        <span class="gc-cam__label">Activate camera</span>
-                    </button>
-                    <p class="gc-cam__msg" id="gcCamMsg" role="status" aria-live="polite" hidden></p>
-                </div>
+    <aside class="gc-invite" id="gcInvite" aria-labelledby="gcInviteTitle">
+        <div class="gc-invite__head">
+            <i class="gc-invite__swatch" aria-hidden="true"></i>
+            <div class="gc-invite__heading">
+                <h2 class="gc-invite__title" id="gcInviteTitle">Work with Aarav</h2>
+                <p class="gc-invite__when">30 min · video call · <span id="gcInviteNow">New Delhi</span></p>
             </div>
-        </section>
-        <section class="gc-cam__card gc-cam__settings" id="gcCamSettings" aria-label="Grid settings" hidden>
-            <div class="gc-cam__head gc-cam__head--static"><span>[ Grid settings ]</span></div>
-            <div class="gc-cam__row">
-                <span class="gc-cam__key">Slots</span>
-                <div class="gc-seg" role="radiogroup" aria-label="Slot size">
-                    <button type="button" role="radio" aria-checked="true" data-cell="0"><i class="gc-seg__ico gc-seg__ico--fine" aria-hidden="true"></i>Fine</button>
-                    <button type="button" role="radio" aria-checked="false" data-cell="1"><i class="gc-seg__ico gc-seg__ico--mid" aria-hidden="true"></i>Mid</button>
-                    <button type="button" role="radio" aria-checked="false" data-cell="2"><i class="gc-seg__ico gc-seg__ico--coarse" aria-hidden="true"></i>Coarse</button>
+            <button class="gc-invite__fold" id="gcInviteFold" type="button" aria-expanded="true" aria-controls="gcInviteBody" aria-label="Fold the invite"><i></i><i></i></button>
+        </div>
+        <div class="gc-invite__body" id="gcInviteBody">
+            <div class="gc-invite__inner">
+                <div class="gc-invite__people">
+                    <figure class="gc-slot gc-slot--photo">
+                        <img src="images/aarav-alpine-320.webp" srcset="images/aarav-alpine-320.webp 320w, images/aarav-alpine-480.webp 480w" sizes="(max-width: 699px) 76px, 132px" width="320" height="400" alt="Aarav Pilania in an alpine valley, mountains behind him" decoding="async">
+                        <figcaption class="gc-slot__chip"><b>Aarav</b> organizer</figcaption>
+                    </figure>
+                    <span class="gc-invite__x" aria-hidden="true">×</span>
+                    <figure class="gc-slot gc-slot--guest" id="gcGuest">
+                        <canvas class="gc-booth" id="gcBooth" aria-hidden="true"></canvas>
+                        <span class="gc-slot__empty" aria-hidden="true"><i>+</i>You</span>
+                        <span class="gc-booth__count" id="gcBoothCount" aria-hidden="true"></span>
+                        <span class="gc-booth__flash" aria-hidden="true"></span>
+                        <figcaption class="gc-slot__chip gc-slot__chip--guest"><b>You</b> <span id="gcGuestState">invited</span></figcaption>
+                    </figure>
                 </div>
-            </div>
-            <div class="gc-cam__row">
-                <span class="gc-cam__key">Ink</span>
-                <div class="gc-seg gc-seg--two" role="radiogroup" aria-label="Palette">
-                    <button type="button" role="radio" aria-checked="true" data-mono="0">Colour</button>
-                    <button type="button" role="radio" aria-checked="false" data-mono="1">Mono</button>
+                <p class="gc-invite__bio">Creative developer in New Delhi. Interactive sites, motion and WebGL. Say hi about a project, a role or a wild idea.</p>
+                <ul class="gc-invite__links">
+                    <li class="gc-link" data-link="email">
+                        <a href="mailto:aaravpilania2006@gmail.com" id="gcMail"><span class="gc-link__k">Email</span><span class="gc-link__v">aaravpilania2006@gmail.com</span></a>
+                        <button class="gc-link__copy" type="button" data-copy="aaravpilania2006@gmail.com" aria-label="Copy email address">Copy</button>
+                    </li>
+                    <li class="gc-link" data-link="linkedin" hidden>
+                        <a href="#" target="_blank" rel="noopener noreferrer"><span class="gc-link__k">LinkedIn</span><span class="gc-link__v"></span></a>
+                    </li>
+                    <li class="gc-link" data-link="x" hidden>
+                        <a href="#" target="_blank" rel="noopener noreferrer"><span class="gc-link__k">X</span><span class="gc-link__v"></span></a>
+                    </li>
+                </ul>
+                <div class="gc-invite__rsvp">
+                    <button class="gc-invite__book" id="gcBook" type="button"><span class="gc-invite__rec" aria-hidden="true"></span><span id="gcBookLabel">Book yourself in</span></button>
+                    <button class="gc-invite__ghost" id="gcRetake" type="button" hidden>Retake</button>
+                    <button class="gc-invite__ghost" id="gcSave" type="button" hidden>Save invite</button>
+                    <a class="gc-invite__gh" id="gcGithub" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
                 </div>
+                <p class="gc-invite__msg" id="gcBoothMsg" role="status" aria-live="polite">Your camera books you in as a slot portrait. It stays on this device.</p>
             </div>
-        </section>
+        </div>
     </aside>
-    <button class="gc-back" id="gcBack" type="button" hidden><span aria-hidden="true">↙</span> Back to dance</button>
 
+    <script src="js/sound-toggle.js"></script>
+    <script src="js/site-nav.js"></script>
     <script src="js/calendar-audio.js"></script>
     <script src="js/calendar-grain.js"></script>
-    <script src="js/calendar-camera.js"></script>
     <script src="js/calendar-contact.js"></script>
+    <script src="js/calendar-invite.js"></script>
 </body>
 
 </html>
