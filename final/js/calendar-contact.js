@@ -1,5 +1,4 @@
-// Contact page: a calendar week on signature yellow that refines into a 15-minute slot mosaic, books "I'M BUSY RN"
-// glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
+// Contact page: a calendar week on signature yellow that refines into a slot mosaic, books "PING? PONG!" glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
 // them into free time and the grid coarsens into the ordinary week. One 12-bar cycle locked to the soundtrack loop.
@@ -13,10 +12,11 @@
     const STEP = BEAT / 8; // a 32nd note: the pace of the resolution steps
     const beat = (n) => n * BEAT;
     const DANCE_FPS = 30;
-    const GLYPH_BEATS = [2, 2.5, 3, 4, 5, 5.5, 6.5, 7, 8]; // I ' M  B U S Y  R N
+    const GLYPH_BEATS = [2, 2.5, 3, 3.5, 4, 6, 6.5, 7, 7.5, 8]; // P I N G ?   P O N G !
+    const NG = GLYPH_BEATS.length;
     const DISSOLVE_STEPS = 8; // sixteenth notes
     const T = {
-        refine: beat(1), empty: beat(1) + 3 * STEP, text: beat(GLYPH_BEATS[0]), textFull: beat(GLYPH_BEATS[8]),
+        refine: beat(1), empty: beat(1) + 3 * STEP, text: beat(GLYPH_BEATS[0]), textFull: beat(GLYPH_BEATS[NG - 1]),
         coarsen: beat(11.5), coarse: beat(11.5) + 3 * STEP, dance: beat(13), refine3: beat(16), refine5: beat(16.5),
         sub7: beat(17), fine: beat(17.5), dissolve: beat(43.5), outro: beat(45.5), week: beat(45.5) + 3 * STEP,
     };
@@ -26,20 +26,18 @@
     // mapped onto these by nearest colour, then drawn in PALETTE
     const SRC = ['#53b44b', '#0b8043', '#616161', '#fbfbfb', '#a6c1f6', '#7986cb', '#5482eb', '#3f51b5', '#039be5',
         '#d50000', '#f4511e', '#f6bf26', '#e67c73'];
-    // Free time is the signature yellow; folds and booked glyphs are the site's void ink; banana is deepened to amber
-    // because it would vanish on yellow
-    const PALETTE = ['#ffed29', '#121316', '#5d5e65', '#fbfaf3', '#a6c1f6', '#7986cb', '#5482eb', '#2f3fa3', '#039be5',
-        '#e5484d', '#ff6a1f', '#c98500', '#e67c73'];
+    // Free time is the signature yellow and the booked glyphs a deep ochre of it; every other colour is the source's own
+    const PALETTE = ['#ffed29', ...SRC.slice(1), '#b8860b'];
     const NP = PALETTE.length;
-    const FIELD = 0, BASIL = 1;
+    const FIELD = 0, OCHRE = NP - 1;
     const COL = { field: 0, basil: 1, graphite: 2, lavender: 5, blueberry: 7, peacock: 8, tomato: 9, tangerine: 10, banana: 11, flamingo: 12 };
     const GAP_BG = '#fff7cf';
     const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
     const DARK_INK = PALETTE.map((h) => { const [r, g, b] = rgbOf(h); return 0.299 * r + 0.587 * g + 0.114 * b > 125; });
-    // light ink, dark ink, and a quieter dark ink for free time so the meetings read first
-    const INK = ['rgba(255,255,255,0.9)', 'rgba(18,19,22,0.8)', 'rgba(18,19,22,0.3)'];
+    // light ink, dark ink, a quiet ochre for free time so the meetings read first, and umber on the ochre glyphs
+    const INK = ['rgba(255,255,255,0.9)', 'rgba(32,33,36,0.78)', 'rgba(122,92,0,0.5)', 'rgba(64,44,0,0.88)'];
     const NI = INK.length;
-    const inkOf = (v) => (v === FIELD ? 2 : DARK_INK[v] ? 1 : 0);
+    const inkOf = (v) => (v === FIELD ? 2 : v === OCHRE ? 3 : DARK_INK[v] ? 1 : 0);
 
     const SUB = 7; // sub-columns per day at full resolution
 
@@ -79,20 +77,23 @@
     const TITLES = ['Sync', 'Focus Time', 'Lunch', '1:1', 'Standup', 'Design Review', 'Q3 Planning', 'All Hands', 'Code Review',
         'Retro', 'Deep Work', 'Coffee Chat', 'Hiring Sync', 'Office Hours', 'Planning', 'Gym', 'Weekly', 'Product Review',
         'Mentoring', 'Team Lunch', 'Demo', 'Email', 'Notes', 'Prep'];
+    // Titles of the meetings that spell the glyphs
+    const PINGS = ['Ping', 'Pong', 'DM', 'Hi!', 'Slack', 'Inbox', 'Reply', 'Say hi', 'Ping?', 'Coffee?'];
 
-    // Block glyphs: '#' is a booked slot (one sub-column by 15 minutes)
+    // 5x7 bitmap glyphs: '#' is one glyph pixel, booked as one sub-column by G.textPu row units
     const GLYPHS = {
-        I: ['######', '######', '..##..', '..##..', '..##..', '..##..', '######', '######'],
-        "'": ['##', '##', '#.', '..', '..', '..', '..', '..'],
-        M: ['##......##', '###....###', '####..####', '##.####.##', '##..##..##', '##......##', '##......##', '##......##'],
-        B: ['#######.', '########', '##....##', '#######.', '#######.', '##....##', '########', '#######.'],
-        U: ['##....##', '##....##', '##....##', '##....##', '##....##', '##....##', '########', '.######.'],
-        S: ['.#######', '########', '##......', '#######.', '.#######', '......##', '########', '#######.'],
-        Y: ['##......##', '###....###', '.###..###.', '..######..', '...####...', '....##....', '....##....', '....##....'],
-        R: ['#######.', '########', '##....##', '########', '#######.', '##..###.', '##...###', '##....##'],
-        N: ['##.....##', '###....##', '####...##', '##.##..##', '##..##.##', '##...####', '##....###', '##.....##'],
+        P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+        I: ['###', '.#.', '.#.', '.#.', '.#.', '.#.', '###'],
+        N: ['#...#', '#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#'],
+        G: ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.###.'],
+        O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+        '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
+        '!': ['#', '#', '#', '#', '#', '.', '#'],
     };
-    const LINES = ["I'M", 'BUSY', 'RN'];
+    const LINES = ['PING?', 'PONG!'];
+    const LINE_GAP = 2; // glyph pixels between lines
+    const lineWidth = (s) => [...s].reduce((w, ch, i) => w + GLYPHS[ch][0].length + (i ? 1 : 0), 0);
+    const TEXT_W = Math.max(...LINES.map(lineWidth)), TEXT_H = LINES.length * 7 + (LINES.length - 1) * LINE_GAP;
 
     // Rows are counted in 7.5-minute units (U per hour). Resolution levels: S sub-columns per day, q units per cell.
     const U = 8;
@@ -105,9 +106,12 @@
         { S: 1, q: 2 }, // 5 one column per day, 15-minute slices
         { S: 3, q: 2 }, // 6
         { S: 7, q: 2 }, // 7 the dance at full clarity: sub-columns per day set in layout() to keep the reel's cell shape
+        { S: 5, q: 2 }, // 8 the text: set in layout() so a glyph pixel is near square
     ];
-    // Glyphs and dance frames both live on the reel's grid (7 sub-columns/day, 15-minute slots); levels vote over it
-    const TEXT_SC = 7, TEXT_SQ = 2, MAX_SD = 12;
+    const TEXT_LV = 8;
+    // Dance frames live on the reel's grid (7 sub-columns/day, 15-minute slots), glyphs on the text level; levels vote
+    // over whichever is showing
+    const REEL_SC = 7, REEL_SQ = 2, MAX_SD = 12;
     const M_WEEK = 0, M_EMPTY = 1, M_TEXT = 2, M_DANCE = 3, M_WEEKGRID = 4;
     // Same-colour runs at most this many rows apart are the same meeting moving, not a new one
     const MATCH_GAP = 1;
@@ -168,7 +172,17 @@
             padX: Math.max(1, Math.round(2.5 * dpr)), padY: Math.max(1, Math.round(2 * dpr)),
             labelH: Math.ceil(fs * 1.3 * dpr),
         };
-        G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : lv, i));
+        // A glyph pixel is one sub-column by pu row units: the tallest pu whose pixel stays near square (5x7 letters
+        // at about their bitmap proportions) with the longest line still fitting inside the week
+        const minTs = Math.ceil((TEXT_W + 2) / 7);
+        let pu = 1, ts = minTs;
+        for (const p of [4, 2, 1]) {
+            const s = Math.max(minTs, Math.min(MAX_SD, Math.round(dayW / (p * unitH))));
+            const ar = (dayW / s) / (p * unitH);
+            if (TEXT_H * p <= R && (ar >= 0.82 || p === 1)) { pu = p; ts = s; break; }
+        }
+        G.textPu = pu;
+        G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : i === TEXT_LV ? { S: ts, q: Math.min(2, pu) } : lv, i));
         // Dance refine steps (1 -> 3 -> 5 -> 7 sub-columns, then the finest) skip any that would not be coarser
         G.danceLv = [5, 6, 1, 0, 7].map((l) => (l !== 7 && LV[l].S >= sd ? 7 : l));
 
@@ -278,26 +292,26 @@
     }
 
     function buildGlyphs() {
-        const R = G.R / TEXT_SQ;
-        const C = 7 * TEXT_SC;
-        const width = (s) => [...s].reduce((w, ch, i) => w + GLYPHS[ch][0].length + (i ? (ch === "'" || s[i - 1] === "'" ? 1 : 2) : 0), 0);
-        const gap = Math.max(1, Math.min(6, Math.floor((R - 24) / 4)));
-        let y = Math.floor((R - (24 + gap * 2)) / 2);
+        const lv = G.levels[TEXT_LV], C = lv.C, R = G.R / lv.q, k = G.textPu / lv.q;
+        let y = Math.floor((G.R / G.textPu - TEXT_H) / 2) * k;
         const glyph = new Uint8Array(C * R);
         let n = 0;
         for (const line of LINES) {
-            let x = Math.round((C - width(line)) / 2);
+            let x = Math.round((C - lineWidth(line)) / 2);
             [...line].forEach((ch, i) => {
-                if (i) x += ch === "'" || line[i - 1] === "'" ? 1 : 2;
+                if (i) x++;
                 const g = GLYPHS[ch];
                 n++;
-                for (let gy = 0; gy < 8; gy++) for (let gx = 0; gx < g[0].length; gx++) {
-                    const c = x + gx, r = y + gy;
-                    if (g[gy][gx] === '#' && c >= 0 && c < C && r >= 0 && r < R) glyph[c * R + r] = n;
+                for (let gy = 0; gy < 7; gy++) for (let gx = 0; gx < g[0].length; gx++) {
+                    if (g[gy][gx] !== '#') continue;
+                    for (let j = 0; j < k; j++) {
+                        const c = x + gx, r = y + gy * k + j;
+                        if (c >= 0 && c < C && r >= 0 && r < R) glyph[c * R + r] = n;
+                    }
                 }
                 x += g[0].length;
             });
-            y += 8 + gap;
+            y += (7 + LINE_GAP) * k;
         }
         G.glyph = glyph;
     }
@@ -307,7 +321,7 @@
     function buildSampler() {
         G.samples = null;
         if (!dance) return;
-        const FR = G.R / TEXT_SQ, srow = new Int32Array(FR);
+        const FR = G.R / REEL_SQ, srow = new Int32Array(FR);
         for (let r = 0; r < FR; r++) srow[r] = Math.min(dance.h - 1, Math.floor(r * dance.h / FR)) * dance.w;
         const lv = G.levels[7], C = lv.C, W = dance.w;
         const off = C >= W ? Math.floor((W - C) / 2) : 0;
@@ -329,19 +343,20 @@
         const { labelH, fs, dpr, padX, R, startHour } = G;
         const atlas = document.createElement('canvas');
         atlas.width = Math.max(...G.levels.map((l) => l.labelW));
-        atlas.height = (TITLES.length + R / 2) * NI * labelH;
+        const names = TITLES.concat(PINGS);
+        atlas.height = (names.length + R / 2) * NI * labelH;
         const a = atlas.getContext('2d');
         a.textBaseline = 'top';
         const dy = Math.round(0.1 * fs * dpr);
         a.font = `500 ${fs * dpr}px Roboto, Arial, sans-serif`;
-        TITLES.forEach((t, i) => {
+        names.forEach((t, i) => {
             for (let ink = 0; ink < NI; ink++) { a.fillStyle = INK[ink]; a.fillText(t, 0, (i * NI + ink) * labelH + dy); }
         });
         a.font = `400 ${fs * dpr}px Roboto, Arial, sans-serif`;
         for (let r = 0; r < R / 2; r++) {
             const min = (startHour * 4 + r) * 15, h = Math.floor(min / 60);
             const t = ((h + 11) % 12) + 1 + ':' + String(min % 60).padStart(2, '0') + (h < 12 ? ' AM' : ' PM');
-            for (let ink = 0; ink < NI; ink++) { a.fillStyle = INK[ink]; a.fillText(t, 0, ((TITLES.length + r) * NI + ink) * labelH + dy); }
+            for (let ink = 0; ink < NI; ink++) { a.fillStyle = INK[ink]; a.fillText(t, 0, ((names.length + r) * NI + ink) * labelH + dy); }
         }
         G.atlas = atlas;
         G.minLabelW = Math.round(8 * dpr) - padX;
@@ -350,7 +365,7 @@
 
     // ---------------------------------------------------------------- content
     function danceFine(f) {
-        G.fineSC = TEXT_SC; G.fineSQ = TEXT_SQ; G.fineRows = G.R / TEXT_SQ;
+        G.fineSC = REEL_SC; G.fineSQ = REEL_SQ; G.fineRows = G.R / REEL_SQ;
         if (G.fineFrame === f) return;
         const FR = G.fineRows, W = dance.w, srow = G.samples, out = G.fine, fr = dance.frames, base = f * W * dance.h;
         for (let c = 0; c < W; c++) for (let r = 0; r < FR; r++) out[c * FR + r] = fr[base + srow[r] + c];
@@ -358,10 +373,11 @@
     }
 
     function textFine(g) {
-        G.fineSC = TEXT_SC; G.fineSQ = TEXT_SQ; G.fineRows = G.R / TEXT_SQ;
+        const lv = G.levels[TEXT_LV];
+        G.fineSC = lv.S; G.fineSQ = lv.q; G.fineRows = G.R / lv.q;
         if (G.fineFrame === -2 - g) return;
-        const n = 7 * TEXT_SC * G.fineRows, glyph = G.glyph, out = G.fine;
-        for (let i = 0; i < n; i++) out[i] = glyph[i] && glyph[i] <= g ? BASIL : FIELD;
+        const n = lv.C * G.fineRows, glyph = G.glyph, out = G.fine;
+        for (let i = 0; i < n; i++) out[i] = glyph[i] && glyph[i] <= g ? OCHRE : FIELD;
         G.fineFrame = -2 - g;
     }
 
@@ -441,7 +457,7 @@
         const tw = G.tw, m = tw.n, xs = emitLv.xs, gx = emitLv.gx;
         tw.c[m] = v; tw.x[m] = xs[c] + gx - (gx >> 1); tw.w[m] = xs[c + 1] - xs[c] - gx;
         tw.t0[m] = t0; tw.b0[m] = b0; tw.t1[m] = t1; tw.b1[m] = b1; tw.f[m] = f;
-        tw.ti[m] = (c * 7 + v * 5) % TITLES.length;
+        tw.ti[m] = v === OCHRE ? TITLES.length + (c * 3 + Math.floor(t0) * 5) % PINGS.length : (c * 7 + v * 5) % TITLES.length;
         tw.o[m] = (((c * 2654435761) ^ (v * 40503)) >>> 0) % 997 / 997;
         tw.n = m + 1;
     }
@@ -661,7 +677,7 @@
             cx.fillRect(x, y + cr, w, h - cr * 2);
             if (cr === 2) cx.fillRect(x + 1, y + 1, w - 2, h - 2);
         }
-        const atlas = G.atlas, lw = lv.labelW, ER = G.evR, timeRow = TITLES.length * NI, timed = lv.S <= 3;
+        const atlas = G.atlas, lw = lv.labelW, ER = G.evR, timeRow = (TITLES.length + PINGS.length) * NI, timed = lv.S <= 3;
         if (lw >= minLabelW) {
             for (let i = 0; i < n; i++) {
                 if (EH[i] < labelH * 0.8 + padY) continue;
@@ -692,7 +708,7 @@
         if (nowHour < startHour || nowHour > startHour + hours) return;
         const y = Math.round((nowHour - startHour) * 4 * slotH * dpr);
         const xs = G.levels[0].xs, x0 = xs[today * SUB], x1 = xs[today * SUB + SUB];
-        ctx.fillStyle = '#e5484d';
+        ctx.fillStyle = '#ea4335';
         ctx.fillRect(x0, y - Math.round(dpr), x1 - x0, Math.max(2, Math.round(2 * dpr)));
         ctx.beginPath();
         ctx.arc(x0, y, 5 * dpr, 0, Math.PI * 2);
@@ -750,21 +766,21 @@
     // A scene is (mode, level, argument), packed into one number so the per-frame check allocates nothing
     let sMode = 0, sLevel = 0, sArg = 0, sDis = 0;
     const stepIn = (t, from) => Math.floor((t - from) / STEP);
-    const COARSEN = [1, 2, 3, 4];
+    const REFINE = [3, 2, TEXT_LV], COARSEN = [6, 2, 3, 4];
 
     function scene(t) {
         const ready = dance && G.samples;
         sArg = 0; sDis = 0;
         if (t < T.refine || t >= T.week) { sMode = M_WEEK; sLevel = 0; }
-        else if (t < T.empty) { sMode = M_WEEKGRID; sLevel = [2, 1, 0][stepIn(t, T.refine)]; }
+        else if (t < T.empty) { sMode = M_WEEKGRID; sLevel = REFINE[stepIn(t, T.refine)]; }
         else if (t >= T.outro) { sMode = M_WEEKGRID; sLevel = [0, 1, 2][Math.min(2, stepIn(t, T.outro))]; }
-        else if (t < T.text) { sMode = M_EMPTY; sLevel = 0; }
+        else if (t < T.text) { sMode = M_EMPTY; sLevel = TEXT_LV; }
         else if (t < T.dance || !ready) {
             sMode = M_TEXT;
             let g = 0;
-            while (g < 9 && GLYPH_T[g] <= t) g++;
+            while (g < NG && GLYPH_T[g] <= t) g++;
             sArg = g;
-            sLevel = t < T.coarsen || t >= T.dance ? 0 : COARSEN[Math.min(3, stepIn(t, T.coarsen))];
+            sLevel = t < T.coarsen || t >= T.dance ? TEXT_LV : COARSEN[Math.min(3, stepIn(t, T.coarsen))];
         } else {
             sMode = M_DANCE;
             sArg = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
