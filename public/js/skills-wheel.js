@@ -577,7 +577,7 @@
     let visible = false, drawn = -1, detached = false, railDirty = true;
     let wantLeash = false, leashed = false, navHidden = false, navRange = [0, 0];
     let shown = -1, swap = null, spin = null, fill = null;
-    let appMod = null, nativeTween = null, animUntil = 0, dragging = false, nudgeAfterTouch = 0;
+    let appMod = null, nativeTween = null, animUntil = 0, passUntil = 0, dragging = false, nudgeAfterTouch = 0;
 
     const now = () => performance.now();
     const viewW = () => scroller.clientWidth;
@@ -1252,16 +1252,18 @@
         zone.unguard();
     }
 
+    // In-page jumps (anchors, the footer's back-to-top) glide straight through the wheel instead of being caught by it
     function onClick(e) {
-        if (!zone.pinned) return;
-        const a = e.target && e.target.closest && e.target.closest('a[href*="#"]');
-        if (a) run(zone.external());
+        const a = e.target && e.target.closest && e.target.closest('a[href*="#"], [data-sk-pass]');
+        if (!a) return;
+        passUntil = now() + 2600;
+        if (zone.pinned) run(zone.external());
     }
 
     function tick(time, dt) {
         const s = Math.max(1, Math.min(dt, 50)) / 1000;
         const y = scroller.scrollTop;
-        run(zone.frame(y, A, B, dragging, now() < animUntil));
+        run(zone.frame(y, A, B, dragging || now() < passUntil, now() < animUntil));
         if (zone.pinned) {
             const lenis = lenisOf();
             if (lenis && !lenis.isStopped) lenis.stop();

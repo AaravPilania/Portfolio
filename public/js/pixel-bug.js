@@ -138,6 +138,7 @@
         projects: ['the good work is down here. hover a row, i\'ll wait on the line.', 'zero bugs in any of these. except me, visiting.'],
         services: ['scroll me. i\'m a wheel now.', 'six arms, five stacks. i ride the spare one.'],
         together: ['thirty-six stickers and not one of me.', 'say hello. i\'ll be in the inbox, chewing.'],
+        footer: ['he signed it. i\'m the asterisk.', 'mind the pile. something in there still compiles.'],
         pet: ['tickles.', '*antennae intensify*', 'careful. i bite. in bytes.', 'you\'re not squashing me. i like you.'],
         caught: ['gotcha. not a feature.', 'reproduced it.', 'found you. marking as resolved.', 'faster than your QA team.', 'tag. you\'re the bug now.'],
         flip: ['i\'m fine. this is fine.', 'help. legs. air.', 'undefined is not a function.', 'works on my machine.',
@@ -538,6 +539,7 @@
             ['projects', doc.getElementById('section-projects')],
             ['services', doc.querySelector('.ll-section--services')],
             ['together', doc.querySelector('.ll-section--together')],
+            ['footer', doc.querySelector('.sig-footer')],
         ].filter((s) => s[1]);
         const seen = {}, told = {};
         let section = '', sectionSince = 0;

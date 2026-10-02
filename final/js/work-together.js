@@ -1,6 +1,8 @@
 // Slide 05: Let's work together. Every entry in the Skills section of the résumé becomes a die-cut sticker, drawn here
-// (Path2D marks and canvas type, no images), flying out of the void behind the headline, then drifting in depth with
-// scroll parallax and a cursor that pushes them aside. One canvas, one rAF, only while the section is on screen.
+// (Path2D marks and canvas type, no images), riding Lusion's white-tunnel conveyor: each one rises at its own steady
+// pace, spinning, re-rolled to a new column and spin every pass. Scrolling into the footer drops them under Matter.js
+// gravity onto the footer's floor; scrolling back lifts them onto the conveyor again. One fixed transparent canvas over
+// the shared backdrop, one rAF, only while slide 05 or the footer is on screen.
 (() => {
     'use strict';
     const sec = document.querySelector('.ll-section--together');
@@ -361,7 +363,7 @@
         o.shadowBlur = B * 1.3;
         o.shadowOffsetY = B * 0.55;
         o.drawImage(sil, 0, 0);
-        return { img: out, w: W, h: H, hit: Math.min(aw, ah) * 0.5 + B };
+        return { img: out, w: W, h: H, bw: aw + B * 2, bh: ah + B * 2 };
     }
 
     const rng = (seed) => () => {
@@ -371,94 +373,100 @@
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
     const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+    const lstep = (a, b, v) => clamp01((v - a) / (b - a));
     const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const wrapPI = (a) => a - Math.round(a / (Math.PI * 2)) * Math.PI * 2;
+    // Lusion's hash42(vec2(cycle, id)): four stable uniforms per sticker per pass
+    function hash4(c, id, out) {
+        let h = Math.imul(c | 0, 0x27d4eb2d) ^ Math.imul(id + 1, 0x165667b1);
+        for (let i = 0; i < 4; i++) {
+            h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+            h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+            h ^= h >>> 16;
+            out[i] = (h >>> 0) / 4294967296;
+            h = (h + 0x9e3779b9) | 0;
+        }
+        return out;
+    }
 
-    const HEAD = 1.18; // raster headroom for the hover lift and the pinned push
-    let W = 0, H = 0, dpr = 1, unit = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
-    let raf = 0, last = 0, time = 0, pS = STATIC ? 1 : 0, inState = false;
-    let safe = { x0: 0, y0: 0, x1: 0, y1: 0 };
-    const ptr = { x: 0, y: 0, cx: 0, cy: 0, on: false, sx: 0, sy: 0 };
+    // Lusion's GoalWhiteTunnelStickers, in screen space: `t = time * mix(0.05, 0.1, randX) + randY`, a pass per unit of
+    // t, x re-rolled across +-5 world units every pass, y from -7/aspect to +7/aspect, spin +-mix(0.5, 1) rad/s, scale
+    // popping in with linearStep(w/2, w/2 + 0.5, activeRatio), a camera that leans 0.05 rad toward the pointer
+    const HEAD = 1.12; // raster headroom for the hover lift
+    const FALL = 0.85, LIFT = 0.95; // footer top, in viewport heights, that drops / lifts the stickers
+    const Mt = window.Matter;
+    const STEP = 1000 / 60;
+    const C_WALL = 1, C_SOLID = 2, C_GHOST = 4;
+    const foot = document.querySelector('.sig-footer');
+    const floorEl = foot && foot.querySelector('.sig-bar');
+
+    let W = 0, H = 0, dpr = 1, vTop = 0, unitA = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
+    let raf = 0, last = 0, time = STATIC ? 31 : 0, active = STATIC ? 1 : 0, inState = false;
+    let xHalf = 0, yHalf = 0, wtTop = 1e5, wtH = 0, footTop = 1e5, lastWt = NaN, lastFoot = NaN;
+    const stageTopNow = () => (wtTop > 0 ? wtTop : Math.min(0, wtTop + wtH - stage.clientHeight));
+    let mode = 'float', fallT = 0, liftT = 0, pileK = 1, floorY = 0, acc = 0, engine = null, walls = [], pileReady = false;
+    let dirty = true, resting = false;
+    const look = { x: 0, y: 0 };
+    const ptr = { cx: 0, cy: 0, on: false, block: false };
     let hovered = null, labelled = false;
     const cursorLabel = document.getElementById('cursorLabel');
     const cursorText = cursorLabel && cursorLabel.querySelector('.js-text-container');
     const cursorDot = document.querySelector('.site-cursor-dot');
 
     const items = STACK.map((def, i) => {
-        const r = rng(9001 + i * 97);
+        const r = rng(4242 + i * 131);
         return {
-            def, i, img: null, ppu: 0,
-            z: r(), rot0: (r() - 0.5) * 0.5, spin: (r() < 0.5 ? -1 : 1) * (0.6 + r() * 0.9),
-            delay: r() * 0.34,
-            w: [0.35 + r() * 0.25, 0.3 + r() * 0.25, 0.5 + r() * 0.4, 0.25 + r() * 0.3, 0.2 + r() * 0.25],
-            p: [r() * 6.28, r() * 6.28, r() * 6.28, r() * 6.28, r() * 6.28],
-            hx: 0, hy: 0, sz: 1, r: 0, ox: 0, oy: 0, hv: 0, x: 0, y: 0, k: 0,
+            def, i, img: null, ppu: 0, side: 0,
+            rx: r(), ry: r(), rz: r(), rw: r(), cyc: NaN, cr: [0, 0, 0, 0],
+            fx: 0, fy: 0, fa: 0, fs: 0, fo: 0, vy: 0, va: 0,
+            x: 0, y: 0, a: 0, ks: 0, o: 0, k0: 0, l: null, body: null, ghost: 0,
+            px: 0, py: 0, pa: 0, hv: 0,
         };
     });
-    const order = items.slice().sort((a, b) => b.z - a.z);
+    const pool = items.concat(items).map(() => ({ s: null, x: 0, y: 0, a: 0, k: 0 }));
+    let drawnN = 0;
+
+    function floatPose(s, offY) {
+        const rate = 0.05 + 0.05 * s.rx;
+        const t = time * rate + s.ry;
+        const cyc = Math.floor(t), ratio = t - cyc;
+        if (cyc !== s.cyc) { s.cyc = cyc; hash4(cyc, s.i, s.cr); }
+        const cr = s.cr, dir = cr[2] < 0.5 ? -1 : 1, spin = 0.5 + 0.5 * cr[1];
+        s.fx = W / 2 + (cr[0] * 2 - 1) * xHalf + look.x;
+        s.fy = H / 2 + (1 - 2 * ratio) * yHalf + offY + look.y;
+        s.fa = s.rz * Math.PI * 2 + dir * time * spin;
+        s.fs = lstep(s.rw * 0.5, s.rw * 0.5 + 0.5, active);
+        s.fo = 1 - lstep(0.45, 0.5, Math.abs(ratio - 0.5));
+        s.vy = -2 * yHalf * rate;
+        s.va = dir * spin;
+    }
 
     function measure() {
-        W = stage.clientWidth;
-        H = stage.clientHeight;
+        W = window.innerWidth;
+        H = window.innerHeight;
         dpr = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.round(W * dpr);
         canvas.height = Math.round(H * dpr);
-        const sr = stage.getBoundingClientRect();
-        // Width from the inked lines (their rise is vertical only), height from kicker to CTA
-        const across = [...title.querySelectorAll('.wt-li'), cta].filter(Boolean).map((el) => el.getBoundingClientRect());
-        const down = [kicker, title, cta].filter(Boolean).map((el) => el.getBoundingClientRect());
-        const m = Math.min(W, H) * 0.03;
-        safe = {
-            x0: Math.min(...across.map((b) => b.left)) - sr.left - m,
-            x1: Math.max(...across.map((b) => b.right)) - sr.left + m,
-            y0: Math.min(...down.map((b) => b.top)) - sr.top - m,
-            y1: Math.max(...down.map((b) => b.bottom)) - sr.top + m,
-        };
-        const phone = W < 700;
-        const nextUnit = Math.sqrt((W * H * (phone ? 0.5 : 0.36)) / items.length);
-        const rebuild = !unit || Math.abs(nextUnit - unit) / unit > 0.12;
-        unit = nextUnit;
-        place();
+        vTop = scroller === document.scrollingElement || scroller === document.documentElement ? 0 : scroller.getBoundingClientRect().top;
+        const aspect = W / H;
+        yHalf = H * Math.min(1, Math.max(0.62, 1.32 / aspect));
+        xHalf = W * 0.53;
+        // Lusion averages ~0.16H on the longest side over 26 stickers; 36 share the same coverage
+        const meanLong = Math.min(H, W * 1.25) * 0.16 * Math.sqrt(26 / items.length);
+        const m = items.reduce((a, s) => a + (s.def.k * Math.max(s.def.w, s.def.h)) / Math.sqrt(s.def.w * s.def.h), 0) / items.length;
+        const next = meanLong / m;
+        const rebuild = !unitA || Math.abs(next - unitA) / unitA > 0.12;
+        unitA = next;
+        items.forEach((s) => { s.side = (unitA * s.def.k) / Math.sqrt(s.def.w * s.def.h); });
+        if (foot && floorEl) floorY = floorEl.getBoundingClientRect().top - foot.getBoundingClientRect().top;
         if (rebuild) {
             items.forEach((s) => { s.img = null; });
             built = 0;
+            pileReady = false;
             if (near) queue();
         }
-    }
-
-    function rectGap(x, y, r) {
-        const k = safe;
-        const dx = Math.max(k.x0 - x, 0, x - k.x1), dy = Math.max(k.y0 - y, 0, y - k.y1);
-        return dx || dy ? Math.hypot(dx, dy) - r : -Math.min(x - k.x0, k.x1 - x, y - k.y0, k.y1 - y) - r;
-    }
-
-    // Best-candidate scatter around the copy: big near stickers first, every one kept out of the headline's box
-    function place() {
-        const r = rng(W < 700 ? 77 : 1301);
-        const placed = [];
-        items.forEach((s) => {
-            s.sz = 1 - 0.42 * s.z;
-            const side = (unit * s.def.k) / Math.sqrt(s.def.w * s.def.h);
-            s.side = side;
-            s.r = 0.5 * Math.hypot(s.def.w, s.def.h) * side * s.sz * 0.8;
-        });
-        items.slice().sort((a, b) => b.r - a.r).forEach((s) => {
-            let best = null, bestScore = -Infinity;
-            // The marquee marks stay whole; the rest may bleed off the frame like Lusion's
-            const bleed = s.def.k >= 1.1 ? -0.7 : 0.35;
-            for (let t = 0; t < 90; t++) {
-                const x = -s.r * bleed + r() * (W + s.r * bleed * 2);
-                const y = -s.r * bleed * 0.7 + r() * (H + s.r * bleed * 1.4);
-                const gap = rectGap(x, y, s.r * 0.9);
-                let score = gap < 0 ? gap * 6 - 1e4 : Math.min(gap, s.r) * 0.25;
-                let crowd = Infinity;
-                for (const o of placed) crowd = Math.min(crowd, Math.hypot(x - o.hx, y - o.hy) - (s.r + o.r) * 0.92);
-                if (placed.length) score += Math.min(crowd, unit * 0.8);
-                if (score > bestScore) { bestScore = score; best = [x, y]; }
-            }
-            s.hx = best[0];
-            s.hy = best[1];
-            placed.push(s);
-        });
+        dirty = true;
     }
 
     function queue() {
@@ -473,13 +481,117 @@
             }
             buildMs += performance.now() - t0;
             if (built < items.length) setTimeout(step, 16);
-            else { queued = false; if (STATIC) draw(0); else kick(); }
+            else { queued = false; if (STATIC) staticPile(); dirty = true; kick(); }
         };
         const go = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(step);
         if (document.fonts && document.fonts.load) {
             Promise.all(['700 40px Brier', '500 16px "IBM Plex Mono"', '800 40px "Mona Sans Variable"'].map((f) => document.fonts.load(f).catch(() => null)))
                 .then(go, go);
         } else go();
+    }
+
+    // Physics lives in footer coordinates: the floor is the top of the footer's bottom bar, the walls its edges. The
+    // pile is scaled to stand about 0.3 of a viewport tall whatever the width.
+    function world() {
+        if (!Mt || !foot) return false;
+        if (!engine) engine = Mt.Engine.create({ enableSleeping: true, positionIterations: 8, velocityIterations: 6 });
+        engine.gravity.y = 1;
+        engine.gravity.scale = (0.0022 * H) / 1000;
+        if (walls.length) Mt.Composite.remove(engine.world, walls);
+        const T = 600, f = { category: C_WALL, mask: C_SOLID | C_GHOST };
+        walls = [
+            Mt.Bodies.rectangle(W / 2, floorY + T / 2, W + T * 2, T, { isStatic: true, friction: 0.9, collisionFilter: f }),
+            Mt.Bodies.rectangle(-T / 2, floorY - H * 2, T, H * 6, { isStatic: true, friction: 0.2, collisionFilter: f }),
+            Mt.Bodies.rectangle(W + T / 2, floorY - H * 2, T, H * 6, { isStatic: true, friction: 0.2, collisionFilter: f }),
+        ];
+        Mt.Composite.add(engine.world, walls);
+        let area = 0;
+        for (const s of items) if (s.img) area += ((s.img.bw * s.side) / s.ppu) * ((s.img.bh * s.side) / s.ppu);
+        pileK = Math.min(1, Math.sqrt((0.27 * H * W * 0.62) / Math.max(1, area)));
+        return true;
+    }
+
+    function clearBodies() {
+        for (const s of items) {
+            if (s.body && engine) Mt.Composite.remove(engine.world, s.body);
+            s.body = null;
+        }
+    }
+
+    function spawn(s, x, y, a, vx, vy, va) {
+        const w = (s.img.bw * s.side * pileK) / s.ppu, h = (s.img.bh * s.side * pileK) / s.ppu;
+        const b = Mt.Bodies.rectangle(Math.min(W - w / 2 - 2, Math.max(w / 2 + 2, x)), y, w, h, {
+            angle: a,
+            chamfer: { radius: Math.min(w, h) * 0.22 },
+            restitution: 0.3, friction: 0.55, frictionStatic: 0.9, frictionAir: 0.012, density: 0.0016,
+            sleepThreshold: 40,
+            collisionFilter: { category: C_GHOST, mask: C_WALL },
+        });
+        Mt.Body.setVelocity(b, { x: vx, y: vy });
+        Mt.Body.setAngularVelocity(b, va);
+        s.body = b;
+        s.ghost = 0;
+        Mt.Composite.add(engine.world, b);
+    }
+
+    // A sticker spawned overlapping another falls through it as a ghost until it is clear, so the conveyor's overlaps
+    // never detonate on the first step
+    function solidify(dt) {
+        for (const s of items) {
+            const b = s.body;
+            if (!b || b.collisionFilter.category === C_SOLID) continue;
+            s.ghost += dt;
+            let clear = s.ghost > 1.4;
+            if (!clear) {
+                clear = true;
+                for (const o of items) {
+                    const c = o.body;
+                    if (!c || c === b || c.collisionFilter.category !== C_SOLID) continue;
+                    const A = b.bounds, B = c.bounds;
+                    if (A.max.x < B.min.x || A.min.x > B.max.x || A.max.y < B.min.y || A.min.y > B.max.y) continue;
+                    if (Mt.Collision.collides(b, c)) { clear = false; break; }
+                }
+            }
+            if (clear) b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 };
+        }
+    }
+
+    function fall() {
+        if (built < items.length || !world()) return;
+        clearBodies();
+        mode = 'fall'; fallT = 0; acc = 0; resting = false;
+        for (const s of items) {
+            s.k0 = s.ks;
+            spawn(s, s.x, s.y - footTop, s.a, (s.cr[3] - 0.5) * 1.6, s.vy / 60, s.va / 60);
+        }
+    }
+
+    function lift() {
+        mode = 'lift'; liftT = 0;
+        for (const s of items) {
+            s.l = { x: s.x, y: s.y, a: s.a, k: s.ks, o: s.o };
+            if (s.body) Mt.Composite.remove(engine.world, s.body);
+            s.body = null;
+        }
+    }
+
+    // Reduced motion: the same drop, settled synchronously, then painted as a still pile in the footer
+    function staticPile() {
+        if (!world()) return;
+        clearBodies();
+        for (const s of items) {
+            floatPose(s, 0);
+            spawn(s, s.fx, floorY - H * 0.25 - (1 - s.fy / H) * H * 0.9, s.fa, 0, 0, 0);
+        }
+        for (let n = 0; n < 900; n++) {
+            solidify(STEP / 1000);
+            Mt.Engine.update(engine, STEP);
+            if (n > 120 && items.every((s) => s.body.isSleeping)) break;
+        }
+        for (const s of items) { s.px = s.body.position.x; s.py = s.body.position.y; s.pa = s.body.angle; }
+        clearBodies();
+        pileReady = true;
+        dirty = true;
     }
 
     function setLabel(s) {
@@ -496,102 +608,181 @@
         }
     }
 
-    function draw(dt) {
-        const sr = sec.getBoundingClientRect();
-        const vTop = scroller === document.scrollingElement || scroller === document.documentElement ? 0 : scroller.getBoundingClientRect().top;
-        const top = sr.top - vTop;
-        const pe = STATIC ? 1 : clamp01((H - top) / (H * 0.92));
-        const q = STATIC ? 0 : clamp01(-top / Math.max(1, sr.height - H));
-        pS += (pe - pS) * (dt ? 1 - Math.exp(-dt * 7) : 1);
-        if (!STATIC) {
-            if (!inState && pe > 0.5) { inState = true; sec.classList.add('is-in'); }
-            else if (inState && pe < 0.12) { inState = false; sec.classList.remove('is-in'); }
+    function pick() {
+        if (!ptr.on || ptr.block) return null;
+        for (let i = drawnN - 1; i >= 0; i--) {
+            const d = pool[i], s = d.s, dx = ptr.cx - d.x, dy = ptr.cy - d.y;
+            const co = Math.cos(-d.a), si = Math.sin(-d.a);
+            const lx = (dx * co - dy * si) / d.k, ly = (dx * si + dy * co) / d.k;
+            if (Math.abs(lx) < s.img.bw / 2 && Math.abs(ly) < s.img.bh / 2) return s;
         }
-        const stageTop = top > 0 ? top : Math.min(0, top + sr.height - H);
-        const px = ptr.cx, py = ptr.cy - stageTop + vTop;
-        if (dt) {
-            const kM = 1 - Math.exp(-dt * 5);
-            ptr.sx += ((ptr.on ? px / W - 0.5 : 0) - ptr.sx) * kM;
-            ptr.sy += ((ptr.on ? py / H - 0.5 : 0) - ptr.sy) * kM;
-        }
-        let hit = null;
-        if (ptr.on && !STATIC) {
-            for (let i = order.length - 1; i >= 0; i--) {
-                const s = order[i];
-                if (s.img && s.e > 0.85 && Math.hypot(px - s.x, py - s.y) < (s.img.hit * s.k) / dpr * 0.92) { hit = s; break; }
-            }
-        }
-        if (hit !== hovered) { hovered = hit; setLabel(hit); }
+        return null;
+    }
 
+    function put(s, x, y, a, sc, o) {
+        const k = (s.side * sc * (1 + 0.07 * s.hv) * dpr) / s.ppu;
+        const r = (Math.max(s.img.w, s.img.h) * k) / dpr / 2;
+        if (y + r < 0 || y - r > H || x + r < 0 || x - r > W) return;
+        const co = Math.cos(a), si = Math.sin(a);
+        ctx.globalAlpha = o;
+        ctx.setTransform(co * k, si * k, -si * k, co * k, x * dpr, y * dpr);
+        ctx.drawImage(s.img.img, -s.img.w / 2, -s.img.h / 2);
+        const d = pool[drawnN++];
+        d.s = s; d.x = x; d.y = y; d.a = a; d.k = k / dpr;
+    }
+
+    function render() {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const cx = W / 2, cy = (safe.y0 + safe.y1) / 2, mn = Math.min(W, H);
-        const kS = dt ? 1 - Math.exp(-dt * 6) : 1, kH = dt ? 1 - Math.exp(-dt * 10) : 1;
-        for (const s of order) {
-            if (!s.img) continue;
-            const t = clamp01(((pS - 0.2) / 0.8 - s.delay) / 0.62);
-            if (t <= 0) { s.k = 0; s.e = 0; continue; }
-            const e = ease(t), w = s.w, p = s.p, depth = 1 - s.z * 0.5;
-            const fly = q * (1 - s.z * 0.6);
-            const amp = STATIC ? 0 : mn * 0.012 * depth;
-            let x = cx + (s.hx - cx) * (0.1 + 0.9 * e) + (s.hx - cx) * fly * 0.1 + Math.sin(time * w[0] + p[0]) * amp;
-            let y = cy + (s.hy - cy) * (0.1 + 0.9 * e) + (s.hy - cy) * fly * 0.1 - H * 0.06 * fly + Math.cos(time * w[1] + p[1]) * amp * 0.8;
-            x -= ptr.sx * W * 0.03 * (1.15 - s.z);
-            y -= ptr.sy * H * 0.03 * (1.15 - s.z);
-            let tx = 0, ty = 0;
-            if (ptr.on && s !== hovered && e > 0.85) {
-                const dx = x - px, dy = y - py, d = Math.hypot(dx, dy) || 1, R = s.r + mn * 0.13;
-                if (d < R) { const f = Math.pow(1 - d / R, 2) * mn * 0.09; tx = (dx / d) * f; ty = (dy / d) * f; }
-            }
-            s.ox += (tx - s.ox) * kS;
-            s.oy += (ty - s.oy) * kS;
-            s.hv += ((s === hovered ? 1 : 0) - s.hv) * kH;
-            x += s.ox; y += s.oy;
-            const scale = s.sz * (0.16 + 0.84 * e) * (1 + fly * 0.1 * (1 - s.z)) * (1 + 0.07 * s.hv)
-                * (STATIC ? 1 : 1 + 0.025 * Math.sin(time * w[2] + p[2]));
-            const rot = s.rot0 * (1 - 0.6 * s.hv) + (1 - e) * s.spin + (STATIC ? 0 : Math.sin(time * w[3] + p[3]) * 0.05) + s.ox * 0.0015;
-            const turn = STATIC ? 1 : 1 - 0.16 * (0.5 + 0.5 * Math.sin(time * w[4] + p[4]));
-            const k = (scale * s.side * dpr) / s.ppu;
-            ctx.globalAlpha = Math.min(1, t * 2.5) * (1 - 0.45 * s.z);
-            const co = Math.cos(rot), si = Math.sin(rot);
-            ctx.setTransform(co * k * turn, si * k * turn, -si * k, co * k, x * dpr, y * dpr);
-            ctx.drawImage(s.img.img, -s.img.w / 2, -s.img.h / 2);
-            s.x = x; s.y = y; s.k = k; s.e = e;
+        drawnN = 0;
+        if (wtTop >= H && !(STATIC && pileReady)) return;
+        ctx.save();
+        if (STATIC) {
+            const top = stageTopNow(), h = stage.clientHeight;
+            ctx.beginPath();
+            ctx.rect(0, Math.floor(top * dpr), canvas.width, Math.ceil(h * dpr));
+            ctx.clip();
         }
+        for (const s of items) if (s.img && s.o > 0.004 && s.ks > 0.002) put(s, s.x, s.y, s.a, s.ks, s.o);
+        ctx.restore();
+        // Feathered like slide 04's dither band rather than cut flat at the section's top edge
+        const f0 = wtTop - H * 0.14, f1 = wtTop + H * 0.06;
+        if (f1 > 0 && drawnN) {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'destination-in';
+            const g = ctx.createLinearGradient(0, f0 * dpr, 0, f1 * dpr);
+            g.addColorStop(0, 'rgba(0,0,0,0)');
+            g.addColorStop(1, 'rgba(0,0,0,1)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'source-over';
+            for (let i = 0; i < drawnN; i++) {
+                if (pool[i].y >= f0) continue;
+                const d = pool[i];
+                pool[i] = pool[drawnN - 1];
+                pool[--drawnN] = d;
+                i--;
+            }
+        }
+        if (STATIC && pileReady) for (const s of items) if (s.img) put(s, s.px, s.py + footTop, s.pa, pileK, 1);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1;
+    }
+
+    function tick(dt, clock = dt) {
+        const sr = sec.getBoundingClientRect();
+        wtTop = sr.top - vTop;
+        footTop = foot ? foot.getBoundingClientRect().top - vTop : 1e5;
+        const moved = !(Math.abs(wtTop - lastWt) < 0.25 && Math.abs(footTop - lastFoot) < 0.25);
+        lastWt = wtTop; lastFoot = footTop;
+
+        if (!STATIC) {
+            time += clock;
+            const pe = clamp01((H - wtTop) / (H * 0.92));
+            if (!inState && pe > 0.5) { inState = true; sec.classList.add('is-in'); }
+            else if (inState && pe < 0.12) { inState = false; sec.classList.remove('is-in'); }
+            active = clamp01((H - wtTop) / (H * 0.8));
+            const kL = 1 - Math.pow(0.9, dt * 60), lean = H * 0.047;
+            look.x += ((ptr.on ? -(ptr.cx / W * 2 - 1) * lean : 0) - look.x) * kL;
+            look.y += ((ptr.on ? -(ptr.cy / H * 2 - 1) * lean : 0) - look.y) * kL;
+            if (mode !== 'fall' && footTop < FALL * H) fall();
+            else if (mode === 'fall' && footTop > LIFT * H) lift();
+        }
+
+        wtH = sr.height;
+        const offY = STATIC ? stageTopNow() : Math.max(0, wtTop);
+        if (mode === 'fall') {
+            fallT += dt;
+            acc += dt * 1000;
+            let n = 0;
+            while (acc >= STEP && n < 4) { solidify(STEP / 1000); Mt.Engine.update(engine, STEP); acc -= STEP; n++; }
+            if (n === 4) acc = 0;
+            const kS = ease(Math.min(1, fallT / 0.5));
+            let asleep = fallT > 0.6;
+            for (const s of items) {
+                const b = s.body;
+                if (!b) continue;
+                s.x = b.position.x; s.y = b.position.y + footTop; s.a = b.angle;
+                s.ks = s.k0 + (pileK - s.k0) * kS;
+                s.o = 1;
+                if (!b.isSleeping) asleep = false;
+            }
+            resting = asleep;
+        } else if (mode === 'lift') {
+            liftT += dt;
+            const t = visible ? easeIO(Math.min(1, liftT / 1.1)) : 1;
+            for (const s of items) {
+                floatPose(s, offY);
+                const l = s.l;
+                s.x = l.x + (s.fx - l.x) * t;
+                s.y = l.y + (s.fy - l.y) * t;
+                s.a = l.a + wrapPI(s.fa - l.a) * t;
+                s.ks = l.k + (s.fs - l.k) * t;
+                s.o = l.o + (s.fo - l.o) * t;
+            }
+            if (t >= 1) mode = 'float';
+        } else {
+            for (const s of items) {
+                floatPose(s, offY);
+                s.x = s.fx; s.y = s.fy; s.a = s.fa; s.ks = s.fs; s.o = s.fo;
+            }
+        }
+
+        const hit = pick();
+        if (hit !== hovered) { hovered = hit; setLabel(hit); dirty = true; }
+        let hvMoving = false;
+        const kH = dt ? 1 - Math.exp(-dt * 10) : 1;
+        for (const s of items) {
+            const goal = s === hovered ? 1 : 0;
+            if (Math.abs(goal - s.hv) > 0.002) { s.hv += (goal - s.hv) * kH; hvMoving = true; } else s.hv = goal;
+        }
+
+        const animating = !STATIC && (mode !== 'fall' || !resting);
+        if (animating || moved || hvMoving || dirty) { render(); dirty = false; }
     }
 
     function frame(now) {
         raf = 0;
-        const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
+        const raw = last ? (now - last) / 1000 : 1 / 60;
         last = now;
-        time += dt;
-        draw(dt);
+        tick(Math.min(0.05, raw), Math.min(0.25, raw));
         if (visible) raf = requestAnimationFrame(frame);
     }
-    function kick() { if (!raf && visible && !STATIC) { last = 0; raf = requestAnimationFrame(frame); } }
+    function kick() { if (!raf && visible) { last = 0; raf = requestAnimationFrame(frame); } }
 
     let resizeT = 0, lastW = 0, lastH = 0;
     function onResize() {
         clearTimeout(resizeT);
         resizeT = setTimeout(() => {
-            const w = stage.clientWidth, h = stage.clientHeight;
+            const w = window.innerWidth, h = window.innerHeight;
             if (w === lastW && Math.abs(h - lastH) < 120) return;
             lastW = w; lastH = h;
             measure();
-            if (STATIC && built >= items.length) draw(0);
+            if (mode !== 'float') { clearBodies(); mode = 'float'; }
+            if (STATIC && built >= items.length) staticPile();
+            kick();
         }, 160);
     }
 
     function init() {
-        lastW = stage.clientWidth; lastH = stage.clientHeight;
+        lastW = window.innerWidth; lastH = window.innerHeight;
         if (!STATIC) sec.classList.add('is-armed');
         measure();
-        // The safe zone is the headline's box, which only settles once Brier is in
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); if (STATIC && built >= items.length) draw(0); });
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); kick(); });
         window.addEventListener('resize', onResize, { passive: true });
-        stage.addEventListener('pointermove', (e) => { ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.on = true; }, { passive: true });
-        stage.addEventListener('pointerleave', () => { ptr.on = false; }, { passive: true });
+        window.addEventListener('pointermove', (e) => {
+            ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.on = true;
+            ptr.block = !!(e.target && e.target.closest && e.target.closest('a, button, input, canvas.sig-canvas'));
+        }, { passive: true });
+        document.documentElement.addEventListener('pointerleave', () => { ptr.on = false; }, { passive: true });
+        const seen = new Map();
+        const watch = (es) => {
+            es.forEach((e) => seen.set(e.target, e.isIntersecting));
+            visible = [...seen.values()].some(Boolean);
+            if (visible) kick();
+            else if (hovered) { hovered = null; setLabel(null); }
+        };
         if ('IntersectionObserver' in window) {
             new IntersectionObserver((es) => {
                 near = es[es.length - 1].isIntersecting;
@@ -600,18 +791,20 @@
             const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1200));
             const early = () => idle(() => { near = true; queue(); }, { timeout: 5000 });
             if (document.readyState === 'complete') early(); else window.addEventListener('load', early, { once: true });
-            new IntersectionObserver((es) => {
-                visible = es[es.length - 1].isIntersecting;
-                if (visible) kick();
-                else if (hovered) { hovered = null; setLabel(null); }
-            }).observe(sec);
+            const io = new IntersectionObserver(watch);
+            io.observe(sec);
+            if (foot) io.observe(foot);
         } else {
             near = visible = true;
             queue();
         }
     }
 
-    window.__workTogether = { items, measure, draw: () => draw(0), state: () => ({ W, H, unit, built, buildMs: Math.round(buildMs), pS, safe }) };
+    window.__workTogether = {
+        items, measure, draw: () => { dirty = true; tick(0); },
+        state: () => ({ W, H, unitA, built, buildMs: Math.round(buildMs), mode, pileK, floorY, wtTop, footTop, resting, active,
+            awake: items.filter((s) => s.body && !s.body.isSleeping).length }),
+    };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();
 })();

@@ -1,5 +1,6 @@
 /* Slide 05: Let's work together. The words sit on a sticky stage; work-together.js paints the stack's die-cut stickers
-   on the canvas underneath. The copy is fully visible without JS; .wt.is-armed hides it until the stage arrives. */
+   on a fixed canvas underneath. The section has no fill of its own: slide 04's backdrop canvas (.js-canvas) dithers
+   out straight through it. The copy is fully visible without JS; .wt.is-armed hides it until the stage arrives. */
 
 section.ll-section--together.wt {
     --wt-ink: #f4f2ea;
@@ -13,7 +14,7 @@ section.ll-section--together.wt {
     z-index: 2;
     height: 175vh;
     height: 175dvh;
-    background: var(--wt-void);
+    background: transparent;
     color: var(--wt-ink);
 }
 
@@ -30,27 +31,16 @@ section.ll-section--together.wt {
     isolation: isolate;
 }
 
+/* Viewport-fixed so the stickers can leave the stage and fall into the footer; JS clips it below slide 04 */
 .wt-canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
     display: block;
     z-index: 0;
     pointer-events: none;
-}
-
-/* The soft void: stickers flying through the middle pass behind it, so the headline never fights them */
-.wt-veil {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: min(120vw, 1500px);
-    height: min(86vh, 900px);
-    transform: translate3d(-50%, -50%, 0);
-    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.82) 46%, rgba(0, 0, 0, 0.36) 74%, rgba(0, 0, 0, 0) 100%);
-    pointer-events: none;
-    z-index: 1;
 }
 
 .wt-marks {
@@ -194,7 +184,6 @@ section.ll-section--together.wt {
     .wt-title { font-size: clamp(46px, 13.4vw, 72px); line-height: 0.96; }
     .wt-title em { display: block; }
     .wt-kicker { font-size: 10px; }
-    .wt-veil { width: 150vw; height: 62vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
