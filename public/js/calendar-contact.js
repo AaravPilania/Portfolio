@@ -1,4 +1,4 @@
-// Contact page: a calendar week on signature yellow that refines into a 15-minute slot mosaic, books "I'M BUSY RN"
+// Contact page: a calendar week on the green free-time field that refines into a 15-minute slot mosaic, books "I'M BUSY RN"
 // glyph by glyph, coarsens back to a week and plays the reel's dance at its own 30 fps. During the dance every
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
@@ -23,22 +23,19 @@
     const GLYPH_T = new Float64Array(GLYPH_BEATS.map(beat));
 
     // Google Calendar event colours, in the order of PALETTE in scratch/calendar/reel-build.py: the dance file is
-    // mapped onto these by nearest colour, then drawn with DRAW
+    // mapped onto these by nearest colour
     const SRC = ['#53b44b', '#0b8043', '#616161', '#fbfbfb', '#a6c1f6', '#7986cb', '#5482eb', '#3f51b5', '#039be5',
         '#d50000', '#f4511e', '#f6bf26', '#e67c73'];
-    // Free time is the signature yellow; folds and booked glyphs are the site's void ink; banana is deepened to amber
-    // because it would vanish on yellow
-    const PALETTE = ['#ffed29', '#121316', '#5d5e65', '#fbfaf3', '#a6c1f6', '#7986cb', '#5482eb', '#2f3fa3', '#039be5',
-        '#e5484d', '#ff6a1f', '#c98500', '#e67c73'];
+    const PALETTE = SRC;
     const NP = PALETTE.length;
     const FIELD = 0, BASIL = 1;
     const COL = { field: 0, basil: 1, graphite: 2, lavender: 5, blueberry: 7, peacock: 8, tomato: 9, tangerine: 10, banana: 11, flamingo: 12 };
-    const GAP_BG = '#fff7cf';
+    const GAP_BG = '#d4f5da';
     const VOID = '#121316';
     const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
     const DARK_INK = PALETTE.map((h) => { const [r, g, b] = rgbOf(h); return 0.299 * r + 0.587 * g + 0.114 * b > 125; });
-    // light ink, dark ink, and a quieter dark ink for free time so the meetings read first
-    const INK = ['rgba(255,255,255,0.9)', 'rgba(18,19,22,0.8)', 'rgba(18,19,22,0.3)'];
+    // light ink, dark ink, and the ink of free-time labels
+    const INK = ['rgba(255,255,255,0.9)', 'rgba(32,33,36,0.78)', 'rgba(32,33,36,0.78)'];
     const NI = INK.length;
     const inkOf = (v) => (v === FIELD ? 2 : DARK_INK[v] ? 1 : 0);
 
@@ -694,7 +691,7 @@
         if (nowHour < startHour || nowHour > startHour + hours) return;
         const y = Math.round((nowHour - startHour) * 4 * slotH * dpr);
         const xs = G.levels[0].xs, x0 = xs[today * SUB], x1 = xs[today * SUB + SUB];
-        ctx.fillStyle = '#e5484d';
+        ctx.fillStyle = '#ea4335';
         ctx.fillRect(x0, y - Math.round(dpr), x1 - x0, Math.max(2, Math.round(2 * dpr)));
         ctx.beginPath();
         ctx.arc(x0, y, 5 * dpr, 0, Math.PI * 2);

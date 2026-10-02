@@ -477,8 +477,8 @@ body.gc {
     transform: rotate(45deg);
 }
 
-.ct__sw--free { background: var(--sig); }
-.ct__sw--busy { background: var(--void); box-shadow: inset 0 0 0 1px rgba(244, 242, 234, 0.45); }
+.ct__sw--free { background: #53b44b; }
+.ct__sw--busy { background: #0b8043; }
 .ct__sw--busy::after { border-color: var(--paper); }
 .ct__sw--gh { background: var(--paper); }
 .ct__sw--home { background: transparent; box-shadow: inset 0 0 0 1px rgba(244, 242, 234, 0.45); }
