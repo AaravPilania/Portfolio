@@ -11,14 +11,14 @@
     <meta property="og:description" content="Your move. A calendar week that schedules itself into a dance.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preload" href="data/calendar-dance.bin" as="fetch" crossorigin>
     <link rel="stylesheet" href="css/calendar-contact.css">
 </head>
 
 <body class="gc">
     <h1 class="gc-sr">Contact — Your move</h1>
-    <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "Your move", then stretch and slide to become a dancing figure before being cancelled back into free time.</p>
+    <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "Your move", then stretch and slide to become a dancing figure before being cancelled back into free time. Join the dance turns on your camera and books you into the week the same way; the video never leaves your device.</p>
 
     <div class="gc-times" id="gcTimes" aria-hidden="true"></div>
     <canvas class="gc-canvas" id="gcCanvas" aria-hidden="true"></canvas>
@@ -28,8 +28,47 @@
         <span>Click anywhere for sound</span>
     </div>
 
+    <aside class="gc-cam" id="gcCam" aria-label="Join the dance">
+        <section class="gc-cam__card is-open">
+            <button class="gc-cam__head" type="button" aria-expanded="true" aria-controls="gcCamBody">
+                <span>[ Join the dance ]</span>
+                <span class="gc-cam__toggle" aria-hidden="true">( − )</span>
+            </button>
+            <div class="gc-cam__body" id="gcCamBody">
+                <div class="gc-cam__inner">
+                    <p class="gc-cam__note">Book yourself into the week. Your camera stays on this device.</p>
+                    <button class="gc-cam__pill" type="button" id="gcCamGo">
+                        <span class="gc-cam__rec" aria-hidden="true"></span>
+                        <span class="gc-cam__label">Activate camera</span>
+                    </button>
+                    <p class="gc-cam__msg" id="gcCamMsg" role="status" aria-live="polite" hidden></p>
+                </div>
+            </div>
+        </section>
+        <section class="gc-cam__card gc-cam__settings" id="gcCamSettings" aria-label="Grid settings" hidden>
+            <div class="gc-cam__head gc-cam__head--static"><span>[ Grid settings ]</span></div>
+            <div class="gc-cam__row">
+                <span class="gc-cam__key">Slots</span>
+                <div class="gc-seg" role="radiogroup" aria-label="Slot size">
+                    <button type="button" role="radio" aria-checked="true" data-cell="0"><i class="gc-seg__ico gc-seg__ico--fine" aria-hidden="true"></i>Fine</button>
+                    <button type="button" role="radio" aria-checked="false" data-cell="1"><i class="gc-seg__ico gc-seg__ico--mid" aria-hidden="true"></i>Mid</button>
+                    <button type="button" role="radio" aria-checked="false" data-cell="2"><i class="gc-seg__ico gc-seg__ico--coarse" aria-hidden="true"></i>Coarse</button>
+                </div>
+            </div>
+            <div class="gc-cam__row">
+                <span class="gc-cam__key">Ink</span>
+                <div class="gc-seg gc-seg--two" role="radiogroup" aria-label="Palette">
+                    <button type="button" role="radio" aria-checked="true" data-mono="0">Colour</button>
+                    <button type="button" role="radio" aria-checked="false" data-mono="1">Mono</button>
+                </div>
+            </div>
+        </section>
+    </aside>
+    <button class="gc-back" id="gcBack" type="button" hidden><span aria-hidden="true">↙</span> Back to dance</button>
+
     <script src="js/calendar-audio.js"></script>
     <script src="js/calendar-grain.js"></script>
+    <script src="js/calendar-camera.js"></script>
     <script src="js/calendar-contact.js"></script>
 </body>
 

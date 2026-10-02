@@ -2,6 +2,8 @@
 // sub-column is a stack of real meetings: runs of same-colour slots are matched frame to frame and their edges glide at
 // display rate, so the meetings themselves stretch, slide, split and merge into the dancer. A rising line then cancels
 // them into free time and the grid coarsens into the ordinary week. One 12-bar cycle locked to the soundtrack loop.
+// Camera mode (calendar-camera.js) books the visitor's mirrored webcam into the same moving meetings instead of the
+// dancer; the cursor grain, beat puffs and the dissolve between the two live in calendar-grain.js.
 (() => {
     'use strict';
 
@@ -77,8 +79,11 @@
     const TITLES = ['Sync', 'Focus Time', 'Lunch', '1:1', 'Standup', 'Design Review', 'Q3 Planning', 'All Hands', 'Code Review',
         'Retro', 'Deep Work', 'Coffee Chat', 'Hiring Sync', 'Office Hours', 'Planning', 'Gym', 'Weekly', 'Product Review',
         'Mentoring', 'Team Lunch', 'Demo', 'Email', 'Notes', 'Prep'];
-    // Titles of the meetings that spell the glyphs
+    // Titles of the meetings that spell the glyphs, then the visitor's in camera mode
     const PINGS = ['Your turn', 'Ping', 'RSVP', 'Slot open', 'Hi?', 'Your call', 'Make a move'];
+    const YOU = ['You', 'Dance break', 'Busy dancing', 'OOO', 'Groove', 'Live', 'On camera'];
+    const NAMES = TITLES.concat(PINGS, YOU);
+    const PING0 = TITLES.length, YOU0 = PING0 + PINGS.length;
 
     // 5x7 bitmap glyphs: '#' is one glyph pixel, booked as one sub-column by G.textPu row units
     const GLYPHS = {
@@ -112,6 +117,8 @@
     // Dance frames live on the reel's grid (7 sub-columns/day, 15-minute slots), glyphs on the text level; levels vote
     // over whichever is showing
     const REEL_SC = 7, REEL_SQ = 2, MAX_SD = 12;
+    // Camera mode's level: fine / mid / coarse rows of 7.5, 15 or 30 minutes, sub-columns keeping the reel's cell shape
+    const CAM_LV = 9, CAM_Q = [1, 2, 4], CAM_MAX_S = 24, MAX_S = Math.max(MAX_SD, CAM_MAX_S), CAM_LABEL_MIN = 16;
     const M_WEEK = 0, M_EMPTY = 1, M_TEXT = 2, M_DANCE = 3, M_WEEKGRID = 4;
     // Same-colour runs at most this many rows apart are the same meeting moving, not a new one
     const MATCH_GAP = 1;
@@ -124,12 +131,14 @@
     const snack = document.getElementById('gcSnack');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const grain = window.CalendarGrain && CalendarGrain.enabled ? CalendarGrain : null;
+    const camera = window.CalendarCamera || null;
 
     let G = null;          // layout
     let dance = null;      // { w, h, n, frames: Uint8Array(n*w*h) } in PALETTE indices
     let lastKey = -1, lastT = -1;
     let wallStart = performance.now();
     let lastRaw = -Infinity;
+    let camOn = false, camCell = 0, camMono = false, camK = -1;
 
     // India keeps one offset all year
     const IST_MS = 5.5 * 3600e3;
@@ -184,6 +193,7 @@
         }
         G.textPu = pu;
         G.levels = LV.map((lv, i) => buildLevel(i === 7 ? { S: sd, q: 2 } : i === TEXT_LV ? { S: ts, q: Math.min(2, pu) } : lv, i));
+        G.levels[CAM_LV] = buildLevel(camSpec(), CAM_LV);
         // Dance refine steps (1 -> 3 -> 5 -> 7 sub-columns, then the finest) skip any that would not be coarser
         G.danceLv = [5, 6, 1, 0, 7].map((l) => (l !== 7 && LV[l].S >= sd ? 7 : l));
 
@@ -193,11 +203,9 @@
         canvas.style.height = gh + 'px';
         const root = document.documentElement.style;
         root.setProperty('--gc-gutter', gutter + 'px');
-        // keep mask for the grain filter: dancer and glyph blocks white, the rest black
-        G.mask = grain ? grain.layout({ canvas, x0: G.levels[0].xs[0], W: G.W, H: G.H, vw, vh: gh, dpr }) : null;
-        G.keep = false;
+        if (grain) grain.layout({ canvas, x0: G.levels[0].xs[0], W: G.W, H: G.H, vw, vh: gh, dpr });
 
-        const cells = 7 * MAX_SD * R, cols = 7 * MAX_SD;
+        const cells = 7 * MAX_S * R, cols = 7 * MAX_S;
         G.evC = new Uint8Array(cells); G.evX = new Int32Array(cells); G.evY = new Int32Array(cells);
         G.evW = new Int32Array(cells); G.evH = new Int32Array(cells); G.evT = new Uint8Array(cells); G.evR = new Uint8Array(cells);
         G.order = new Uint16Array(cells); G.bucket = new Uint16Array(NP + 1);
@@ -221,6 +229,7 @@
         G.field.width = G.W; G.field.height = G.H;
         G.fieldCtx = G.field.getContext('2d', { alpha: false });
         G.fieldLv = -1;
+        G.cam = null;
 
         buildWeek();
         buildGlyphs();
@@ -228,6 +237,12 @@
         buildAtlas();
         G.weekCache = null;
         lastKey = -1;
+        camK = -1;
+    }
+
+    function camSpec() {
+        const q = CAM_Q[camCell];
+        return { S: Math.max(1, Math.min(CAM_MAX_S, Math.round(G.dayW / (q * G.unitH * 1.09)))), q };
     }
 
     function makeRuns(n, cols) {
@@ -347,7 +362,7 @@
         const { labelH, fs, dpr, padX, R, startHour } = G;
         const atlas = document.createElement('canvas');
         atlas.width = Math.max(...G.levels.map((l) => l.labelW));
-        const names = TITLES.concat(PINGS);
+        const names = NAMES;
         atlas.height = (names.length + R / 2) * NI * labelH;
         const a = atlas.getContext('2d');
         a.textBaseline = 'top';
@@ -461,7 +476,8 @@
         const tw = G.tw, m = tw.n, xs = emitLv.xs, gx = emitLv.gx;
         tw.c[m] = v; tw.x[m] = xs[c] + gx - (gx >> 1); tw.w[m] = xs[c + 1] - xs[c] - gx;
         tw.t0[m] = t0; tw.b0[m] = b0; tw.t1[m] = t1; tw.b1[m] = b1; tw.f[m] = f;
-        tw.ti[m] = v === OCHRE ? TITLES.length + (c * 3 + Math.floor(t0) * 5) % PINGS.length : (c * 7 + v * 5) % TITLES.length;
+        tw.ti[m] = camOn ? YOU0 + (c * 7 + v * 5) % YOU.length
+            : v === OCHRE ? PING0 + (c * 3 + Math.floor(t0) * 5) % PINGS.length : (c * 7 + v * 5) % TITLES.length;
         tw.o[m] = (((c * 2654435761) ^ (v * 40503)) >>> 0) % 997 / 997;
         tw.n = m + 1;
     }
@@ -573,21 +589,18 @@
             JT[i] = (f & 1 ? 0 : 1 - e) + (f & 2 ? 0 : e);
             JB[i] = (f & 4 ? 0 : 1 - e) + (f & 8 ? 0 : e);
         }
-        // two layers (meetings being overwritten, then the rest), each: gaps punched into the free time, then ink.
-        // Every piece is dancer or glyph, so the keep mask gets the same rects: gaps black, ink white.
-        const order = tw.order, under = tw.under, mk = G.mask;
-        const fill = mk ? (x, y, w, h) => { ctx.fillRect(x, y, w, h); mk.fillRect(x, y, w, h); } : (x, y, w, h) => ctx.fillRect(x, y, w, h);
+        // two layers (meetings being overwritten, then the rest), each: gaps punched into the free time, then ink
+        const order = tw.order, under = tw.under;
+        const fill = (x, y, w, h) => ctx.fillRect(x, y, w, h);
         for (let layer = 0; layer < 2; layer++) {
             const j0 = layer ? under : 0, j1 = layer ? n : under;
             ctx.fillStyle = GAP_BG;
-            if (mk) mk.fillStyle = '#000';
             for (let j = j0; j < j1; j++) {
                 const i = order[j];
                 if (Y1[i] - Y0[i] < thin || F[i] & BACKING) continue;
                 const oy = Math.round(Y0[i] - gya * JT[i]);
                 fill(X[i], oy, Wd[i], Math.round(Y1[i] + gyb * JB[i]) - oy);
             }
-            if (mk) mk.fillStyle = '#fff';
             let cur = -1;
             for (let j = j0; j < j1; j++) {
                 const i = order[j];
@@ -602,8 +615,9 @@
                 if (cr === 2) fill(x + 1, y + 1, w - 2, h - 2);
             }
         }
-        if (mk) G.keep = true;
         const { labelH, padX, padY, minLabelW } = G, lw = lv.labelW, atlas = G.atlas;
+        // the visitor's finest slots are too narrow to letter: they read as pixels, like a photo
+        if (camOn && lw < CAM_LABEL_MIN * G.dpr) return;
         if (lw >= minLabelW) {
             for (let i = 0; i < n; i++) {
                 if (JT[i] < 0.5 || (F[i] & UNDER && e > 0)) continue;
@@ -686,7 +700,7 @@
             cx.fillRect(x, y + cr, w, h - cr * 2);
             if (cr === 2) cx.fillRect(x + 1, y + 1, w - 2, h - 2);
         }
-        const atlas = G.atlas, lw = lv.labelW, ER = G.evR, timeRow = (TITLES.length + PINGS.length) * NI, timed = lv.S <= 3;
+        const atlas = G.atlas, lw = lv.labelW, ER = G.evR, timeRow = NAMES.length * NI, timed = lv.S <= 3;
         if (lw >= minLabelW) {
             for (let i = 0; i < n; i++) {
                 if (EH[i] < labelH * 0.8 + padY) continue;
@@ -832,18 +846,10 @@
         buildTweens(lv, G.runA, G.runB);
     }
 
-    function maskClear() {
-        if (!G.keep) return;
-        G.keep = false;
-        G.mask.fillStyle = '#000';
-        G.mask.fillRect(0, 0, G.W, G.H);
-    }
-
     function render(t) {
         const key = scene(t);
         if (sMode === M_DANCE) {
             if (key === lastKey && t === lastT) return false;
-            maskClear();
             const lv = G.levels[sLevel];
             if (key !== lastKey) buildStep(lv, sArg);
             lastKey = key; lastT = t;
@@ -855,7 +861,6 @@
         }
         if (key === lastKey) return false;
         lastKey = key;
-        maskClear();
         if (sMode === M_WEEK) {
             drawWeek();
             nowLine();
@@ -877,6 +882,171 @@
         return true;
     }
 
+    // ---------------------------------------------------------------- camera mode
+    // The visitor in four lightness bands of meeting colours under free time, darkest first; each band's first colour
+    // is its neutral, the others take over where the camera sees their hue
+    const CAM_FPS = 30;
+    const BANDS = [
+        [COL.graphite, COL.blueberry, COL.basil],
+        [OCHRE, COL.peacock, COL.basil],
+        [COL.flamingo, COL.lavender],
+        [COL.banana, 4],
+    ];
+    const MONO_BANDS = [[COL.graphite], [OCHRE], [OCHRE], [COL.banana]];
+    const BAND_EDGE = [0.24, 0.5, 0.76];
+    const hueOf = (h) => { const [r, g, b] = rgbOf(h), y = 0.299 * r + 0.587 * g + 0.114 * b, u = r - y, w = b - y, m = Math.hypot(u, w) || 1; return [u / m, w / m]; };
+    const HUE = PALETTE.map(hueOf);
+    const BAND_OF = new Int8Array(NP).fill(-1);
+    BANDS.forEach((b, i) => b.forEach((v) => { if (BAND_OF[v] < 0) BAND_OF[v] = i; }));
+    const FIELD_IN = 0.66, FIELD_OUT = 0.6, CHROMA_MIN = 9, BAND_HOLD = 0.05;
+
+    // One webcam frame (one RGBA pixel per cell, row-major) into cell colours: eased per cell against sensor noise,
+    // auto-levelled, free time above FIELD_IN, a lightness band below it and the band colour nearest the camera's hue
+    // (its neutral when the hue is too weak to trust). Cells near a band edge or a colour tie keep what they were, so
+    // meetings hold still while the visitor does.
+    function camQuantise(lv, px, prevCol, col, key) {
+        const { C, Rq } = lv, n = C * Rq;
+        if (!G.cam || G.cam.n !== n) G.cam = { n, rgb: new Float32Array(n * 3), hist: new Uint32Array(64), lo: 0, hi: 255, fresh: true, cx: -1, cy: -1 };
+        const S = G.cam, rgb = S.rgb, hist = S.hist, k = S.fresh ? 1 : 0.6;
+        hist.fill(0);
+        for (let r = 0; r < Rq; r++) for (let c = 0; c < C; c++) {
+            const p = (r * C + c) * 4, j = (c * Rq + r) * 3;
+            rgb[j] += (px[p] - rgb[j]) * k;
+            rgb[j + 1] += (px[p + 1] - rgb[j + 1]) * k;
+            rgb[j + 2] += (px[p + 2] - rgb[j + 2]) * k;
+            hist[Math.min(63, (0.299 * rgb[j] + 0.587 * rgb[j + 1] + 0.114 * rgb[j + 2]) >> 2)]++;
+        }
+        let acc = 0, lo = -1, hi = 63;
+        for (let b = 0; b < 64; b++) {
+            acc += hist[b];
+            if (lo < 0 && acc > n * 0.03) lo = b;
+            if (acc >= n * 0.97) { hi = b + 1; break; }
+        }
+        const ease = S.fresh ? 1 : 0.08;
+        S.lo += (lo * 4 - S.lo) * ease;
+        S.hi += (hi * 4 - S.hi) * ease;
+        const span = Math.max(32, S.hi - S.lo);
+        const bands = camMono ? MONO_BANDS : BANDS;
+        let sx = 0, sy = 0, sn = 0;
+        for (let c = 0; c < C; c++) for (let r = 0; r < Rq; r++) {
+            const i = c * Rq + r, j = i * 3;
+            const R = rgb[j], B = rgb[j + 2], y = 0.299 * R + 0.587 * rgb[j + 1] + 0.114 * B;
+            const l = (y - S.lo) / span, prev = prevCol ? prevCol[i] : -1;
+            let v;
+            if (l > (prev === FIELD ? FIELD_OUT : FIELD_IN)) v = FIELD;
+            else {
+                const m = l / FIELD_IN;
+                let band = m < BAND_EDGE[0] ? 0 : m < BAND_EDGE[1] ? 1 : m < BAND_EDGE[2] ? 2 : 3;
+                const pb = prev >= 0 ? BAND_OF[prev] : -1;
+                if (pb >= 0 && Math.abs(pb - band) === 1 && Math.abs(m - BAND_EDGE[Math.min(pb, band)]) < BAND_HOLD) band = pb;
+                const list = bands[band];
+                v = list[0];
+                const u = R - y, w = B - y, ch = Math.hypot(u, w);
+                if (list.length > 1 && ch > CHROMA_MIN) {
+                    let best = -2, keep = -2;
+                    for (let q = 1; q < list.length; q++) {
+                        const h = HUE[list[q]], s = (u * h[0] + w * h[1]) / ch;
+                        if (s > best) { best = s; v = list[q]; }
+                        if (list[q] === prev) keep = s;
+                    }
+                    if (best < 0.55) v = list[0];
+                    else if (keep > best - 0.12) v = prev;
+                }
+            }
+            col[i] = key[i] = v;
+            if (v !== FIELD) { sx += c; sy += r; sn++; }
+        }
+        S.fresh = false;
+        const ok = sn > n * 0.04 && sn < n * 0.85;
+        S.cx = ok ? sx / sn : -1;
+        S.cy = ok ? sy / sn : -1;
+    }
+
+    // The dance's own motion: camera frames arrive at 30 fps and each one's meetings travel from the last frame's
+    function renderCam(now) {
+        const lv = G.levels[CAM_LV];
+        const k = Math.floor(now * CAM_FPS / 1000);
+        if (k !== camK) {
+            const px = camera ? camera.grab(lv.C, lv.Rq, G.gw / G.gh) : null;
+            if (px) {
+                const first = camK < 0;
+                let s = G.colA; G.colA = G.colB; G.colB = s;
+                s = G.keyA; G.keyA = G.keyB; G.keyB = s;
+                s = G.runA; G.runA = G.runB; G.runB = s;
+                camQuantise(lv, px, first ? null : G.colA, G.colB, G.keyB);
+                extractRuns(lv, G.colB, G.runB);
+                buildTweens(lv, first ? G.runB : G.runA, G.runB);
+                camK = k;
+            }
+        }
+        drawField(CAM_LV);
+        if (camK >= 0) drawPieces(lv, Math.min(1, now * CAM_FPS / 1000 - camK), -1);
+        return true;
+    }
+
+    function camEnter() {
+        if (grain && !reduceMotion.matches) grain.dissolve(performance.now());
+        camOn = true;
+        camK = -1;
+        G.cam = null;
+    }
+
+    function camExit(instant) {
+        if (!instant && grain && !reduceMotion.matches) grain.dissolve(performance.now());
+        camOn = false;
+        lastKey = -1;
+        G.fineFrame = -1;
+    }
+
+    function camSettings(s) {
+        const cellChanged = s.cell !== camCell, changed = cellChanged || s.mono !== camMono;
+        camCell = s.cell;
+        camMono = s.mono;
+        if (!G || !changed) return;
+        if (camOn && grain && !reduceMotion.matches) grain.dissolve(performance.now());
+        if (cellChanged) {
+            G.levels[CAM_LV] = buildLevel(camSpec(), CAM_LV);
+            G.fieldLv = -1;
+            G.cam = null;
+            buildAtlas();
+        }
+        camK = -1;
+    }
+
+    // ---------------------------------------------------------------- beat puffs
+    // Where the dancer (or the visitor) is on screen, in css px; null while there is nobody to throw grain off
+    function dancerCentre(t) {
+        if (!dance || !G.samples || t < T.dance || t >= T.dissolve) return null;
+        const f = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
+        if (dance.mass[f] < 12) return null;
+        const lv = G.levels[7], C = lv.C, W = dance.w;
+        const col = dance.cx[f] - (C >= W ? Math.floor((W - C) / 2) : lv.shift[f] / (G.R / REEL_SQ));
+        if (col < 0 || col >= C) return null;
+        const i = Math.floor(col);
+        return [(lv.xs[i] + (col - i) * (lv.xs[i + 1] - lv.xs[i])) / G.dpr, dance.cy[f] / dance.h * G.gh];
+    }
+
+    function camCentre() {
+        const S = G.cam, lv = G.levels[CAM_LV];
+        if (!S || S.cx < 0) return null;
+        const x0 = lv.xs[0], x1 = lv.xs[lv.C];
+        return [(x0 + (S.cx + 0.5) / lv.C * (x1 - x0)) / G.dpr, (S.cy + 0.5) / lv.Rq * G.gh];
+    }
+
+    // Every beat a small puff off the dancer, a firmer one on each bar's downbeat; the visitor only on downbeats
+    const PUFF_BEAT = 0.45, PUFF_DOWN = 0.8;
+    let lastBeat = -1;
+    function beatPuff(t) {
+        const b = Math.floor(t / BEAT);
+        if (b === lastBeat) return;
+        const first = lastBeat < 0;
+        lastBeat = b;
+        if (first || !grain.trail) return;
+        const down = b % 4 === 0;
+        const p = camOn ? (down ? camCentre() : null) : dancerCentre(t);
+        if (p) grain.puff(p[0], p[1], down ? PUFF_DOWN : PUFF_BEAT);
+    }
+
     // ?t=<seconds> pins the cycle to one moment (stills, debugging)
     let frozen = parseFloat(new URLSearchParams(location.search).get('t'));
     if (!Number.isFinite(frozen)) frozen = null;
@@ -889,11 +1059,13 @@
     function tick(ts) {
         const a = performance.now();
         // Sampled half a frame ahead so each step lands within +-half a vsync of its beat instead of up to a whole one late
-        const drew = render(reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2));
-        if (drew) {
-            if (grain) grain.draw(G.keep);
-            perfDraw[perfI++ % PERF_N] = performance.now() - a;
+        const t = reduceMotion.matches ? T.textFull : frozen !== null ? frozen : cycleTime(ts + frameDt / 2);
+        const drew = camOn ? renderCam(ts) : render(t);
+        if (grain) {
+            beatPuff(t);
+            grain.frame(drew, ts);
         }
+        if (drew || (grain && grain.active)) perfDraw[perfI++ % PERF_N] = performance.now() - a;
         if (lastTs) {
             perfDelta[perfJ++ % PERF_N] = ts - lastTs;
             frameDt += (Math.min(34, Math.max(6, ts - lastTs)) - frameDt) * 0.05;
@@ -928,18 +1100,22 @@
         for (let i = size; i < n * size; i++) frames[i] = raw[i] ^ frames[i - size];
         for (let i = 0; i < n * size; i++) frames[i] = remap[frames[i]];
         // Per-frame dancer centre, averaged over +-8 frames so a narrow window glides instead of jittering
-        const cen = new Float64Array(n), cx = new Float64Array(n);
+        const cen = new Float64Array(n), ceny = new Float64Array(n), cx = new Float64Array(n), cy = new Float64Array(n);
+        const mass = new Uint16Array(n);
         for (let f = 0; f < n; f++) {
-            let sx = 0, sn = 0;
-            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { sx += i % w; sn++; }
+            let sx = 0, sy = 0, sn = 0;
+            for (let i = 0; i < size; i++) if (frames[f * size + i] !== FIELD) { sx += i % w; sy += Math.floor(i / w); sn++; }
             cen[f] = sn ? sx / sn + 0.5 : w / 2;
+            ceny[f] = sn ? sy / sn + 0.5 : h / 2;
+            mass[f] = sn;
         }
         for (let f = 0; f < n; f++) {
-            let sum = 0, k = 0;
-            for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; k++; }
+            let sum = 0, sumy = 0, k = 0;
+            for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; sumy += ceny[j]; k++; }
             cx[f] = sum / k;
+            cy[f] = sumy / k;
         }
-        dance = { w, h, n, frames, cx };
+        dance = { w, h, n, frames, cx, cy, mass };
         if (G) { buildSampler(); lastKey = -1; }
     }
 
@@ -959,6 +1135,7 @@
     }
 
     loadDance('data/calendar-dance.bin').catch(() => {});
+    if (camera) camera.attach({ enter: camEnter, exit: camExit, settings: camSettings });
 
     if (window.CalendarAudio) {
         CalendarAudio.onStart(() => {
@@ -984,6 +1161,9 @@
         bench: (t) => { const a = performance.now(); lastKey = -1; render(t); return performance.now() - a; },
         pieces: () => G.tw.n,
         ready: () => !!(dance && G.samples),
+        centre: (t) => (camOn ? camCentre() : dancerCentre(t)),
+        puff: (t, amp = PUFF_DOWN) => { const p = camOn ? camCentre() : dancerCentre(t); if (p && grain) grain.puff(p[0], p[1], amp); return p; },
+        cam: () => ({ on: camOn, level: G.levels[CAM_LV].S + 'x' + G.levels[CAM_LV].q, cells: G.levels[CAM_LV].C * G.levels[CAM_LV].Rq, frame: camK, cell: camCell, mono: camMono }),
         perfReset: () => { perfI = 0; perfJ = 0; lastTs = 0; },
         perf: () => ({
             draws: perfI, drawP50: pct(perfDraw, perfI, 0.5), drawP95: pct(perfDraw, perfI, 0.95), drawMax: pct(perfDraw, perfI, 1),

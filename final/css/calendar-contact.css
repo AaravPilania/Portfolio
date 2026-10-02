@@ -5,6 +5,10 @@
     --gc-ink-soft: #5f6368;
     --gc-line: #dadce0;
     --gc-font: 'Google Sans', Roboto, 'Segoe UI', Arial, sans-serif;
+    --gc-mono: 'IBM Plex Mono', 'Sometype Mono', ui-monospace, monospace;
+    --void: #000;
+    --off: #f9f4eb;
+    --rec: #ea4335;
     --gc-pad-l: 4px;
     --gc-pad-r: 5px;
     /* written by calendar-contact.js from the widest hour label, so the column and the canvas grid share one edge */
@@ -50,15 +54,18 @@ body.gc {
     top: 0;
     display: block;
     z-index: 1;
+    /* touch drags paint the grain instead of panning */
+    touch-action: none;
 }
 
-/* the slide-4 dot grid over the calendar grid only; sized and placed by calendar-grain.js */
+/* the cursor grain over the calendar grid only; sized, placed and shown by calendar-grain.js while it has anything to draw */
 .gc-grain {
     position: fixed;
     top: 0;
     display: block;
     z-index: 1;
     pointer-events: none;
+    visibility: hidden;
 }
 
 /* ---------- time column ---------- */
@@ -123,6 +130,267 @@ body.gc {
     visibility: hidden;
 }
 
+/* ---------- join the dance: sticky chip, grid settings, back pill ---------- */
+.gc-cam {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 184px;
+    font-family: var(--gc-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--off);
+    animation: gc-cam-in 0.7s cubic-bezier(0.2, 0.7, 0, 1) 1.4s both;
+}
+
+@keyframes gc-cam-in {
+    from {
+        opacity: 0;
+        transform: translate3d(0, -8px, 0);
+    }
+}
+
+.gc-cam__card {
+    border-radius: 4px;
+    background: var(--void);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 8px 24px -12px rgba(0, 0, 0, 0.45);
+}
+
+.gc-cam__card[hidden] {
+    display: none;
+}
+
+.gc-cam__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 11px 12px 10px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gc-cam__head--static {
+    cursor: default;
+}
+
+.gc-cam__toggle {
+    opacity: 0.6;
+    white-space: pre;
+}
+
+.gc-cam__body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.45s cubic-bezier(0.2, 0.7, 0, 1);
+}
+
+.gc-cam__card.is-open .gc-cam__body {
+    grid-template-rows: 1fr;
+}
+
+.gc-cam__inner {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.gc-cam__note {
+    margin: 0;
+    padding: 0 12px 10px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    text-transform: none;
+    color: rgba(249, 244, 235, 0.58);
+}
+
+.gc-cam__pill,
+.gc-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 999px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.gc-cam__pill {
+    margin: 0 8px 8px;
+    padding: 9px 12px 8px;
+    background: var(--off);
+    color: var(--void);
+}
+
+.gc-cam__pill:hover,
+.gc-cam__pill:focus-visible {
+    background: var(--sig);
+}
+
+.gc-cam__pill:disabled {
+    cursor: progress;
+}
+
+.gc-cam__rec {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--rec);
+}
+
+.gc-cam__pill:disabled .gc-cam__rec,
+.is-cam .gc-cam__rec {
+    animation: gc-rec 1.1s steps(2, jump-none) infinite;
+}
+
+@keyframes gc-rec {
+    50% {
+        opacity: 0.25;
+    }
+}
+
+.gc-cam__msg {
+    margin: 0;
+    padding: 0 12px 10px;
+    color: var(--sig);
+    letter-spacing: 0.04em;
+}
+
+.gc-cam__msg[hidden] {
+    display: none;
+}
+
+.gc-cam__row {
+    display: grid;
+    gap: 6px;
+    padding: 0 8px 10px;
+}
+
+.gc-cam__key {
+    padding: 0 4px;
+    font-size: 9px;
+    color: rgba(249, 244, 235, 0.5);
+}
+
+.gc-seg {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 2px;
+    border-radius: 3px;
+    background: #1d1e1e;
+}
+
+.gc-seg--two {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.gc-seg button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 0 6px;
+    border: 0;
+    border-radius: 2px;
+    background: none;
+    color: rgba(249, 244, 235, 0.62);
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.gc-seg--two button {
+    padding: 8px 0 7px;
+}
+
+.gc-seg button:hover {
+    color: var(--off);
+}
+
+.gc-seg button[aria-checked='true'] {
+    background: var(--off);
+    color: var(--void);
+}
+
+/* each slot size drawn as the grid it books */
+.gc-seg__ico {
+    width: 14px;
+    height: 12px;
+    --l: rgba(127, 127, 127, 0.9);
+    background:
+        repeating-linear-gradient(90deg, var(--l) 0 1px, transparent 1px var(--p)),
+        repeating-linear-gradient(180deg, var(--l) 0 1px, transparent 1px var(--q));
+    box-shadow: inset -1px -1px 0 var(--l);
+}
+
+.gc-seg__ico--fine {
+    --p: 3.5px;
+    --q: 3px;
+}
+
+.gc-seg__ico--mid {
+    --p: 7px;
+    --q: 6px;
+}
+
+.gc-seg__ico--coarse {
+    --p: 14px;
+    --q: 12px;
+}
+
+.gc-back {
+    position: fixed;
+    left: calc(var(--gc-gutter) + 16px);
+    bottom: 20px;
+    z-index: 6;
+    padding: 11px 16px 10px 14px;
+    background: var(--void);
+    color: var(--off);
+    font-family: var(--gc-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    animation: gc-cam-in 0.5s cubic-bezier(0.2, 0.7, 0, 1) 0.35s both;
+}
+
+.gc-back[hidden] {
+    display: none;
+}
+
+.gc-back:hover,
+.gc-back:focus-visible {
+    background: var(--sig);
+    color: var(--void);
+}
+
+.gc-cam button:focus-visible,
+.gc-back:focus-visible {
+    outline: 1px solid var(--sig);
+    outline-offset: 2px;
+}
+
 /* ---------- phones ---------- */
 @media (max-width: 699px) {
     :root {
@@ -147,10 +415,87 @@ body.gc {
     .gc-snack[hidden] {
         transform: translate3d(-50%, -8px, 0);
     }
+
+    .gc-cam {
+        top: auto;
+        left: calc(var(--gc-gutter) + 8px);
+        right: 8px;
+        bottom: max(8px, env(safe-area-inset-bottom));
+        width: auto;
+    }
+
+    .gc-cam__card:first-child {
+        display: flex;
+        align-items: center;
+    }
+
+    .gc-cam__card:first-child .gc-cam__head {
+        width: auto;
+        flex: none;
+        cursor: default;
+        pointer-events: none;
+    }
+
+    .gc-cam__toggle,
+    .gc-cam__note {
+        display: none;
+    }
+
+    .gc-cam__body,
+    .gc-cam__card.is-open .gc-cam__body {
+        display: block;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .gc-cam__inner {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .gc-cam__pill {
+        margin: 6px;
+    }
+
+    .gc-cam__msg {
+        flex-basis: 100%;
+        padding: 0 12px 8px;
+        text-align: right;
+    }
+
+    .is-cam .gc-cam__card:first-child {
+        display: none;
+    }
+
+    .gc-cam__settings {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+    }
+
+    .gc-cam__settings .gc-cam__head {
+        grid-column: 1 / -1;
+        padding-bottom: 8px;
+    }
+
+    .gc-back {
+        left: calc(var(--gc-gutter) + 8px);
+        bottom: auto;
+        top: max(10px, env(safe-area-inset-top));
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .gc-snack {
+    .gc-snack,
+    .gc-cam__body,
+    .gc-cam__pill,
+    .gc-seg button {
         transition: none;
+    }
+
+    .gc-cam,
+    .gc-back,
+    .gc-cam__rec {
+        animation: none !important;
     }
 }
