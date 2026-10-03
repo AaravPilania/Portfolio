@@ -1,109 +1,182 @@
-// The contact band over the calendar: headline, Aarav's pill, [ Get in touch ], two mail buttons with a riding
-// tooltip, and a footer strip with New Delhi's clock. The pill opens the invite, "Work with Aarav", organised by Aarav
-// (his portrait is the organizer's event block) with one open guest slot. "Book yourself in" turns on the camera and
-// renders the visitor into that slot as a stack of calendar meetings in the page's yellows; four beats of the
-// soundtrack count in and the next downbeat takes the shot. The camera stops right there, the slot keeps the portrait,
-// the visitor is "going", and the RSVP is one mail away. Frames are read from a 30 x 38 pixel canvas and never leave
-// the page.
+// The contact UI over the calendar, element for element after lamalama.com/contact: headline and lines rise out of
+// clips, mono labels type in as glyphs and resolve, outline buttons fill with an arrow swap and a tooltip riding the
+// cursor, a live New Delhi clock in the footer bar, two panels top right. "Join the calendar" is their "Join in our
+// DNA": "Book yourself in" steps the contact copy out (their camera mode), turns on the camera and renders the visitor
+// into the panel as a stack of calendar meetings; four beats of the soundtrack count in and the next downbeat takes
+// the shot. The camera stops there, the panel keeps the portrait, and the RSVP is one mail away. "Calendar settings"
+// is their grid settings: the slider dims the week under the type, the toggle flips dark and light. Frames are read
+// from a 30 x 38 pixel canvas and never leave the page.
 const CONTACT = {
     email: 'aaravpilania2006@gmail.com',
-    // full profile URLs; a link stays hidden while its value is empty
-    linkedin: '',
-    x: '',
     github: 'https://github.com/AaravPilania',
 };
 
 (() => {
     'use strict';
 
-    const band = document.getElementById('gcContact'), card = document.getElementById('gcInvite');
-    if (!band || !card) return;
+    const root = document.body, section = document.getElementById('gcContact'), panel = document.getElementById('gcBooth');
+    if (!section || !panel) return;
     const $ = (id) => document.getElementById(id);
-    const fold = $('gcInviteFold'), body = $('gcInviteBody'), toggleGlyph = fold.querySelector('.gc-card__toggle i');
-    const guest = $('gcGuest'), booth = $('gcBooth'), countEl = $('gcBoothCount'), stateEl = $('gcGuestState');
-    const book = $('gcBook'), bookLabel = $('gcBookLabel'), retake = $('gcRetake'), save = $('gcSave'), msg = $('gcBoothMsg');
-    const MSG_IDLE = msg.textContent;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
     const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
-    let rsvpHref = `mailto:${CONTACT.email}?subject=${encodeURIComponent('RSVP: Work with Aarav')}`;
+    const desktop = window.matchMedia('(min-width: 1000px)');
 
-    // ------------------------------------------------------------ links
-    for (const key of ['github', 'linkedin', 'x']) {
-        const a = band.querySelector(`[data-link="${key}"]`), url = CONTACT[key];
-        if (!a) continue;
-        if (url) a.href = url;
-        a.hidden = !url;
+    for (const a of document.querySelectorAll('[data-link="github"]')) a.href = CONTACT.github;
+
+    // ------------------------------------------------------------ mono reveal (their parts/mono-text-reveal)
+    const GLYPHS = ['#', '#', '#', '#', '#', '$', '*', '@', '(', '0', '%', '1', '>'];
+    const KEEP = { ' ': '_', '[': '[', ']': ']' };
+    const easeP2 = (k) => 1 - (1 - k) * (1 - k);
+    const easeP3 = (k) => 1 - Math.pow(1 - k, 3);
+    function monoWrap(el) {
+        if (el.__mono) return el.__mono;
+        const text = el.textContent;
+        el.textContent = '';
+        const box = document.createElement('span'), ghost = document.createElement('span'), live = document.createElement('span');
+        box.className = 'gc-m'; ghost.className = 'gc-m__ghost'; live.className = 'gc-m__live';
+        ghost.textContent = text;
+        box.append(ghost, live);
+        el.append(box);
+        const m = { el, ghost, live, text, rand: '', shown: 0, swapped: 0, raf: 0, setText(t) { m.text = t; ghost.textContent = t; m.rand = ''; } };
+        return (el.__mono = m);
     }
-    for (const b of band.querySelectorAll('[data-copy]')) {
-        let t = 0;
-        const idle = b.textContent;
-        b.addEventListener('click', async () => {
-            try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { location.href = 'mailto:' + b.dataset.copy; return; }
-            b.textContent = 'Copied';
-            b.classList.add('is-done');
-            clearTimeout(t);
-            t = setTimeout(() => { b.textContent = idle; b.classList.remove('is-done'); }, 1600);
+    function randomize(m) {
+        let s = '';
+        for (const ch of m.text) s += KEEP[ch] ?? GLYPHS[(Math.random() * GLYPHS.length) | 0];
+        m.rand = s;
+    }
+    function render(m) {
+        const n = m.text.length;
+        let s = '';
+        for (let i = 0; i < Math.min(n, m.shown); i++) s += i < m.swapped ? m.text[i] : m.rand[i];
+        m.live.textContent = s;
+    }
+    // types in random glyphs, then 0.2 s later replaces them with the text: power2.out over 0.25 s + 5 ms a char
+    function monoIn(el, { delay = 0, dur = 0.25 } = {}) {
+        const m = monoWrap(el);
+        cancelAnimationFrame(m.raf);
+        clearTimeout(m.t);
+        const n = m.text.length;
+        if (reduce.matches) { m.shown = m.swapped = n; render(m); return; }
+        randomize(m);
+        m.shown = m.swapped = 0;
+        render(m);
+        const D = (dur + n * 0.005) * 1000, t0 = performance.now() + delay * 1000;
+        const step = (now) => {
+            const a = Math.max(0, Math.min(1, (now - t0) / D)), b = Math.max(0, Math.min(1, (now - t0 - 200) / D));
+            m.shown = Math.ceil(easeP2(a) * n);
+            m.swapped = Math.ceil(easeP2(b) * n);
+            render(m);
+            if (b < 1) m.raf = requestAnimationFrame(step);
+        };
+        m.raf = requestAnimationFrame(step);
+    }
+    // back to glyphs and away: power3.out over 0.15 s + 5 ms a shown char
+    function monoOut(el) {
+        const m = monoWrap(el);
+        cancelAnimationFrame(m.raf);
+        if (!m.rand) randomize(m);
+        if (reduce.matches) { m.shown = m.swapped = 0; render(m); return; }
+        const s0 = m.shown, w0 = m.swapped, D = (0.15 + s0 * 0.005) * 1000, t0 = performance.now();
+        const step = (now) => {
+            const a = Math.max(0, Math.min(1, (now - t0) / D)), b = Math.max(0, Math.min(1, (now - t0 - 100) / D));
+            m.swapped = Math.floor(w0 * (1 - easeP3(a)));
+            m.shown = Math.floor(s0 * (1 - easeP3(b)));
+            render(m);
+            if (b < 1) m.raf = requestAnimationFrame(step);
+        };
+        m.raf = requestAnimationFrame(step);
+    }
+    const monos = [...document.querySelectorAll('[data-mono]')];
+    const monoHovers = [...document.querySelectorAll('[data-mono-hover]')];
+    for (const el of [...monos, ...monoHovers]) monoWrap(el);
+
+    // ------------------------------------------------------------ line reveal (their parts/text-reveal)
+    const reveals = [...section.querySelectorAll('[data-reveal]')];
+    function lineIn(el, delay = 0) {
+        const lines = [...el.querySelectorAll('.gc-l')], n = lines.length;
+        lines.forEach((l, t) => l.style.setProperty('--ld', (t * (0.135 + 0.03 * n) / (n > 1 ? n - 1 : 1) + 0.15 + delay).toFixed(3) + 's'));
+        el.classList.remove('is-out');
+        el.classList.add('is-in');
+    }
+    function lineOut(el) {
+        el.classList.add('is-out');
+        el.classList.remove('is-in');
+    }
+
+    // ------------------------------------------------------------ entrance: after the sound gate, like after their loader
+    let entered = false;
+    function enter() {
+        if (entered) return;
+        entered = true;
+        root.classList.add('is-entered');
+        const d = 0.62;
+        const order = [$('gcHead'), ...section.querySelectorAll('.gc-desc[data-reveal]')];
+        order.forEach((el, i) => lineIn(el, d + (i ? 0.08 : 0)));
+        monos.forEach((el) => monoIn(el, { delay: d + 0.1 }));
+        setTimeout(cycleNav, 4200);
+    }
+    for (const el of monos) monoWrap(el).live.textContent = '';
+    (function waitStart() {
+        if (window.CalendarClock && CalendarClock.started()) enter();
+        else setTimeout(waitStart, 80);
+    })();
+
+    // ------------------------------------------------------------ header message: their rotating phrases
+    const navMsg = document.querySelector('.ap-nav__msg[data-labels]');
+    const phrases = navMsg ? navMsg.dataset.labels.split('|') : [];
+    let navI = 0;
+    if (navMsg) { const m = monoWrap(navMsg); m.shown = m.swapped = m.text.length; render(m); }
+    function cycleNav() {
+        if (!navMsg || reduce.matches) return;
+        if (!document.hidden) {
+            navI = (navI + 1) % phrases.length;
+            const m = navMsg.__mono;
+            monoOut(navMsg);
+            setTimeout(() => { m.setText(phrases[navI]); monoIn(navMsg); }, 260);
+        }
+        setTimeout(cycleNav, 4200);
+    }
+
+    // ------------------------------------------------------------ hovers: fill, arrow swap, mono swap; card; socials
+    const hoverable = (e) => e.pointerType === 'mouse' && finePointer.matches;
+    for (const b of document.querySelectorAll('.gc-btn')) {
+        const base = b.querySelector('.gc-btn__in:not(.gc-btn__in--h) [data-mono]'), over = b.querySelector('[data-mono-hover]');
+        if (!over) continue;
+        b.addEventListener('pointerenter', (e) => {
+            if (!hoverable(e)) return;
+            b.classList.add('is-h');
+            monoIn(over, { dur: 0.15 });
+            if (base) monoOut(base);
+        });
+        b.addEventListener('pointerleave', () => {
+            if (!b.classList.contains('is-h')) return;
+            b.classList.remove('is-h');
+            monoOut(over);
+            if (base) monoIn(base, { dur: 0.15 });
         });
     }
-
-    // ------------------------------------------------------------ mono scramble (labels, the pill, the nav message)
-    const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+=/<>';
-    function scramble(el, to, ms = 520) {
-        if (reduce.matches) { el.textContent = to; return; }
-        cancelAnimationFrame(el.__scr || 0);
-        const t0 = performance.now();
-        const step = (now) => {
-            const k = Math.min(1, (now - t0) / ms);
-            let s = '';
-            for (let i = 0; i < to.length; i++) {
-                const ch = to[i];
-                s += ch === ' ' || i < k * to.length ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0];
-            }
-            el.textContent = s;
-            if (k < 1) el.__scr = requestAnimationFrame(step);
-        };
-        el.__scr = requestAnimationFrame(step);
+    const card = $('gcCard');
+    if (card) {
+        const over = card.querySelector('[data-mono-hover]');
+        card.addEventListener('pointerenter', (e) => { if (hoverable(e)) monoIn(over, { dur: 0.05 }); });
+        card.addEventListener('pointerleave', () => monoOut(over));
     }
-    const label = band.querySelector('.gc-contact__label');
-    if (label) setTimeout(() => scramble(label, label.textContent, 700), 500);
-    // the pill keeps its markup; only the plain words after the name re-scramble on hover
-    const pillWords = fold.querySelector('.gc-card__line b').nextSibling;
-    if (pillWords && pillWords.nodeType === 3) {
-        const words = pillWords.textContent, span = document.createElement('span');
-        span.textContent = words;
-        pillWords.replaceWith(span);
-        fold.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') scramble(span, words, 420); });
+    for (const a of document.querySelectorAll('.gc-social')) {
+        const t = a.querySelector('[data-mono]');
+        a.addEventListener('pointerenter', (e) => { if (hoverable(e)) monoIn(t, { dur: 0.15 }); });
     }
-    const navMsg = document.querySelector('.ap-nav__msg[data-labels]');
-    if (navMsg && !reduce.matches) {
-        const phrases = navMsg.dataset.labels.split('|');
-        let i = 0;
-        setInterval(() => {
-            if (document.hidden) return;
-            i = (i + 1) % phrases.length;
-            scramble(navMsg, phrases[i], 600);
-        }, 4200);
-    }
-
-    // ------------------------------------------------------------ clock
-    const clockEl = $('gcClock');
-    const HS = '\u200a:\u200a';
-    function clock() {
-        const d = new Date(Date.now() + 5.5 * 3600e3), p = (n) => String(n).padStart(2, '0');
-        clockEl.textContent = p(d.getUTCHours()) + HS + p(d.getUTCMinutes()) + HS + p(d.getUTCSeconds());
-        setTimeout(clock, 1000 - (Date.now() % 1000) + 5);
-    }
-    clock();
 
     // ------------------------------------------------------------ tooltip riding the cursor over [data-tip]
-    const tip = $('gcTip'), tipText = tip.firstElementChild;
+    const tip = $('gcTip'), tipText = document.createElement('span');
+    tip.append(tipText);
     let tipOn = null, tipX = 0, tipY = 0, tipRaf = 0;
     const placeTip = () => { tipRaf = 0; tip.style.transform = `translate3d(${tipX}px, ${tipY}px, 0)`; };
-    for (const el of band.querySelectorAll('[data-tip]')) {
+    for (const el of document.querySelectorAll('[data-tip]')) {
         el.addEventListener('pointerenter', (e) => {
-            if (e.pointerType !== 'mouse' || !finePointer.matches) return;
+            if (!hoverable(e)) return;
             tipOn = el;
-            tipText.textContent = el === fold && card.classList.contains('is-open') ? 'Fold it away' : el.dataset.tip;
+            tipText.textContent = el.dataset.tip;
             tipX = e.clientX; tipY = e.clientY;
             placeTip();
             tip.classList.add('is-on');
@@ -116,56 +189,84 @@ const CONTACT = {
         el.addEventListener('pointerleave', () => { if (tipOn === el) { tipOn = null; tip.classList.remove('is-on'); } });
     }
 
-    // ------------------------------------------------------------ the dithered top edge of the band
-    const fringe = $('gcFringe');
-    function drawFringe() {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const w = fringe.clientWidth, h = fringe.clientHeight;
-        if (!w || !h) return;
-        fringe.width = Math.round(w * dpr);
-        fringe.height = Math.round(h * dpr);
-        const x = fringe.getContext('2d');
-        x.clearRect(0, 0, fringe.width, fringe.height);
-        x.fillStyle = 'rgba(0,0,0,0.88)';
-        // 4 x 4 Bayer order: a cell of 2 px squares fills square by square as the band gets closer
-        const ORDER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-        const sq = 2, cell = sq * 4, rows = Math.ceil(h / cell), cols = Math.ceil(w / cell);
-        let seed = 7;
-        const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-        for (let r = 0; r < rows; r++) {
-            const base = 1 - (r * cell + cell / 2) / h;
-            for (let c = 0; c < cols; c++) {
-                const d = r === 0 ? 1 : Math.max(0, Math.min(1, base * base * (3 - 2 * base) + (rand() - 0.5) * 0.14));
-                const n = Math.round(d * 16);
-                if (!n) continue;
-                for (let k = 0; k < 16; k++) {
-                    if (ORDER[k] >= n) continue;
-                    const px = c * cell + (k & 3) * sq, py = h - (r + 1) * cell + (k >> 2) * sq;
-                    x.fillRect(Math.round(px * dpr), Math.round(py * dpr), Math.round((px + sq) * dpr) - Math.round(px * dpr), Math.round((py + sq) * dpr) - Math.round(py * dpr));
-                }
-            }
+    // ------------------------------------------------------------ clock: [ ● HH : MM : SS ] in New Delhi
+    const hEl = $('gcH'), mEl = $('gcM'), sEl = $('gcS');
+    function clock() {
+        const d = new Date(Date.now() + 5.5 * 3600e3), p = (n) => String(n).padStart(2, '0');
+        hEl.textContent = p(d.getUTCHours()); mEl.textContent = p(d.getUTCMinutes()); sEl.textContent = p(d.getUTCSeconds());
+        setTimeout(clock, 1000 - (Date.now() % 1000) + 5);
+    }
+    clock();
+
+    // ------------------------------------------------------------ sound switch: footer slot on desktop, the row on phones
+    function placeSound() {
+        const t = document.querySelector('.ss-toggle');
+        const slot = document.querySelector(`[data-sound-slot="${desktop.matches ? 'bar' : 'follow'}"]`);
+        if (t && slot && t.parentNode !== slot) slot.append(t);
+    }
+    desktop.addEventListener?.('change', placeSound);
+    new MutationObserver(placeSound).observe(document.querySelector('[data-sound-slot="bar"]'), { childList: true });
+
+    // ------------------------------------------------------------ panels
+    function setPanel(p, open) {
+        p.classList.toggle('is-open', open);
+        const head = p.querySelector('.gc-panel__head');
+        head.setAttribute('aria-expanded', String(open));
+        head.querySelector('.gc-panel__pm i').textContent = open ? '-' : '+';
+        p.querySelector('.gc-panel__body').inert = !open;
+    }
+    for (const p of document.querySelectorAll('.gc-panel')) {
+        p.querySelector('.gc-panel__head').addEventListener('click', () => setPanel(p, !p.classList.contains('is-open')));
+        setPanel(p, p.classList.contains('is-open'));
+    }
+
+    // ------------------------------------------------------------ settings: dim slider, dark / light
+    const range = $('gcDimRange'), ticks = document.querySelector('.gc-ticks'), thumb = ticks.querySelector('.gc-ticks__thumb');
+    ticks.querySelector('.gc-ticks__marks').innerHTML = '<i></i>'.repeat(24);
+    function setDim() {
+        const v = +range.value, k = (v - 1) / 23;
+        root.style.setProperty('--dim', (v / 24).toFixed(3));
+        thumb.style.setProperty('--tx-thumb', `calc(${k.toFixed(4)} * (${ticks.clientWidth}px - ${thumb.offsetWidth}px))`);
+    }
+    range.addEventListener('input', setDim);
+    window.addEventListener('resize', setDim);
+    setDim();
+    const meta = document.querySelector('meta[name="theme-color"]');
+    for (const b of document.querySelectorAll('[data-theme-set]')) {
+        b.addEventListener('click', () => {
+            const t = b.dataset.themeSet;
+            root.dataset.theme = t;
+            for (const o of document.querySelectorAll('[data-theme-set]')) o.setAttribute('aria-pressed', String(o === b));
+            if (meta) meta.content = t === 'light' ? '#f9f4eb' : '#1a1c1c';
+        });
+    }
+
+    // ------------------------------------------------------------ camera mode (their video room)
+    const back = $('gcBack');
+    let cam = false;
+    function camMode(on) {
+        if (on === cam) return;
+        cam = on;
+        root.classList.toggle('is-cam', on);
+        const label = section.querySelector('.gc-label');
+        if (on) {
+            reveals.forEach(lineOut);
+            monoOut(label);
+            for (const el of section.querySelectorAll('.gc-follow [data-mono], .gc-cam-m [data-mono]')) monoOut(el);
+            setPanel(panel, true);
+            setTimeout(() => back.focus({ preventScroll: true }), 700);
+        } else {
+            reveals.forEach((el) => lineIn(el, 0.2));
+            monoIn(label, { delay: 0.2 });
+            for (const el of section.querySelectorAll('.gc-follow [data-mono], .gc-cam-m [data-mono]')) monoIn(el, { delay: 0.2 });
+            if (state === 'live' || state === 'count' || state === 'waking') cancel(false);
         }
     }
-    let fringeT = 0;
-    window.addEventListener('resize', () => { clearTimeout(fringeT); fringeT = setTimeout(drawFringe, 120); });
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawFringe);
-    drawFringe();
-
-    // ------------------------------------------------------------ card
-    const mobile = window.matchMedia('(max-width: 699px)');
-    function setOpen(open) {
-        card.classList.toggle('is-open', open);
-        fold.setAttribute('aria-expanded', String(open));
-        body.inert = !open;
-        toggleGlyph.textContent = open ? '−' : '+';
-        if (tipOn === fold) tipText.textContent = open ? 'Fold it away' : fold.dataset.tip;
-        if (open) requestAnimationFrame(sizeBooth);
-        else if (state === 'live' || state === 'count' || state === 'waking') cancel(false);
-    }
-    fold.addEventListener('click', () => setOpen(!card.classList.contains('is-open')));
-    document.addEventListener('pointerdown', (e) => { if (card.classList.contains('is-open') && !card.contains(e.target)) setOpen(false); });
+    back.addEventListener('click', () => camMode(false));
 
     // ------------------------------------------------------------ booth
+    const shot = $('gcShot'), booth = $('gcCam'), countEl = $('gcCount'), note = $('gcNote');
+    const book = $('gcBook'), bookLabel = $('gcBookLabel'), pair = $('gcPair'), retake = $('gcRetake'), save = $('gcSave');
     const COLS = 30, ROWS = 38;                 // camera samples
     const GC = 15, GR = 19;                     // slot cells, about the portrait's 4:5
     const TONES = ['#3a2c06', '#b8860b', '#f6bf26', '#ffed29'];
@@ -180,9 +281,10 @@ const CONTACT = {
     const lum = new Float32Array(GC * GR), tone = new Int8Array(GC * GR).fill(-1);
     let lo = 0, hi = 255, fresh = true;
     let stream = null, video = null, state = 'idle', raf = 0, lastDraw = 0, snapBeat = -1, snapAt = 0, fallbackT0 = 0;
+    let rsvpHref = `mailto:${CONTACT.email}?subject=${encodeURIComponent('RSVP: Work with Aarav')}`;
 
     function sizeBooth() {
-        const r = guest.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+        const r = shot.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
         booth.width = Math.max(1, Math.round(r.width * dpr));
         booth.height = Math.max(1, Math.round(r.height * dpr));
         if (state !== 'idle') paint();
@@ -274,8 +376,7 @@ const CONTACT = {
             if (state === 'live' && !fresh) {
                 // four beats of count-in, the shot on the downbeat after them
                 snapBeat = (Math.floor(b / 4) + 2) * 4;
-                state = 'count';
-                guest.classList.add('is-counting');
+                setState('count');
             }
             if (state === 'count') {
                 const left = snapBeat - b;
@@ -298,24 +399,20 @@ const CONTACT = {
         if (video) { video.pause(); video.srcObject = null; video = null; }
     }
 
-    function say(text) { msg.textContent = text; }
-
+    const say = (text) => { note.textContent = text; };
+    const LABELS = { idle: 'Book yourself in', waking: 'Waking camera', live: 'Cancel', count: 'Cancel', booked: 'Send the RSVP' };
     function setState(s) {
         state = s;
-        card.dataset.booth = s;
-        guest.classList.toggle('is-live', s === 'live' || s === 'count' || s === 'waking');
-        guest.classList.toggle('is-booked', s === 'booked');
-        if (s !== 'count') guest.classList.remove('is-counting');
-        retake.hidden = s !== 'booked';
-        save.hidden = s !== 'booked';
+        panel.dataset.booth = s;
+        pair.hidden = s !== 'booked';
         book.disabled = s === 'waking';
-        bookLabel.textContent = s === 'waking' ? 'Waking camera' : s === 'live' || s === 'count' ? 'Cancel' : s === 'booked' ? 'Send the RSVP' : 'Book yourself in';
-        stateEl.textContent = s === 'booked' ? 'going' : s === 'live' || s === 'count' ? 'on camera' : 'invited';
+        if (bookLabel.textContent !== LABELS[s]) bookLabel.textContent = LABELS[s];
     }
 
     async function start() {
         if (state === 'waking' || state === 'live' || state === 'count') return;
-        if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { say('No camera on this page. The RSVP works by email all the same.'); return; }
+        camMode(true);
+        if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { say('No camera here. The RSVP works by email all the same.'); return; }
         setState('waking');
         say('Hold still for four beats. Nothing leaves this device.');
         fallbackT0 = performance.now();
@@ -327,12 +424,12 @@ const CONTACT = {
             video.srcObject = stream;
             await video.play();
             if (!video.videoWidth) await new Promise((r) => video.addEventListener('loadeddata', r, { once: true }));
-            if (document.hidden) throw Object.assign(new Error('hidden'), { name: 'AbortError' });
+            if (document.hidden || !cam) throw Object.assign(new Error('hidden'), { name: 'AbortError' });
         } catch (e) {
             stopTracks();
             setState('idle');
             const n = e && e.name;
-            say(n === 'AbortError' ? MSG_IDLE
+            say(n === 'AbortError' ? ''
                 : n === 'NotAllowedError' || n === 'SecurityError' ? 'Camera blocked, no problem: the RSVP works by email.'
                     : n === 'NotFoundError' || n === 'OverconstrainedError' ? 'No camera found. The RSVP works by email.'
                         : n === 'NotReadableError' ? 'The camera is busy in another app.' : 'Camera unavailable. The RSVP works by email.');
@@ -353,8 +450,8 @@ const CONTACT = {
         cancelAnimationFrame(raf);
         raf = 0;
         countEl.textContent = '';
-        setState('idle');
-        if (!silent) say(MSG_IDLE);
+        setState(snapAt ? 'booked' : 'idle');
+        if (!silent) say('');
     }
 
     function snap() {
@@ -363,9 +460,9 @@ const CONTACT = {
         stopTracks();
         snapAt = Date.now();
         countEl.textContent = '';
-        guest.classList.remove('is-flash');
-        void guest.offsetWidth;
-        guest.classList.add('is-flash');
+        shot.classList.remove('is-flash');
+        void shot.offsetWidth;
+        shot.classList.add('is-flash');
         setState('booked');
         const d = new Date(snapAt + 5.5 * 3600e3);
         const when = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -377,33 +474,26 @@ const CONTACT = {
         const W = 1200, H = 630, c = document.createElement('canvas');
         c.width = W; c.height = H;
         const x = c.getContext('2d');
-        x.fillStyle = '#121316'; x.fillRect(0, 0, W, H);
-        x.fillStyle = '#ffed29'; x.fillRect(0, 60, 8, H - 120);
-        const sw = 300, sh = 375, sy = 150;
-        const img = card.querySelector('.gc-slot--photo img');
-        const rr = (X, Y, w, h) => { x.save(); x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, 10); else x.rect(X, Y, w, h); x.clip(); };
-        rr(80, sy, sw, sh);
-        try { x.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 80, sy, sw, sh); } catch (e) { /* not loaded */ }
+        x.fillStyle = '#1a1c1c'; x.fillRect(0, 0, W, H);
+        const sw = 300, sh = 375, sy = 170;
+        const img = shot.querySelector('img');
+        const rr = (X, Y, w, h) => { x.save(); x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, 6); else x.rect(X, Y, w, h); x.clip(); };
+        rr(60, sy, sw, sh);
+        try { x.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 60, sy, sw, sh); } catch (e) { /* not loaded */ }
         x.restore();
-        rr(420, sy, sw, sh);
-        x.drawImage(booth, 0, 0, booth.width, booth.height, 420, sy, sw, sh);
+        rr(400, sy, sw, sh);
+        x.drawImage(booth, 0, 0, booth.width, booth.height, 400, sy, sw, sh);
         x.restore();
-        x.fillStyle = '#f4f2ea';
-        x.font = '700 64px "Playfair Display", Georgia, serif';
-        x.fillText('Work with Aarav', 80, 110);
-        x.font = '500 22px "IBM Plex Mono", monospace';
-        x.fillStyle = 'rgba(244,242,234,0.6)';
-        x.fillText('AARAV  ORGANIZER', 80, sy + sh + 40);
-        x.fillText('YOU  GOING', 420, sy + sh + 40);
-        x.fillStyle = '#ffed29';
-        x.font = '700 120px "Playfair Display", Georgia, serif';
-        x.fillText('×', 372, sy + sh / 2 + 40);
-        x.font = '500 22px "IBM Plex Mono", monospace';
-        x.fillStyle = 'rgba(244,242,234,0.6)';
+        x.fillStyle = '#f9f4eb';
+        x.font = '700 76px SuisseBPIntl, Helvetica, Arial, sans-serif';
+        x.fillText('BRIEF ME SOMETHING.', 60, 120);
+        x.font = '500 20px Sometype, monospace';
+        x.fillText('AARAV · ORGANIZER', 60, sy + sh + 36);
+        x.fillText('YOU · GOING', 400, sy + sh + 36);
         const d = new Date(snapAt + 5.5 * 3600e3);
-        const lines = ['BOOKED', d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).toUpperCase(),
-            String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ' IST', '', CONTACT.email];
-        lines.forEach((l, i) => x.fillText(l, 780, sy + 30 + i * 36));
+        const lines = ['[ BOOKED ]', d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).toUpperCase(),
+            String(d.getUTCHours()).padStart(2, '0') + ' : ' + String(d.getUTCMinutes()).padStart(2, '0') + ' IST', '', CONTACT.email.toUpperCase()];
+        lines.forEach((l, i) => x.fillText(l, 760, sy + 30 + i * 34));
         c.toBlob((blob) => {
             if (!blob) return;
             const a = document.createElement('a');
@@ -416,27 +506,30 @@ const CONTACT = {
         }, 'image/png');
     }
 
-    book.addEventListener('click', () => {
-        if (state === 'booked') { location.href = rsvpHref; return; }
-        if (state === 'live' || state === 'count') { cancel(false); return; }
-        start();
-    });
-    retake.addEventListener('click', () => { start(); });
+    for (const b of document.querySelectorAll('[data-book]')) {
+        b.addEventListener('click', () => {
+            if (state === 'booked' && b === book) { location.href = rsvpHref; return; }
+            if ((state === 'live' || state === 'count') && b === book) { cancel(false); return; }
+            if (state === 'booked') { camMode(true); return; }
+            start();
+        });
+    }
+    retake.addEventListener('click', () => { snapAt = 0; setState('idle'); start(); });
     save.addEventListener('click', saveInvite);
     document.addEventListener('visibilitychange', () => { if (document.hidden && (state === 'live' || state === 'count' || state === 'waking')) cancel(true); });
     window.addEventListener('pagehide', () => cancel(true));
     window.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
+        if (e.key !== 'Escape' || document.querySelector('.ap-nav.is-open')) return;
         if (state === 'live' || state === 'count') cancel(false);
-        else if (card.classList.contains('is-open')) { setOpen(false); fold.focus(); }
+        else if (cam) camMode(false);
     });
-    setOpen(false);
     window.addEventListener('resize', () => { if (state !== 'idle') sizeBooth(); });
-    mobile.addEventListener?.('change', () => { if (state !== 'idle') sizeBooth(); });
+    setState('idle');
 
     window.__invite = {
         get state() { return state; },
+        get cam() { return cam; },
         get liveTracks() { return stream ? stream.getTracks().filter((t) => t.readyState === 'live').length : 0; },
-        start, cancel, snap,
+        start, cancel, snap, camMode, enter,
     };
 })();

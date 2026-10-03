@@ -967,6 +967,7 @@
         if (sound && !toggle) {
             toggle = sound.toggle({
                 muted: !withSound,
+                mount: document.querySelector('[data-sound-slot="bar"]') || undefined,
                 levels: audio ? (out) => audio.levels(out) : null,
                 onChange: (m) => {
                     sound.setPref(m ? 'off' : 'on');
@@ -985,7 +986,7 @@
         kicker: 'Soundtrack · 28 s loop',
         title: 'This calendar dances.',
         body: 'A week of meetings, scored to sixteen bars of Alice Deejay\u2019s Better Off Alone on repeat. Best with sound.',
-        foot: window.matchMedia('(pointer: coarse)').matches ? 'Switch it any time, top right.' : 'Switch it any time, top right, or press M.',
+        foot: window.matchMedia('(pointer: coarse)').matches ? 'Switch it any time, bottom right.' : 'Switch it any time, bottom right, or press M.',
         onChoose: (s) => begin(s, true),
     });
     if (!sound || frozen !== null || /[?&]gate=0\b/.test(location.search)) begin(false, false);
