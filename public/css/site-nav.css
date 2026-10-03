@@ -1,5 +1,13 @@
 /* The main site's header pill (index.html .ll-header .js-menu) for standalone pages, without the theme bundle.
    Same metrics: the theme sizes it in rem on a 16px root that becomes 1.11111vw from 1600px. */
+
+/* no "Get in contact" card in the top right on any page */
+.js-sticky-items,
+.ll-header .js-sticky-items,
+.ll-header .js-sticky-items.is-revealed {
+    display: none !important;
+}
+
 @font-face {
     font-family: SuisseBPIntl;
     src: url('../fonts/SuisseBPIntl-Regular.woff2') format('woff2');

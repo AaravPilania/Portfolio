@@ -976,7 +976,8 @@
             toggle = sound.toggle({
                 muted: !withSound,
                 mount: document.querySelector('[data-sound-slot="bar"]') || undefined,
-                levels: audio ? (out) => audio.levels(out) : null,
+                beat: BEAT,
+                clock: () => cycleTime(performance.now(), true),
                 onChange: (m) => {
                     sound.setPref(m ? 'off' : 'on');
                     if (!audio) return;
@@ -991,7 +992,7 @@
         CalendarAudio.init('audio/calendar-loop.mp3', LOOP, AUDIO_PAD).catch(() => {});
     }
     if (!sound || frozen !== null || /[?&]gate=0\b/.test(location.search)) begin(false, false);
-    else sound.gate({ title: 'Ready for the flashbang?', onChoose: (s) => begin(s, true) });
+    else sound.gate({ title: 'Ready for the flashbang?', body: 'This week dances to a track. Best loud.', onChoose: (s) => begin(s, true) });
 
     const pct = (arr, count, p) => {
         const a = Array.from(arr.subarray(0, Math.min(count, PERF_N))).sort((x, y) => x - y);

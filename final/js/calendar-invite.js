@@ -1,13 +1,13 @@
 // The contact UI over the calendar: headline lines rise out of clips, mono labels type in as glyphs and resolve, a
 // live India clock, the brief form that opens out of its button and posts straight to the inbox, and the side column:
-// the soundtrack switch and "Join the calendar", where the camera renders the visitor live as stacks of calendar
-// meetings at one of three grid sizes. Frames are read from a small canvas and never leave the page.
+// the soundtrack switch and "Join the calendar": the portrait rebuilt as stacks of meetings in its own colours at one
+// of three grid sizes, and the camera, which takes over the whole screen in that grid while the dance shrinks into the
+// portrait. Frames are read from a small canvas and never leave the page.
 const CONTACT = {
     email: 'aaravpilania2006@gmail.com',
     github: 'https://github.com/AaravPilania',
-    // FILL IN: full profile URLs; an empty one hides its icon
-    linkedin: '',
-    instagram: '',
+    linkedin: 'https://www.linkedin.com/in/aarav-pilania',
+    instagram: 'https://www.instagram.com/aaravpilania',
     // optional: a Web3Forms access key sends the brief through Web3Forms instead of FormSubmit
     web3formsKey: '',
 };
@@ -102,6 +102,74 @@ const CONTACT = {
         el.classList.remove('is-in');
     }
 
+    // ------------------------------------------------------------ headline: letters decipher under the pointer, the
+    // navbar's glyph scramble one letter at a time. A letter or the gap beside it scrambles that pair, a swipe runs on
+    // through the rest of the word, the gap between the two slabs takes the nearest letter of each.
+    const SCR = '#$*@(0%1>';
+    head.setAttribute('aria-label', [...head.querySelectorAll('.gc-ink')].map((n) => n.textContent).join(' '));
+    const rows = [...head.querySelectorAll('.gc-ink')].map((ink) => {
+        const text = ink.textContent, chars = [];
+        ink.textContent = '';
+        ink.setAttribute('aria-hidden', 'true');
+        for (const ch of text) {
+            const s = document.createElement('span');
+            s.className = ch === ' ' ? 'gc-ch gc-ch--sp' : 'gc-ch';
+            s.textContent = ch === ' ' ? '\u00a0' : ch;
+            ink.append(s);
+            if (ch !== ' ') chars.push({ el: s, start: 0, until: 0, last: 0, raf: 0 });
+        }
+        return chars;
+    });
+    function scramble(c, delay = 0) {
+        if (!c || reduce.matches) return;
+        const now = performance.now();
+        if (c.raf && c.until > now + delay + 200) return;
+        c.start = now + delay;
+        c.until = c.start + 380;
+        if (c.raf) return;
+        const step = (t) => {
+            if (t >= c.until) { delete c.el.dataset.s; c.raf = 0; return; }
+            if (t >= c.start && t - c.last > 55) { c.el.dataset.s = SCR[(Math.random() * SCR.length) | 0]; c.last = t; }
+            c.raf = requestAnimationFrame(step);
+        };
+        c.raf = requestAnimationFrame(step);
+    }
+    let boxes = null, last = null, wave = 0, waveT = 0;
+    const measure = () => {
+        boxes = rows.map((chars) => ({
+            r: chars[0].el.parentNode.getBoundingClientRect(),
+            xs: chars.map((c) => { const b = c.el.getBoundingClientRect(); return (b.left + b.right) / 2; }),
+        }));
+    };
+    const nearest = (xs, x) => { let i = 0; while (i < xs.length - 1 && x > (xs[i] + xs[i + 1]) / 2) i++; return i; };
+    head.addEventListener('pointerenter', measure);
+    head.addEventListener('pointermove', (e) => {
+        if (!boxes) measure();
+        const x = e.clientX, y = e.clientY, now = performance.now();
+        const ri = boxes.findIndex((b) => y >= b.r.top && y <= b.r.bottom);
+        if (ri < 0) {
+            if (boxes.length > 1 && y > boxes[0].r.bottom && y < boxes[1].r.top) boxes.forEach((b, k) => scramble(rows[k][nearest(b.xs, x)]));
+            last = null;
+            return;
+        }
+        const { xs } = boxes[ri], cs = rows[ri];
+        let i = 0;
+        while (i < xs.length - 2 && x > xs[i + 1]) i++;
+        scramble(cs[i]);
+        scramble(cs[i + 1]);
+        const idx = nearest(xs, x);
+        if (last && last.row === ri && idx !== last.idx) {
+            const dir = Math.sign(idx - last.idx), dt = Math.max(1, now - last.t);
+            if (dt < 220 && Math.abs(x - last.x) / dt > 0.35 && (dir !== wave || now - waveT > 500)) {
+                for (let k = idx + dir, d = 1; k >= 0 && k < cs.length; k += dir, d++) scramble(cs[k], d * 45);
+                wave = dir;
+                waveT = now;
+            }
+        }
+        if (!last || last.row !== ri || last.idx !== idx) last = { row: ri, idx, t: now, x };
+    });
+    head.addEventListener('pointerleave', () => { last = null; boxes = null; });
+
     // ------------------------------------------------------------ entrance: after the sound gate
     let entered = false;
     function enter() {
@@ -171,11 +239,11 @@ const CONTACT = {
             return;
         }
         setForm('sending');
-        const subject = `New brief: ${d.project} from ${d.name.trim()}`;
+        const subject = `New brief from ${d.name.trim()}`;
         const w3 = !!CONTACT.web3formsKey;
         const body = w3
-            ? { access_key: CONTACT.web3formsKey, subject, from_name: d.name, name: d.name, email: d.email, project: d.project, message: d.message }
-            : { name: d.name, email: d.email, project: d.project, message: d.message, _subject: subject, _replyto: d.email, _template: 'table', _captcha: 'false' };
+            ? { access_key: CONTACT.web3formsKey, subject, from_name: d.name, name: d.name, email: d.email, message: d.message }
+            : { name: d.name, email: d.email, message: d.message, _subject: subject, _replyto: d.email, _template: 'table', _captcha: 'false' };
         try {
             const res = await fetch(w3 ? 'https://api.web3forms.com/submit' : `https://formsubmit.co/ajax/${CONTACT.email}`, {
                 method: 'POST',
@@ -229,102 +297,101 @@ const CONTACT = {
     // ------------------------------------------------------------ booth
     const shot = $('gcShot'), booth = $('gcCam'), say = (t) => { $('gcNote').textContent = t; };
     const book = $('gcBook'), bookLabel = $('gcBookLabel');
-    // fine / mid / coarse: slot columns and rows at about the portrait's 4:5
-    const GRIDS = [[30, 38], [15, 19], [8, 10]];
-    const TONES = ['#3a2c06', '#b8860b', '#f6bf26', '#ffed29'];
+    // fine / mid / coarse: columns across the portrait, and across the screen when the camera has it
+    const COLS = [30, 15, 8], STAGE_COLS = [96, 48, 24];
     const GAP = '#fff7cf';
-    const EDGES = [0.3, 0.55, 0.78];
-    const HOLD = 0.035;
     const FPS = 24;
+    const stage = $('gcStage'), calendar = $('gcCanvas'), photo = shot.querySelector('img');
     const grab = document.createElement('canvas');
     const gctx = grab.getContext('2d', { willReadFrequently: true });
-    const bctx = booth.getContext('2d');
-    let GC = 0, GR = 0, lum = null, tone = null, lo = 0, hi = 255, fresh = true;
+    const bctx = booth.getContext('2d'), sctx = stage.getContext('2d');
+    let sel = -1, rgb = null, fresh = true;
     let stream = null, video = null, state = 'idle', raf = 0, lastDraw = 0;
 
-    function setGrid(i) {
-        [GC, GR] = GRIDS[i];
-        grab.width = GC * 2; grab.height = GR * 2;
-        lum = new Float32Array(GC * GR);
-        tone = new Int8Array(GC * GR).fill(-1);
-        fresh = true;
-        for (const b of document.querySelectorAll('[data-cell]')) b.setAttribute('aria-checked', String(+b.dataset.cell === i));
+    function sizeTo(cv, w, h) {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        cv.width = Math.max(1, Math.round(w * dpr));
+        cv.height = Math.max(1, Math.round(h * dpr));
     }
-    setGrid(0);
-    for (const b of document.querySelectorAll('[data-cell]')) b.addEventListener('click', () => setGrid(+b.dataset.cell));
-
     function sizeBooth() {
-        const r = shot.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-        booth.width = Math.max(1, Math.round(r.width * dpr));
-        booth.height = Math.max(1, Math.round(r.height * dpr));
+        const r = shot.getBoundingClientRect();
+        sizeTo(booth, r.width, r.height);
+        sizeTo(stage, innerWidth, innerHeight);
     }
 
-    function sample() {
-        if (!video || video.readyState < 2 || !video.videoWidth) return false;
-        const vw = video.videoWidth, vh = video.videoHeight, aspect = GC / GR, W = GC * 2, H = GR * 2;
-        let sw = vw, sh = vw / aspect;
-        if (sh > vh) { sh = vh; sw = vh * aspect; }
-        gctx.setTransform(-1, 0, 0, 1, W, 0);
-        gctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, W, H);
-        const px = gctx.getImageData(0, 0, W, H).data;
-        const hist = new Uint16Array(32), n = GC * GR, k = fresh ? 1 : 0.5;
-        for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) {
-            let s = 0;
-            for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
-                const p = ((r * 2 + dy) * W + c * 2 + dx) * 4;
-                s += 0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2];
-            }
-            const i = r * GC + c;
-            lum[i] += (s / 4 - lum[i]) * k;
-            hist[Math.min(31, lum[i] >> 3)]++;
-        }
-        let acc = 0, l = -1, h = 31;
-        for (let b = 0; b < 32; b++) { acc += hist[b]; if (l < 0 && acc > n * 0.02) l = b; if (acc >= n * 0.98) { h = b + 1; break; } }
-        const e = fresh ? 1 : 0.1;
-        lo += (l * 8 - lo) * e;
-        hi += (h * 8 - hi) * e;
-        const span = Math.max(40, hi - lo);
-        for (let i = 0; i < n; i++) {
-            const v = (lum[i] - lo) / span;
-            let t = v < EDGES[0] ? 0 : v < EDGES[1] ? 1 : v < EDGES[2] ? 2 : 3;
-            const p = tone[i];
-            // near an edge a cell keeps its tone, so a still face is a still stack of meetings
-            if (p >= 0 && Math.abs(p - t) === 1 && Math.abs(v - EDGES[Math.min(p, t)]) < HOLD) t = p;
-            tone[i] = t;
-        }
+    // src cover-cropped to cols x rows, averaged per cell; every column is a stack of meetings, a run of near colours
+    // one rounded block in their mean colour, with the calendar's cream gaps
+    function paintGrid(cx, W, H, src, sw, sh, cols, mirror) {
+        const rows = Math.max(1, Math.round(cols * (H / W))), n = cols * rows;
+        if (grab.width !== cols || grab.height !== rows) { grab.width = cols; grab.height = rows; rgb = null; }
+        if (!rgb || rgb.length !== n * 3) { rgb = new Float32Array(n * 3); fresh = true; }
+        let cw = sw, ch = sw * rows / cols;
+        if (ch > sh) { ch = sh; cw = sh * cols / rows; }
+        gctx.imageSmoothingQuality = 'high';
+        gctx.setTransform(mirror ? -1 : 1, 0, 0, 1, mirror ? cols : 0, 0);
+        gctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, cols, rows);
+        const px = gctx.getImageData(0, 0, cols, rows).data, k = fresh ? 1 : 0.5;
+        for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) rgb[i * 3 + j] += (px[i * 4 + j] - rgb[i * 3 + j]) * k;
         fresh = false;
-        return true;
-    }
-
-    // every column is a stack of meetings: runs of one tone become one rounded block, with the calendar's cream gaps
-    function paint() {
-        const W = booth.width, H = booth.height, cw = W / GC, ch = H / GR;
-        const gap = Math.max(1, Math.round(cw * 0.12)), rad = Math.min(4, cw * 0.22);
-        bctx.fillStyle = GAP;
-        bctx.fillRect(0, 0, W, H);
-        for (let c = 0; c < GC; c++) {
-            const x0 = Math.round(c * cw) + (gap >> 1), x1 = Math.round((c + 1) * cw) - (gap - (gap >> 1));
+        const cwp = W / cols, chp = H / rows, gap = Math.max(1, Math.round(cwp * 0.12)), rad = Math.min(4, cwp * 0.22);
+        cx.fillStyle = GAP;
+        cx.fillRect(0, 0, W, H);
+        for (let c = 0; c < cols; c++) {
+            const x0 = Math.round(c * cwp) + (gap >> 1), x1 = Math.round((c + 1) * cwp) - (gap - (gap >> 1));
             let r = 0;
-            while (r < GR) {
-                const t = tone[r * GC + c];
-                let e = r + 1;
-                while (e < GR && tone[e * GC + c] === t && e - r < 6) e++;
-                if (t >= 0) {
-                    const y0 = Math.round(r * ch) + (gap >> 1), y1 = Math.round(e * ch) - (gap - (gap >> 1));
-                    bctx.fillStyle = TONES[t];
-                    bctx.beginPath();
-                    if (bctx.roundRect) bctx.roundRect(x0, y0, x1 - x0, y1 - y0, rad); else bctx.rect(x0, y0, x1 - x0, y1 - y0);
-                    bctx.fill();
+            while (r < rows) {
+                const a = (r * cols + c) * 3;
+                let e = r + 1, R = rgb[a], G = rgb[a + 1], B = rgb[a + 2];
+                while (e < rows && e - r < 6) {
+                    const b = (e * cols + c) * 3;
+                    if (Math.abs(rgb[b] - rgb[a]) + Math.abs(rgb[b + 1] - rgb[a + 1]) + Math.abs(rgb[b + 2] - rgb[a + 2]) > 36) break;
+                    R += rgb[b]; G += rgb[b + 1]; B += rgb[b + 2];
+                    e++;
                 }
+                const m = e - r, y0 = Math.round(r * chp) + (gap >> 1), y1 = Math.round(e * chp) - (gap - (gap >> 1));
+                cx.fillStyle = `rgb(${(R / m) | 0},${(G / m) | 0},${(B / m) | 0})`;
+                cx.beginPath();
+                if (cx.roundRect) cx.roundRect(x0, y0, x1 - x0, y1 - y0, rad); else cx.rect(x0, y0, x1 - x0, y1 - y0);
+                cx.fill();
                 r = e;
             }
         }
     }
 
+    function paintPhoto() {
+        if (sel < 0 || state === 'live') return;
+        if (!photo.complete || !photo.naturalWidth) { photo.addEventListener('load', paintPhoto, { once: true }); return; }
+        sizeBooth();
+        fresh = true;
+        paintGrid(bctx, booth.width, booth.height, photo, photo.naturalWidth, photo.naturalHeight, COLS[sel], false);
+        shot.classList.add('is-on');
+    }
+
+    function setGrid(i) {
+        sel = i;
+        fresh = true;
+        for (const b of document.querySelectorAll('[data-cell]')) b.setAttribute('aria-checked', String(+b.dataset.cell === i));
+        paintPhoto();
+    }
+    for (const b of document.querySelectorAll('[data-cell]')) b.addEventListener('click', () => setGrid(+b.dataset.cell));
+
+    // the dance, cover-cropped from the calendar canvas into the portrait
+    function paintDance() {
+        const W = booth.width, H = booth.height, cw0 = calendar.width, ch0 = calendar.height;
+        if (!cw0 || !ch0) return;
+        let sw = cw0, sh = cw0 * H / W;
+        if (sh > ch0) { sh = ch0; sw = ch0 * W / H; }
+        bctx.drawImage(calendar, (cw0 - sw) / 2, (ch0 - sh) / 2, sw, sh, 0, 0, W, H);
+    }
+
     function loop(now) {
         raf = 0;
         if (state !== 'live') return;
-        if (now - lastDraw >= 1000 / FPS - 2 && sample()) { paint(); lastDraw = now; }
+        if (now - lastDraw >= 1000 / FPS - 2 && video && video.readyState >= 2 && video.videoWidth) {
+            paintGrid(sctx, stage.width, stage.height, video, video.videoWidth, video.videoHeight, STAGE_COLS[sel], true);
+            lastDraw = now;
+        }
+        paintDance();
         raf = requestAnimationFrame(loop);
     }
 
@@ -338,6 +405,7 @@ const CONTACT = {
     function setState(s) {
         state = s;
         panel.dataset.booth = s;
+        root.classList.toggle('is-live', s === 'live');
         book.disabled = s === 'waking';
         bookLabel.textContent = LABELS[s];
     }
@@ -368,10 +436,10 @@ const CONTACT = {
                         : n === 'NotReadableError' ? 'The camera is busy in another app.' : 'Camera unavailable.');
             return;
         }
+        if (sel < 0) setGrid(1);
         fresh = true;
-        tone.fill(-1);
-        lum.fill(0);
         sizeBooth();
+        shot.classList.add('is-on');
         setState('live');
         if (!raf) raf = requestAnimationFrame(loop);
     }
@@ -383,6 +451,7 @@ const CONTACT = {
         setState('idle');
         say(msg);
         camMode(false);
+        if (sel >= 0) paintPhoto(); else shot.classList.remove('is-on');
     }
 
     book.addEventListener('click', () => (state === 'idle' ? start() : state === 'live' ? stop('') : null));
@@ -393,7 +462,7 @@ const CONTACT = {
         if (briefOpen) brief(false);
         else if (state !== 'idle') stop('');
     });
-    window.addEventListener('resize', () => { if (state === 'live') sizeBooth(); });
+    window.addEventListener('resize', () => { if (state === 'live') sizeBooth(); else paintPhoto(); });
     setState('idle');
 
     window.__invite = {

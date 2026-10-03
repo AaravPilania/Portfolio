@@ -2,10 +2,10 @@
 // the on/off toggle. Engine-agnostic: pages pass callbacks, so any page with a soundtrack can adopt it.
 //   SiteSound.pref()                 -> 'on' | 'off' | null (the choice made in this browsing session)
 //   SiteSound.setPref(v)
-//   SiteSound.gate(opts)             -> Promise<boolean> sound wanted; opts { kicker, title, body, foot, onChoose(sound) }
+//   SiteSound.gate(opts)             -> Promise<boolean> sound wanted; opts { kicker, title, body, onChoose(sound) }
 //                                       onChoose runs synchronously inside the click, where audio may be unlocked
-//   SiteSound.toggle(opts)           -> { el, set(muted), get muted() }; opts { muted, onChange(muted), levels(out),
-//                                       mount (element, default body), hotkey ('m') }
+//   SiteSound.toggle(opts)           -> { el, set(muted), get muted() }; opts { muted, onChange(muted), clock() (seconds
+//                                       of music time), beat (seconds), mount (element, default body), hotkey ('m') }
 window.SiteSound = (() => {
     'use strict';
 
@@ -26,6 +26,9 @@ window.SiteSound = (() => {
 
     // ------------------------------------------------------------ gate
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const SPEAKER = '<rect x="0" y="3" width="2" height="4" /><rect x="2" y="2" width="1" height="6" /><rect x="3" y="1" width="1" height="8" />';
+    const ICO_ON = `<svg viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor">${SPEAKER}<rect class="ss-w1" x="5" y="4" width="1" height="2" /><rect class="ss-w2" x="7" y="2" width="1" height="6" /><rect class="ss-w3" x="9" y="0" width="1" height="10" /></g></svg>`;
+    const ICO_OFF = `<svg viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor">${SPEAKER}<rect x="6" y="3" width="1" height="1" /><rect x="9" y="3" width="1" height="1" /><rect x="7" y="4" width="2" height="2" /><rect x="6" y="6" width="1" height="1" /><rect x="9" y="6" width="1" height="1" /></g></svg>`;
 
     function gate(opts = {}) {
         return new Promise((resolve) => {
@@ -38,13 +41,15 @@ window.SiteSound = (() => {
                 <div class="ss-gate__scrim"></div>
                 <div class="ss-gate__flash" aria-hidden="true"></div>
                 <div class="ss-gate__card">
+                    <p class="ss-gate__kicker"><i aria-hidden="true"></i>${esc(opts.kicker || 'Soundtrack · 137 BPM')}</p>
                     <h2 class="ss-gate__title" id="ssGateTitle">${esc(opts.title || 'Sound on?')}</h2>
+                    ${opts.body ? `<p class="ss-gate__body">${esc(opts.body)}</p>` : ''}
                     <div class="ss-gate__actions">
                         <button class="ss-gate__btn ss-gate__btn--on" type="button" data-sound="1">
-                            <span class="ss-gate__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Enter with sound</span>
+                            <span class="ss-gate__ico">${ICO_ON}</span><span class="ss-gate__t">With sound</span><kbd>Enter</kbd>
                         </button>
                         <button class="ss-gate__btn ss-gate__btn--off" type="button" data-sound="0">
-                            <span class="ss-gate__flat" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Enter without sound</span>
+                            <span class="ss-gate__ico">${ICO_OFF}</span><span class="ss-gate__t">Without sound</span><kbd>Esc</kbd>
                         </button>
                     </div>
                 </div>`;
@@ -85,22 +90,21 @@ window.SiteSound = (() => {
     }
 
     // ------------------------------------------------------------ toggle
-    // Five bars that follow the music; muting cancels them into a dashed line that wobbles flat, unmuting springs
-    // them back up with a little overshoot.
-    const NB = 5;
-    const MIN = 0.16;
+    // A 2x2 slot of meetings that books itself round the bar: one block per beat, clockwise, read off the music clock
+    // so each lands on its beat. Muting cancels the slot back to four empty blocks.
+    const ORDER = [0, 1, 3, 2];
     function toggle(opts = {}) {
         let muted = !!opts.muted;
+        const beat = opts.beat || 0.5;
+        const clock = opts.clock || (() => performance.now() / 1000);
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'ss-toggle' + (opts.mount ? '' : ' ss-toggle--fixed');
-        el.innerHTML = `<span class="ss-toggle__bars" aria-hidden="true">${'<i></i>'.repeat(NB)}</span>
+        el.innerHTML = `<span class="ss-toggle__beat" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
             <span class="ss-toggle__label" aria-hidden="true"><span class="ss-toggle__roll"><span>On</span><span>Off</span></span></span>`;
         (opts.mount || document.body).appendChild(el);
-        const bars = [...el.querySelectorAll('i')];
-        const lv = new Float32Array(NB);
-        const y = new Float32Array(NB).fill(muted ? MIN : 0.5), v = new Float32Array(NB);
-        let raf = 0, last = 0, mutedAt = -1e9, t0 = performance.now();
+        const cells = [...el.querySelectorAll('.ss-toggle__beat i')];
+        let raf = 0;
 
         function sync() {
             el.classList.toggle('is-muted', muted);
@@ -109,49 +113,36 @@ window.SiteSound = (() => {
             el.title = muted ? 'Sound off (M)' : 'Sound on (M)';
         }
 
-        function frame(now) {
+        function rest() {
+            for (const c of cells) { c.style.transform = ''; c.style.opacity = ''; c.classList.remove('is-down'); }
+        }
+        function frame() {
             raf = 0;
-            const dt = Math.min(0.05, (now - (last || now)) / 1000);
-            last = now;
-            const live = !muted && opts.levels ? opts.levels(lv) : null;
-            const since = (now - mutedAt) / 1000;
-            let moving = false;
-            for (let i = 0; i < NB; i++) {
-                let target;
-                if (muted) target = MIN;
-                else if (live && live[i] > 0.01) target = MIN + (1 - MIN) * Math.min(1, live[i] * 1.25);
-                else target = 0.42 + 0.3 * Math.sin((now - t0) / 1000 * (3.1 + i * 0.7) + i * 1.3);
-                // muted: soft and slightly under-damped; live: stiff enough to follow the beat
-                const k = muted ? 120 : 520, c = muted ? 9 : 26;
-                v[i] += ((target - y[i]) * k - v[i] * c) * dt;
-                y[i] += v[i] * dt;
-                if (y[i] < 0.06) { y[i] = 0.06; v[i] = 0; }
-                let dy = 0;
-                if (muted && since < 1.4) dy = 3.6 * Math.exp(-since / 0.32) * Math.sin(since * 2 * Math.PI * 3.4 - i * 0.95);
-                if (Math.abs(v[i]) > 0.002 || Math.abs(target - y[i]) > 0.002 || Math.abs(dy) > 0.05) moving = true;
-                bars[i].style.transform = `translate3d(0,${dy.toFixed(2)}px,0) scaleY(${y[i].toFixed(3)})`;
+            if (muted || document.hidden) return;
+            const b = clock() / beat, n = Math.floor(b), ph = b - n, at = ORDER[((n % 4) + 4) % 4], prev = ORDER[(((n - 1) % 4) + 4) % 4];
+            const hit = Math.exp(-ph * 7);
+            for (let i = 0; i < 4; i++) {
+                const c = cells[i];
+                if (i === at) {
+                    c.style.transform = `scale(${(0.86 + 0.34 * hit).toFixed(3)})`;
+                    c.style.opacity = '1';
+                } else {
+                    c.style.transform = 'scale(0.8)';
+                    c.style.opacity = i === prev ? (0.3 + 0.4 * hit).toFixed(3) : '0.3';
+                }
+                c.classList.toggle('is-down', i === at && ((n % 4) + 4) % 4 === 0);
             }
-            if (!muted || moving) raf = requestAnimationFrame(frame);
+            raf = requestAnimationFrame(frame);
         }
         function wake() {
-            if (reduceMotion.matches) {
-                bars.forEach((b, i) => { b.style.transform = `scaleY(${muted ? MIN : [0.5, 0.8, 0.62, 0.9, 0.45][i]})`; });
-                return;
-            }
-            if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
+            if (muted || reduceMotion.matches) { cancelAnimationFrame(raf); raf = 0; rest(); return; }
+            if (!raf) raf = requestAnimationFrame(frame);
         }
 
         function set(m, silent) {
             m = !!m;
             if (m === muted) return;
             muted = m;
-            if (muted) {
-                mutedAt = performance.now();
-                // a downward flick so the bars fall through the line before settling
-                for (let i = 0; i < NB; i++) v[i] = -2.2;
-            } else {
-                for (let i = 0; i < NB; i++) v[i] = 5 + i % 2;
-            }
             sync();
             wake();
             if (!silent && opts.onChange) opts.onChange(muted);

@@ -6,6 +6,14 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: Brier;
+    src: url('../fonts/Brier-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* Lama Lama's contact page metrics: their rem is 16px, 1.11111vw from 1600px, so every size here is in --u (one
    design px) and their layout lands on the same pixels at every width */
 :root {
@@ -37,6 +45,9 @@
     --sec: calc(24 * var(--u));
     --h1: clamp(calc(52 * var(--u)), calc(17 * var(--u) + 4.38vw), calc(80 * var(--u)));
     --body: clamp(calc(20 * var(--u)), calc(15 * var(--u) + 0.63vw), calc(24 * var(--u)));
+    --brier: Brier, 'Playfair Display', Georgia, serif;
+    /* the week stays at full colour, so every front element carries its own soft halo */
+    --halo: 0 0 0 1px rgb(244 242 234 / 0.06), 0 12px 40px rgb(18 19 22 / 0.3);
 }
 
 @media (min-width: 1000px) {
@@ -146,20 +157,24 @@ body.gc {
     transform: translateY(-50%);
 }
 
-/* ---------- the dim: their type sits on a dim video; ours sits on the bright week, so the week is dimmed under the
-   type, deepest where the type is. Its opacity is the settings slider ---------- */
-.gc-dim {
+/* ---------- the camera stage: the visitor over the whole week while the dance plays in the portrait ---------- */
+.gc-stage {
     position: fixed;
     inset: 0;
-    z-index: 3;
+    z-index: 4;
+    display: block;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
-    background: linear-gradient(to top, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 0.92) 40%, rgb(0 0 0 / 0.84) 70%, rgb(0 0 0 / 0.8) 100%);
-    opacity: var(--dim, 0.833);
-    transition: opacity 0.45s var(--expo);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.6s var(--p4), visibility 0s linear 0.6s;
 }
 
-.gc[data-theme='light'] .gc-dim {
-    background: linear-gradient(to top, rgb(249 244 235 / 1) 0%, rgb(249 244 235 / 0.82) 40%, rgb(249 244 235 / 0.6) 70%, rgb(249 244 235 / 0.5) 100%);
+.gc.is-live .gc-stage {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.6s var(--p4), visibility 0s;
 }
 
 /* ---------- shared type ---------- */
@@ -206,7 +221,7 @@ body.gc {
 .is-in .gc-l {
     opacity: 1;
     transform: none;
-    clip-path: inset(-10% -10% -10% -10%);
+    clip-path: inset(-40% -10% -40% -10%);
 }
 
 .is-out > .gc-l,
@@ -247,7 +262,15 @@ body.gc {
     display: flex;
     align-items: center;
     gap: calc(16 * var(--u));
-    margin: 0 0 calc(28 * var(--u));
+    width: fit-content;
+    height: calc(30 * var(--u));
+    margin: 0 0 calc(22 * var(--u));
+    padding: 0 calc(10 * var(--u));
+    border-radius: calc(4 * var(--u));
+    background: rgb(18 19 22 / 0.86);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--halo);
     transition: opacity 0.5s var(--p4), transform 0.6s var(--expo);
 }
 
@@ -272,21 +295,56 @@ body.gc {
     font-family: var(--suisse);
     font-size: calc(var(--h1) * 1.18);
     font-weight: 700;
-    line-height: 0.84;
-    letter-spacing: -0.035em;
+    line-height: 1;
+    letter-spacing: 0;
     text-transform: uppercase;
 }
 
 .gc-title .gc-l + .gc-l {
-    margin: calc(6 * var(--u)) 0 0 calc(var(--col) + var(--g));
+    margin: calc(8 * var(--u)) 0 0 calc(var(--col) + var(--g));
 }
 
+/* letters are flex items with one gap between them and equal padding all round, each trimmed to cap height and
+   baseline, so the caps sit dead centre in the slab */
 .gc-ink {
-    display: inline-block;
-    padding: 0.07em 0.12em 0.015em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.035em;
+    padding: 0.13em 0.15em;
     border-radius: calc(4 * var(--u));
     background: var(--sig);
+    box-shadow: 0 0 0 1px rgb(18 19 22 / 0.08), 0 14px 44px rgb(18 19 22 / 0.28);
     color: #000;
+}
+
+.gc-ch {
+    position: relative;
+    display: block;
+    text-box: trim-both cap alphabetic;
+}
+
+.gc-ch--sp {
+    width: 0.2em;
+}
+
+.gc-ch[data-s] {
+    color: transparent;
+}
+
+.gc-ch[data-s]::after {
+    content: attr(data-s);
+    position: absolute;
+    inset: 0;
+    color: #000;
+    text-align: center;
+    text-box: trim-both cap alphabetic;
+}
+
+@supports not (text-box: trim-both cap alphabetic) {
+    .gc-ch {
+        line-height: 0.74;
+        transform: translate3d(0, 0.04em, 0);
+    }
 }
 
 /* ---------- the button the brief opens out of ---------- */
@@ -302,6 +360,7 @@ body.gc {
     border: 1px solid rgb(var(--tx-rgb) / 0.2);
     border-radius: calc(4 * var(--u));
     background: #000;
+    box-shadow: var(--halo);
     color: var(--off);
     cursor: pointer;
     transition: color 0.3s var(--p4), opacity 0.5s var(--p4), transform 0.6s var(--expo);
@@ -379,6 +438,7 @@ body.gc {
     background: rgba(0, 0, 0, 0.86);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
+    box-shadow: var(--halo);
 }
 
 .gc-form__head,
@@ -400,8 +460,7 @@ body.gc {
 
 .gc-form__body > :nth-child(1) { --k: 1; }
 .gc-form__body > :nth-child(2) { --k: 2; }
-.gc-form__body > :nth-child(3) { --k: 3; }
-.gc-form__body > :nth-child(5) { --k: 4; }
+.gc-form__body > :nth-child(4) { --k: 3; }
 .gc-form__done > :nth-child(2) { --k: 1; }
 .gc-form__done > :nth-child(3) { --k: 2; }
 
@@ -414,10 +473,10 @@ body.gc {
 
 .gc-form__title {
     margin: 0;
-    font-family: var(--suisse);
-    font-size: calc(30 * var(--u));
+    font-family: var(--brier);
+    font-size: calc(32 * var(--u));
     font-weight: 700;
-    line-height: 0.9;
+    line-height: 0.95;
     letter-spacing: -0.03em;
     text-transform: uppercase;
 }
@@ -480,9 +539,10 @@ body.gc {
     border-radius: 0;
     background: none;
     color: var(--off);
-    font-family: var(--suisse);
-    font-size: calc(18 * var(--u));
-    line-height: 1.35;
+    font-family: var(--brier);
+    font-size: calc(20 * var(--u));
+    font-weight: 700;
+    line-height: 1.3;
     letter-spacing: -0.01em;
     outline: none;
     resize: none;
@@ -497,49 +557,6 @@ body.gc {
 .gc-field input:focus,
 .gc-field textarea:focus {
     border-bottom-color: var(--sig);
-}
-
-.gc-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: calc(6 * var(--u));
-    padding-top: calc(6 * var(--u));
-}
-
-.gc-chip {
-    position: relative;
-    cursor: pointer;
-}
-
-.gc-chip input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.gc-chip span {
-    display: inline-flex;
-    align-items: center;
-    height: calc(32 * var(--u));
-    padding: 0 calc(13 * var(--u));
-    border: 1px solid rgb(249 244 235 / 0.22);
-    border-radius: 999px;
-    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
-}
-
-.gc-chip:hover span {
-    border-color: var(--off);
-}
-
-.gc-chip input:checked + span {
-    border-color: var(--sig);
-    background: var(--sig);
-    color: #000;
-}
-
-.gc-chip input:focus-visible + span {
-    outline: 1px solid var(--sig);
-    outline-offset: 2px;
 }
 
 .gc-hp {
@@ -628,7 +645,7 @@ body.gc {
     border-radius: calc(4 * var(--u));
     background: var(--sig);
     color: #000;
-    font-family: var(--suisse);
+    font-family: var(--brier);
     font-size: calc(56 * var(--u));
     font-weight: 700;
     line-height: 0.84;
@@ -668,6 +685,7 @@ body.gc {
     background: rgba(0, 0, 0, 0.86);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
+    box-shadow: var(--halo);
     color: var(--off);
 }
 
@@ -682,6 +700,7 @@ body.gc {
     padding: 0 calc(13 * var(--u)) calc(6 * var(--u));
     border-radius: calc(4 * var(--u));
     background: rgba(0, 0, 0, 0.86);
+    box-shadow: var(--halo);
     color: var(--off);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
@@ -771,7 +790,7 @@ body.gc {
     transition: opacity 0.65s cubic-bezier(0.39, 0.575, 0.565, 1);
 }
 
-.gc-panel[data-booth='live'] .gc-shot__cam {
+.gc-shot.is-on .gc-shot__cam {
     opacity: 1;
 }
 
@@ -955,35 +974,36 @@ body.gc {
     color: #000;
 }
 
-.gc-grid__ico {
-    --s: calc(3.33 * var(--u));
-    width: calc(10 * var(--u));
-    height: calc(10 * var(--u));
-    border: 1px solid currentColor;
-    background:
-        repeating-linear-gradient(90deg, transparent 0 calc(var(--s) - 1px), currentColor calc(var(--s) - 1px) var(--s)),
-        repeating-linear-gradient(0deg, transparent 0 calc(var(--s) - 1px), currentColor calc(var(--s) - 1px) var(--s));
-    opacity: 0.8;
+.gc-grid button:not([aria-checked='true']):hover {
+    background: rgb(244 242 234 / 0.1);
 }
 
-.gc-grid__ico--fine { --s: calc(2.5 * var(--u)); }
-.gc-grid__ico--coarse { --s: calc(5 * var(--u)); }
+.gc-grid__ico {
+    flex: none;
+    width: 11px;
+    height: 11px;
+    shape-rendering: crispEdges;
+}
 
 .gc-reach {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: calc(4 * var(--u));
     margin-top: calc(8 * var(--u));
 }
 
 .gc-ico {
     display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    height: calc(36 * var(--u));
+    flex-direction: column;
+    justify-content: space-between;
+    gap: calc(10 * var(--u));
+    min-width: 0;
+    height: calc(54 * var(--u));
+    padding: calc(8 * var(--u));
     border: 1px solid rgb(249 244 235 / 0.2);
     border-radius: calc(4 * var(--u));
     color: var(--off);
+    text-decoration: none;
     transition: background-color 0.3s var(--p4), color 0.3s var(--p4), border-color 0.3s var(--p4);
 }
 
@@ -991,9 +1011,18 @@ body.gc {
     display: none;
 }
 
+.gc-ico__t {
+    order: 2;
+    overflow: hidden;
+    font-size: calc(9 * var(--u));
+    line-height: 1;
+    text-overflow: ellipsis;
+}
+
 .gc-ico svg {
     width: calc(14 * var(--u));
     height: calc(14 * var(--u));
+    transform-origin: 0 0;
     transition: transform 0.45s var(--expo);
 }
 
@@ -1061,65 +1090,12 @@ body.gc {
     letter-spacing: -0.02em;
 }
 
-.gc-sound-slot .ss-toggle::before,
-.gc-sound-slot .ss-toggle::after {
-    transition: opacity 0.3s ease;
+.gc-sound-slot .ss-toggle {
+    gap: calc(10 * var(--u));
 }
 
-.gc-sound-slot .ss-toggle::before {
-    content: 'Sound off';
-    opacity: 0.4;
-}
-
-.gc-sound-slot .ss-toggle::after {
-    content: 'On';
-}
-
-.gc-sound-slot .ss-toggle.is-muted::before {
-    opacity: 1;
-}
-
-.gc-sound-slot .ss-toggle.is-muted::after {
-    opacity: 0.4;
-}
-
-.gc-sound-slot .ss-toggle__bars {
-    position: relative;
-    width: calc(15 * var(--u));
-    height: calc(8 * var(--u));
-    gap: 0;
-    border-radius: 9999px;
-}
-
-.gc-sound-slot .ss-toggle__bars::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: currentColor;
-    opacity: 0.2;
-}
-
-.gc-sound-slot .ss-toggle__bars::after {
-    content: '';
-    position: absolute;
-    top: calc(2 * var(--u));
-    left: calc(2 * var(--u));
-    width: calc(4 * var(--u));
-    height: calc(4 * var(--u));
-    border-radius: 50%;
-    background: currentColor;
-    transform: translate3d(calc(7 * var(--u)), 0, 0);
-    transition: transform 0.45s var(--expo);
-}
-
-.gc-sound-slot .ss-toggle.is-muted .ss-toggle__bars::after {
-    transform: none;
-}
-
-.gc-sound-slot .ss-toggle__bars i,
 .gc-sound-slot .ss-toggle__label {
-    display: none;
+    line-height: 14px;
 }
 
 .gc-contact :focus-visible,
@@ -1129,8 +1105,7 @@ body.gc {
 }
 
 .gc-field input:focus-visible,
-.gc-field textarea:focus-visible,
-.gc-chip input:focus-visible {
+.gc-field textarea:focus-visible {
     outline: none;
 }
 
