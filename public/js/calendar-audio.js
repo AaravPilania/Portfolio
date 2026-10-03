@@ -12,10 +12,12 @@
 //   CalendarAudio.timeAt(t)   -> the same, at performance.now()-based timestamp t
 //   CalendarAudio.onStart(fn) -> fn() whenever playback (re)starts, so visuals can restart in sync
 //   CalendarAudio.setMuted(b) -> fades over FADE seconds; levels(out) fills out (0..1) with live band levels
+//   CalendarAudio.onset()     -> 0, or 0..1 strength when a vocal/rhythm onset landed since the last call (poll per frame)
 window.CalendarAudio = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     const FADE = 0.45;
     let ctx = null, gain = null, analyser = null, spectrum = null, buffer = null, source = null;
+    let vox = null, voxCur = null, voxPrev = null, fluxAvg = 0, lastOnset = 0;
     let startAt = 0, loop = 0, pad = 0, muted = false, wanted = false, ready = null, joinAt = null;
     const starters = new Set();
 
@@ -51,8 +53,15 @@ window.CalendarAudio = (() => {
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.6;
         spectrum = new Uint8Array(analyser.frequencyBinCount);
+        // unsmoothed, so frame-to-frame differences are real onsets rather than the display smoothing
+        vox = ctx.createAnalyser();
+        vox.fftSize = 1024;
+        vox.smoothingTimeConstant = 0;
+        voxCur = new Uint8Array(vox.frequencyBinCount);
+        voxPrev = new Uint8Array(vox.frequencyBinCount);
         gain.connect(analyser);
-        analyser.connect(ctx.destination);
+        analyser.connect(vox);
+        vox.connect(ctx.destination);
         ctx.addEventListener('statechange', play);
     }
 
@@ -103,8 +112,27 @@ window.CalendarAudio = (() => {
         return out;
     }
 
+    // positive spectral flux over the vocal band (300 Hz - 3.4 kHz) against an adaptive mean
+    function onset() {
+        if (!source || !vox || muted) return 0;
+        vox.getByteFrequencyData(voxCur);
+        const hz = ctx.sampleRate / vox.fftSize, lo = Math.round(300 / hz), hi = Math.round(3400 / hz);
+        let f = 0;
+        for (let k = lo; k < hi; k++) {
+            const d = voxCur[k] - voxPrev[k];
+            if (d > 0) f += d;
+            voxPrev[k] = voxCur[k];
+        }
+        f /= (hi - lo) * 255;
+        const thr = fluxAvg * 1.7 + 0.01, t = ctx.currentTime;
+        fluxAvg += (f - fluxAvg) * 0.06;
+        if (f <= thr || t - lastOnset < 0.11) return 0;
+        lastOnset = t;
+        return Math.min(1, (f - thr) / (thr + 0.001));
+    }
+
     return {
-        init, start, resume, levels,
+        init, start, resume, levels, onset,
         available: () => !!AC,
         time: () => (source ? ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) - startAt : null),
         // Audible position at a performance.now() timestamp (e.g. a rAF time). currentTime advances in audio-callback

@@ -289,7 +289,7 @@ body.gc {
     animation: gc-blink 2s steps(2, jump-none) infinite;
 }
 
-/* black type on signature yellow slabs: booked blocks, the way the week books its meetings */
+/* white type on black slabs: booked blocks, the way the week books its meetings */
 .gc-title {
     margin: 0;
     font-family: var(--suisse);
@@ -312,9 +312,9 @@ body.gc {
     gap: 0.035em;
     padding: 0.13em 0.15em;
     border-radius: calc(4 * var(--u));
-    background: var(--sig);
-    box-shadow: 0 0 0 1px rgb(18 19 22 / 0.08), 0 14px 44px rgb(18 19 22 / 0.28);
-    color: #000;
+    background: #000;
+    box-shadow: 0 0 0 1px rgb(244 242 234 / 0.1), 0 14px 44px rgb(18 19 22 / 0.28);
+    color: #fff;
 }
 
 .gc-ch {
@@ -335,9 +335,10 @@ body.gc {
     content: attr(data-s);
     position: absolute;
     inset: 0;
-    color: #000;
+    color: var(--sig);
     text-align: center;
     text-box: trim-both cap alphabetic;
+    clip-path: inset(-50% 0);
 }
 
 @supports not (text-box: trim-both cap alphabetic) {
@@ -363,7 +364,7 @@ body.gc {
     box-shadow: var(--halo);
     color: var(--off);
     cursor: pointer;
-    transition: color 0.3s var(--p4), opacity 0.5s var(--p4), transform 0.6s var(--expo);
+    transition: color 0.12s linear, opacity 0.5s var(--p4), transform 0.6s var(--expo);
 }
 
 .gc-brief-open__fill {
@@ -373,7 +374,7 @@ body.gc {
     background: var(--sig);
     transform: scaleY(0);
     transform-origin: 50% 100%;
-    transition: transform 0.45s var(--expo);
+    transition: transform 0.2s var(--expo);
 }
 
 .gc-brief-open__in {
@@ -1092,9 +1093,19 @@ body.gc {
 
 .gc-sound-slot .ss-toggle {
     gap: calc(10 * var(--u));
+    height: 14px;
+    line-height: 14px;
 }
 
 .gc-sound-slot .ss-toggle__label {
+    line-height: 14px;
+}
+
+/* the label, the blocks and the On/Off roll share one 14px line, centred in the bar */
+.gc-sound > span {
+    display: flex;
+    align-items: center;
+    height: 14px;
     line-height: 14px;
 }
 
@@ -1125,6 +1136,11 @@ body.gc {
 .gc.is-entered:not(.is-brief) .gc-brief-open {
     opacity: 1;
     transition-delay: 0.5s, 0.5s, 0s;
+}
+
+/* transitions here are color, opacity, transform: only the entrance fade waits, the hover colour never does */
+.gc.is-entered:not(.is-brief) .gc-brief-open {
+    transition-delay: 0s, 0.5s, 0s;
 }
 
 /* ---------- below 1000px: stacked ---------- */

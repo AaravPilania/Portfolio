@@ -120,8 +120,23 @@ const CONTACT = {
         }
         return chars;
     });
+    // each letter only scrambles through glyphs no wider than itself, so nothing spills out of its cell
+    let pools = false;
+    function fitPools() {
+        const cs = getComputedStyle(rows[0][0].el), mc = document.createElement('canvas').getContext('2d');
+        mc.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const gw = [...SCR].map((g) => [g, mc.measureText(g).width]);
+        const narrow = gw.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+        for (const chars of rows) for (const c of chars) {
+            const w = c.el.getBoundingClientRect().width + 0.5;
+            c.pool = gw.filter((g) => g[1] <= w).map((g) => g[0]).join('') || narrow;
+        }
+        pools = true;
+    }
+    window.addEventListener('resize', () => { pools = false; });
     function scramble(c, delay = 0) {
         if (!c || reduce.matches) return;
+        if (!pools) fitPools();
         const now = performance.now();
         if (c.raf && c.until > now + delay + 200) return;
         c.start = now + delay;
@@ -129,7 +144,7 @@ const CONTACT = {
         if (c.raf) return;
         const step = (t) => {
             if (t >= c.until) { delete c.el.dataset.s; c.raf = 0; return; }
-            if (t >= c.start && t - c.last > 55) { c.el.dataset.s = SCR[(Math.random() * SCR.length) | 0]; c.last = t; }
+            if (t >= c.start && t - c.last > 55) { c.el.dataset.s = c.pool[(Math.random() * c.pool.length) | 0]; c.last = t; }
             c.raf = requestAnimationFrame(step);
         };
         c.raf = requestAnimationFrame(step);
@@ -313,23 +328,26 @@ const CONTACT = {
         cv.width = Math.max(1, Math.round(w * dpr));
         cv.height = Math.max(1, Math.round(h * dpr));
     }
+    // layout size, not the transformed rect: measured mid-reveal the bitmap would get the wrong shape
     function sizeBooth() {
-        const r = shot.getBoundingClientRect();
-        sizeTo(booth, r.width, r.height);
+        sizeTo(booth, shot.clientWidth, shot.clientHeight);
         sizeTo(stage, innerWidth, innerHeight);
     }
 
     // src cover-cropped to cols x rows, averaged per cell; every column is a stack of meetings, a run of near colours
     // one rounded block in their mean colour, with the calendar's cream gaps
-    function paintGrid(cx, W, H, src, sw, sh, cols, mirror) {
+    // oy matches the img's object-position, so the grid sits exactly over the photo's own framing
+    function paintGrid(cx, W, H, src, sw, sh, cols, mirror, oy = 0.5) {
         const rows = Math.max(1, Math.round(cols * (H / W))), n = cols * rows;
         if (grab.width !== cols || grab.height !== rows) { grab.width = cols; grab.height = rows; rgb = null; }
         if (!rgb || rgb.length !== n * 3) { rgb = new Float32Array(n * 3); fresh = true; }
-        let cw = sw, ch = sw * rows / cols;
-        if (ch > sh) { ch = sh; cw = sh * cols / rows; }
+        let cw = sw, ch = sw * H / W;
+        if (ch > sh) { ch = sh; cw = sh * W / H; }
+        gctx.setTransform(1, 0, 0, 1, 0, 0);
+        gctx.clearRect(0, 0, cols, rows);
         gctx.imageSmoothingQuality = 'high';
         gctx.setTransform(mirror ? -1 : 1, 0, 0, 1, mirror ? cols : 0, 0);
-        gctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, cols, rows);
+        gctx.drawImage(src, (sw - cw) / 2, (sh - ch) * oy, cw, ch, 0, 0, cols, rows);
         const px = gctx.getImageData(0, 0, cols, rows).data, k = fresh ? 1 : 0.5;
         for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) rgb[i * 3 + j] += (px[i * 4 + j] - rgb[i * 3 + j]) * k;
         fresh = false;
@@ -363,15 +381,18 @@ const CONTACT = {
         if (!photo.complete || !photo.naturalWidth) { photo.addEventListener('load', paintPhoto, { once: true }); return; }
         sizeBooth();
         fresh = true;
-        paintGrid(bctx, booth.width, booth.height, photo, photo.naturalWidth, photo.naturalHeight, COLS[sel], false);
+        paintGrid(bctx, booth.width, booth.height, photo, photo.naturalWidth, photo.naturalHeight, COLS[sel], false, 0.3);
         shot.classList.add('is-on');
     }
 
+    // the checked option again clears the grid back to the photo; the camera always needs one
     function setGrid(i) {
+        if (i === sel) { if (state === 'live') return; i = -1; }
         sel = i;
         fresh = true;
         for (const b of document.querySelectorAll('[data-cell]')) b.setAttribute('aria-checked', String(+b.dataset.cell === i));
-        paintPhoto();
+        if (sel < 0) shot.classList.remove('is-on');
+        else paintPhoto();
     }
     for (const b of document.querySelectorAll('[data-cell]')) b.addEventListener('click', () => setGrid(+b.dataset.cell));
 

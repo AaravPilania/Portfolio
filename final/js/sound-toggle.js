@@ -5,7 +5,8 @@
 //   SiteSound.gate(opts)             -> Promise<boolean> sound wanted; opts { kicker, title, body, onChoose(sound) }
 //                                       onChoose runs synchronously inside the click, where audio may be unlocked
 //   SiteSound.toggle(opts)           -> { el, set(muted), get muted() }; opts { muted, onChange(muted), clock() (seconds
-//                                       of music time), beat (seconds), mount (element, default body), hotkey ('m') }
+//                                       of music time), beat (seconds), onset() (0..1 per frame, optional), mount
+//                                       (element, default body), hotkey ('m') }
 window.SiteSound = (() => {
     'use strict';
 
@@ -116,11 +117,16 @@ window.SiteSound = (() => {
         function rest() {
             for (const c of cells) { c.style.transform = ''; c.style.opacity = ''; c.classList.remove('is-down'); }
         }
-        function frame() {
+        // onsets between beats (busy vocals, fills) book an extra block, so the slot runs faster when the track does
+        let extra = 0, kickAt = -1e9;
+        function frame(now) {
             raf = 0;
             if (muted || document.hidden) return;
-            const b = clock() / beat, n = Math.floor(b), ph = b - n, at = ORDER[((n % 4) + 4) % 4], prev = ORDER[(((n - 1) % 4) + 4) % 4];
-            const hit = Math.exp(-ph * 7);
+            const b = clock() / beat, nb = Math.floor(b), ph = b - nb;
+            const o = opts.onset ? opts.onset() : 0;
+            if (o > 0 && ph > 0.16 && ph < 0.84) { extra++; kickAt = now; }
+            const n = nb + extra, at = ORDER[((n % 4) + 4) % 4], prev = ORDER[(((n - 1) % 4) + 4) % 4];
+            const hit = Math.max(Math.exp(-ph * 7), Math.exp(-(now - kickAt) * 0.009));
             for (let i = 0; i < 4; i++) {
                 const c = cells[i];
                 if (i === at) {
@@ -130,7 +136,7 @@ window.SiteSound = (() => {
                     c.style.transform = 'scale(0.8)';
                     c.style.opacity = i === prev ? (0.3 + 0.4 * hit).toFixed(3) : '0.3';
                 }
-                c.classList.toggle('is-down', i === at && ((n % 4) + 4) % 4 === 0);
+                c.classList.toggle('is-down', i === at && ((nb % 4) + 4) % 4 === 0);
             }
             raf = requestAnimationFrame(frame);
         }

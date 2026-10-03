@@ -978,6 +978,7 @@
                 mount: document.querySelector('[data-sound-slot="bar"]') || undefined,
                 beat: BEAT,
                 clock: () => cycleTime(performance.now(), true),
+                onset: audio ? () => audio.onset() : undefined,
                 onChange: (m) => {
                     sound.setPref(m ? 'off' : 'on');
                     if (!audio) return;

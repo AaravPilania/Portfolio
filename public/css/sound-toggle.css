@@ -21,9 +21,18 @@
     padding: 16px;
 }
 
+/* the page waits behind frosted glass until the visitor is in */
 .ss-gate__scrim {
     position: absolute;
     inset: 0;
+    background: rgba(18, 19, 22, 0.5);
+    -webkit-backdrop-filter: blur(48px) saturate(0.7);
+    backdrop-filter: blur(48px) saturate(0.7);
+}
+
+.ss-gate.is-out .ss-gate__scrim {
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(0.3, 0, 0.2, 1) 0.08s;
 }
 
 /* the way in is a flashbang: the page blinks to paper as the dialog goes */
