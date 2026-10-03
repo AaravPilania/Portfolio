@@ -1717,7 +1717,7 @@ void main() {
             };
             section.querySelectorAll('.js-launch-uc').forEach((btn) => {
                 btn.addEventListener('mouseenter', () => ucSummon(btn));
-                btn.addEventListener('mouseleave', () => ucRelease(1200));
+                btn.addEventListener('mouseleave', () => ucRelease(0));
                 btn.addEventListener('focus', () => ucSummon(btn));
                 btn.addEventListener('blur', () => ucRelease(400));
                 btn.addEventListener('click', (e) => {

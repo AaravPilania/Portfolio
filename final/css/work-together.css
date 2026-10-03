@@ -190,8 +190,8 @@ html.is-sticker-drag * {
 /* The last screen's one action, on the page's centre axis where the header pill stood */
 .wt-contact {
     position: fixed;
-    left: 50%;
-    top: clamp(28px, 7.5vh, 72px);
+    right: clamp(20px, 3vw, 48px);
+    top: clamp(20px, 4vh, 40px);
     z-index: 12;
     display: inline-flex;
     align-items: center;
@@ -208,11 +208,11 @@ html.is-sticker-drag * {
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
-    transform: translate3d(-50%, -16px, 0);
+    transform: translate3d(0, -16px, 0);
     transition: opacity 0.5s var(--wt-ease), transform 0.9s var(--wt-ease), background-color 0.4s var(--wt-ease);
 }
 .wt-contact .wt-cta__arrow { width: 38px; height: 38px; }
-.wt.is-end .wt-contact { opacity: 1; pointer-events: auto; transform: translate3d(-50%, 0, 0); }
+.wt.is-end .wt-contact { opacity: 1; pointer-events: auto; transform: translate3d(0, 0, 0); }
 .wt-contact:hover,
 .wt-contact:focus-visible { background: var(--wt-sun); }
 .wt-contact:hover .wt-cta__arrow svg,

@@ -325,11 +325,11 @@
     // One pinned screen, scrubbed by the section's scroll progress: the headline leaves, the stickers drop the moment it
     // has gone, then the footer links and the signature arrive; the signature finishes as the page ends
     // Section scroll is 2.6 viewports: the dots finish the headline ~0.17 in, it holds until ~0.75, rises by ~1.35
-    // The signature is written before the drop so it is already a solid object when the stickers land on it
+    // Words rise, the stickers drop and settle, and only then is the signature written with the scroll; it has no body
     const T_RISE0 = 0.25, T_RISE1 = 0.46, RISE_W = 0.42;
-    const T_SIG0 = 0.43, T_SIG1 = 0.66;
-    const T_FALL = 0.7, T_LIFT = 0.66;
-    const T_BAR0 = 0.7, T_BAR1 = 0.78;
+    const T_FALL = 0.52, T_LIFT = 0.49;
+    const T_SIG0 = 0.66, T_SIG1 = 0.93;
+    const T_BAR0 = 0.88, T_BAR1 = 0.96;
     const Mt = window.Matter;
     const STEP = 1000 / 60;
     const C_WALL = 1, C_SOLID = 2, C_GHOST = 4, C_SIG = 8;
@@ -339,7 +339,7 @@
     const sigCanvas = document.getElementById('wtSigCanvas');
     const sigWrap = document.getElementById('wtSigWrap');
     const contactEl = stage.querySelector('.wt-contact');
-    let sigEngine = null;
+    let sigEngine = null, sigDrawn = 0;
     let titleChars = [];
 
     let W = 0, H = 0, dpr = 1, vTop = 0, unitA = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
@@ -464,20 +464,6 @@
         return true;
     }
 
-    // The signature as a static chain of capsules laid along its ribbon, each as thick as the ink at that point
-    function sigCollider() {
-        if (sigParts.length) Mt.Composite.remove(engine.world, sigParts);
-        sigParts = [];
-        if (!sigEngine || !sigEngine.ready || !sigWrap) return;
-        const r = sigWrap.getBoundingClientRect();
-        sigParts = sigEngine.segments(Math.max(14, W / 90)).map((g) => Mt.Bodies.rectangle(r.left + g.x, r.top + g.y, g.len, g.th, {
-            isStatic: true, angle: g.a, friction: 0.4, frictionStatic: 0.8, restitution: 0.12,
-            chamfer: { radius: g.th * 0.49 },
-            collisionFilter: { category: C_SIG, mask: C_SOLID },
-        }));
-        Mt.Composite.add(engine.world, sigParts);
-    }
-
     // Bodies are built once per raster and reused, so the drop frame only repositions them
     function bodies() {
         if (!Mt) return;
@@ -546,7 +532,6 @@
     function fall() {
         if (built < items.length || !world()) return;
         clearBodies();
-        sigCollider();
         mode = 'fall'; fallT = 0; acc = 0; resting = false;
         for (const s of items) {
             const h = (s.img.bh * s.side) / s.ppu;
@@ -842,7 +827,7 @@ void main() {
             for (let y = Math.max(0, Math.ceil(y0 / SYN_STEP)) * SYN_STEP; y <= Math.min(y1, sh + 160); y += SYN_STEP) {
                 for (let c = 0; c < nc; c++) {
                     const d = hashN(c * 3.17, y * 0.731);
-                    if (d < 0.5 - 0.5 * lstep(bw[c] - 40, bw[c] + 80, y)) fn(c * SYN_STEP, y, c, hashN(c * 0.913, y * 2.41));
+                    if (d < 0.78 - 0.78 * lstep(bw[c] - 40, bw[c] + 80, y)) fn(c * SYN_STEP, y, c, hashN(c * 0.913, y * 2.41));
                 }
             }
         },
@@ -965,31 +950,109 @@ void main() {
             this.w = 0; this.h = 0; this.dpr = 1;
             const D = window.__SIG_DATA;
             if (!D || !this.ctx) return;
-            const ROT = 22 * Math.PI / 180, NIB = 27, HAIR = 3.6, R_MED = 5.4;
+            const ROT = 22 * Math.PI / 180, NIB = 31, HAIR = 2.4, R_MED = 5.4;
             const co = Math.cos(ROT), si = Math.sin(ROT), cx = D.w / 2, cy = D.h / 2;
             let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-            this.strokes = D.s.map((st) => {
-                const n = st.length / 4, o = new Float32Array(n * 4);
-                for (let i = 0; i < n; i++) {
-                    const dx = st[i * 4] - cx, dy = (D.h - st[i * 4 + 1]) - cy;
-                    const x = dx * co - dy * si, y = dx * si + dy * co;
-                    o[i * 4] = x; o[i * 4 + 1] = y;
-                    o[i * 4 + 2] = NIB * Math.min(1.25, Math.max(0.78, st[i * 4 + 2] / R_MED));
-                    o[i * 4 + 3] = st[i * 4 + 3];
-                }
-                // The trace wobbles by a pixel; a nib magnifies that into serrated edges, so the line is relaxed first
-                for (let pass = 0; pass < 3; pass++) {
-                    const q = o.slice();
-                    for (let i = 2; i < n - 2; i++) {
-                        for (let c = 0; c < 3; c++) {
-                            o[i * 4 + c] = (q[(i - 2) * 4 + c] + 2 * q[(i - 1) * 4 + c] + 3 * q[i * 4 + c] + 2 * q[(i + 1) * 4 + c] + q[(i + 2) * 4 + c]) / 9;
+            // The skeleton trace breaks the hand into ~150 fragments at every junction, each with a pixel of wobble. They are
+            // re-chained into a few long strokes (each fragment continues the straightest one whose pen time and end meet
+            // it), spurs are dropped, and every stroke is resampled and smoothed hard so the nib sweeps clean curves.
+            const frags = D.s.map((st) => {
+                const n = st.length / 4, p = [];
+                for (let i = 0; i < n; i++) p.push([st[i * 4], D.h - st[i * 4 + 1], st[i * 4 + 2], st[i * 4 + 3]]);
+                if (p.length > 1 && p[p.length - 1][3] < p[0][3]) p.reverse();
+                return p;
+            }).filter((p) => p.length > 1).sort((a, b) => a[0][3] - b[0][3]);
+            const dirAt = (p, end) => {
+                const a = end ? p[Math.max(0, p.length - 4)] : p[0], b = end ? p[p.length - 1] : p[Math.min(p.length - 1, 3)];
+                const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+                return [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+            };
+            const used = new Uint8Array(frags.length), chains = [];
+            // Grows the chain's tail with the unused fragment, either way round, that continues it most smoothly
+            const grow = (ch) => {
+                for (;;) {
+                    const e = ch[ch.length - 1], de = dirAt(ch, true);
+                    let best = -1, rev = false, bs = 1e9;
+                    for (let j = 0; j < frags.length; j++) {
+                        if (used[j]) continue;
+                        const f = frags[j];
+                        for (const r of [false, true]) {
+                            const h = r ? f[f.length - 1] : f[0], d = Math.hypot(h[0] - e[0], h[1] - e[1]);
+                            if (d > 18) continue;
+                            const df = r ? dirAt(f, true).map((v) => -v) : dirAt(f, false), turn = 1 - (de[0] * df[0] + de[1] * df[1]);
+                            if (turn > 1.3) continue;
+                            const sc = d + turn * 26;
+                            if (sc < bs) { bs = sc; best = j; rev = r; }
                         }
                     }
+                    if (best < 0) return ch;
+                    used[best] = 1;
+                    const f = rev ? frags[best].slice().reverse() : frags[best];
+                    ch.push(...f.slice(1));
                 }
+            };
+            const lenOf = (p) => { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return L; };
+            const order = frags.map((f, i) => i).sort((a, b) => lenOf(frags[b]) - lenOf(frags[a]));
+            for (const s of order) {
+                if (used[s]) continue;
+                used[s] = 1;
+                let ch = grow(frags[s].slice());
+                ch = grow(ch.reverse()).reverse();
+                chains.push(ch);
+            }
+            chains.sort((a, b) => Math.min(a[0][3], a[a.length - 1][3]) - Math.min(b[0][3], b[b.length - 1][3]));
+            chains.forEach((c) => { if (c[c.length - 1][3] < c[0][3]) c.reverse(); });
+            const STEP = 4;
+            const long = chains.filter((p) => lenOf(p) > 70);
+            // An end that lands on another stroke is a junction, not a lift: only free ends taper
+            const free = (p, q) => !long.some((o) => o !== q && o.some((v) => Math.hypot(v[0] - p[0], v[1] - p[1]) < 16));
+            const ends = long.map((p) => [free(p[0], p), free(p[p.length - 1], p)]);
+            const kept = long.map((p) => {
+                const out = [p[0].slice()];
+                let carry = 0;
+                for (let i = 1; i < p.length; i++) {
+                    const a = p[i - 1], b = p[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                    let u = STEP - carry;
+                    while (u <= l) {
+                        const k = u / l;
+                        out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k]);
+                        u += STEP;
+                    }
+                    carry = l - (u - STEP);
+                }
+                out.push(p[p.length - 1].slice());
+                const n = out.length;
+                const blur = (c, passes) => {
+                    for (let pass = 0; pass < passes; pass++) {
+                        const q = out.map((v) => v[c]);
+                        for (let i = 1; i < n - 1; i++) {
+                            const a = q[Math.max(0, i - 2)], b = q[i - 1], m = q[i], d = q[i + 1], e = q[Math.min(n - 1, i + 2)];
+                            out[i][c] = (a + 4 * b + 6 * m + 4 * d + e) / 16;
+                        }
+                    }
+                };
+                blur(0, 9); blur(1, 9); blur(2, 24);
+                return out;
+            });
+            // Pen time is re-laid at a steady speed through the strokes in their original order, with a short lift between
+            let total = 0;
+            const lens = kept.map((p) => { const L = lenOf(p); total += L + 40; return L; });
+            let run = 0;
+            this.strokes = kept.map((p, si2) => {
+                const n = p.length, o = new Float32Array(n * 4), L = lens[si2];
+                let s = 0;
                 for (let i = 0; i < n; i++) {
-                    const x = o[i * 4], y = o[i * 4 + 1];
+                    if (i) s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+                    const dx = p[i][0] - cx, dy = p[i][1] - cy;
+                    const x = dx * co - dy * si, y = dx * si + dy * co;
+                    // Brush entry and exit: the nib lands lightly and lifts off in a long tapered flick
+                    const taper = (ends[si2][0] ? Math.pow(Math.min(1, s / 26), 0.55) : 1) * (ends[si2][1] ? Math.pow(Math.min(1, (L - s) / 60), 0.75) : 1);
+                    o[i * 4] = x; o[i * 4 + 1] = y;
+                    o[i * 4 + 2] = NIB * Math.min(1.15, Math.max(0.85, p[i][2] / R_MED)) * Math.max(0.12, taper);
+                    o[i * 4 + 3] = (run + s) / total;
                     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
                 }
+                run += L + 40;
                 return o;
             });
             const pad = NIB * 1.5;
@@ -1106,17 +1169,42 @@ void main() {
         for (let i = 0; i < charIn.length; i++) charIn[i] = easeIO(lstep(dots.cl[i], dots.cl[i] + D_REVEAL, bp));
     }
 
+    // Every dot that has left marks its cell in the theme grid's hole mask (index.html), so slide 04 visibly loses
+    // exactly the cells whose dots are in flight and shows its image through them
+    function punchHoles(srcTop) {
+        const hm = window.__svcHoles;
+        if (!hm) return;
+        if (!dots || bp < dots.r0 || svcB <= 0) {
+            if (hm.on) { hm.on = 0; hm.gen = (hm.gen || 0) + 1; }
+            return;
+        }
+        const C = hm.cell, w = Math.ceil(W / C) + 1, h = Math.ceil(H / C) + 1;
+        if (!hm.data || hm.w !== w || hm.h !== h) { hm.w = w; hm.h = h; hm.data = new Uint8Array(w * h * 4); }
+        const d = hm.data, a = dots.a;
+        d.fill(0);
+        for (let i = 0; i < dots.n; i++) {
+            const o = i * 12;
+            if (bp < a[o + 4]) continue;
+            const cx = Math.floor(a[o] / C + 0.5), cy = Math.floor((srcTop + a[o + 1]) / C + 0.5);
+            if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue;
+            d[(cy * w + cx) * 4] = 255;
+        }
+        hm.on = 1;
+        hm.gen = (hm.gen || 0) + 1;
+    }
+
     function drawDots() {
         if (bp < -0.45) snapArmed = true;
         if (snapArmed && bp > -0.3 && bp < R0 + 0.04 && snapshot()) snapArmed = false;
         updateHide();
         revealChars();
-        if (!dots) return;
+        if (!dots) { punchHoles(0); return; }
         if (bp === dotsP && !dirty) return;
         dotsP = bp;
         const show = bp >= dots.r0 && bp < dots.end;
         const F = svcField();
         const srcTop = src.cv.getBoundingClientRect().top;
+        punchHoles(srcTop);
         const wt = F ? F.time : 0;
         const grow = Math.max(2, dots.step * 0.92);
         if (dgl) {
@@ -1255,7 +1343,11 @@ void main() {
             const tf = rise > 0.001 ? `translate3d(-50%, calc(-50% + ${(rise * 9).toFixed(2)}vh), 0)` : '';
             if (sigWrap.style.transform !== tf) sigWrap.style.transform = tf;
         }
-        if (sigEngine) sigEngine.render(lstep(T_SIG0, T_SIG1, wtProgress), look.x / (W * 0.5), look.y / (H * 0.5));
+        // The pen waits for the pile to come to rest, then catches up with the scroll
+        const sigWant = (STATIC || (mode === 'fall' && (resting || fallT > 2.2))) ? lstep(T_SIG0, T_SIG1, wtProgress) : 0;
+        sigDrawn = sigWant < sigDrawn ? sigWant : sigDrawn + (sigWant - sigDrawn) * Math.min(1, dt * 7);
+        if (Math.abs(sigWant - sigDrawn) < 0.0005) sigDrawn = sigWant;
+        if (sigEngine) sigEngine.render(sigDrawn, look.x / (W * 0.5), look.y / (H * 0.5));
 
         wtH = sr.height;
         const offY = STATIC ? stageTopNow() : Math.max(0, wtTop);

@@ -32,6 +32,11 @@
 
         return {
             locked: (t) => t < lockUntil,
+            unlock() {
+                spent = false;
+                touchSpent = false;
+                lockUntil = -Infinity;
+            },
             // Entering the stage owns whatever gesture carried the page there, so its inertia can't skip category one
             claim(t) {
                 spent = true;
@@ -135,6 +140,7 @@
             const to = z.step + d;
             if (to < 0 || to > n - 1) {
                 z.pinned = false;
+                z.guard = true;
                 return { type: 'release', dir: d, y: d < 0 ? z.A : z.B };
             }
             z.step = to;
@@ -416,7 +422,7 @@
             else minClear = Math.min(minClear, d);
         }
         return {
-            route, pts: P, s0: 0, s1: route.L, marks: [0, K[i1e], K[i2e], K[iTouch], route.L], steps: [0, K[i1s], K[i1e], K[i2e], K[iDive], K[iTouch], route.L],
+            route, pts: P, s0: 0, s1: route.L, marks: [0, K[i1e], K[i2e], K[iTouch], route.L], steps: [0, 1, 2, 3, 4, 5, 6].map((k) => route.L * k / 6),
             calm: [K[i1s], K[i2e]], box, clear: m,
             minClear, lensClear, lens: lens.map((l) => ({ x: l.x, y: l.y, r: l.r })), onEyes, lensOk, stacked, ok: minClear >= m - 1,
         };
@@ -1187,8 +1193,9 @@
         } else if (act.type === 'snap') {
             scrollTo(act.y, 0);
         } else if (act.type === 'release') {
-            if (!act.external) scrollTo(act.y, 0);
+            if (!act.external && act.dir < 0) scrollTo(act.y, 0);
             hold(false);
+            if (intent && intent.unlock) intent.unlock();
         }
     }
 

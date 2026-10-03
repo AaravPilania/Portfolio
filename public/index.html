@@ -254,7 +254,7 @@
         line-height: 1.5;
         color: #ffffff;
         cursor: default;
-        z-index: 5;
+        z-index: auto;
     }
 
     @media (min-width: 650px) {
@@ -266,9 +266,19 @@
     }
 
     #section-projects .projects__entry.h-mainOpacity--full {
-        z-index: 45 !important;
         opacity: 1 !important;
         cursor: pointer !important;
+    }
+
+    /* The row itself stays out of the stacking order so its rules paint under the hover media (#canvas, z 20);
+       only its content is lifted, above the media once the row is hot */
+    #section-projects .projects__entry > :not(.projects__entry-ctaMobile) {
+        position: relative;
+        z-index: 5;
+    }
+
+    #section-projects .projects__entry.h-mainOpacity--full > :not(.projects__entry-ctaMobile) {
+        z-index: 45;
     }
 
     #section-projects .projects__entry:after,
@@ -452,16 +462,17 @@
         content: '';
         position: absolute;
         inset: calc(-0.75 * var(--rem));
-        border: 1.5px solid #FFED29;
+        border: 2px dotted #FFED29;
         opacity: 0;
         transform: scale(0.55);
-        transition: opacity 0.2s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.48, 1.19);
+        transition: none;
         pointer-events: none;
     }
 
     #section-projects .projects__entry-cta--launch a.is-uc > span:nth-child(2)::after {
         opacity: 1;
         transform: scale(1);
+        transition: opacity 0.2s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.48, 1.19);
     }
 
     #section-projects .projects__entry-cta-arrow,
@@ -638,16 +649,79 @@
     <script>
         /* Slide 04's backdrop dither reads the raw video luminance, so its dark scenes crush to empty cells and the
            contrast swings with whatever frame is up. The theme bundle is vendored, so its grid shader is remapped as it
-           compiles: a fixed floor and a soft gamma give every cell at least ~7 of its 16 dots, the same on every frame. */
+           compiles: a low floor keeps the blacks soft (~3 of 16 dots) and an S-curve restores mid-tone contrast so the
+           face reads. The same shader also takes a screen-space mask of cells whose dots have flown off to slide 05
+           (window.__svcHoles, written by work-together.js): those cells stop dithering and show the image itself. */
         (function () {
             const MARK = 'float imageRGB = (tex.r + tex.g + tex.b) / 3.0;';
-            const LIFT = MARK + '\n    imageRGB = u_render_content * u_reveal_progress > 0.5 ? 0.44 + 0.56 * pow(clamp(imageRGB, 0.0, 1.0), 0.72) : imageRGB;';
+            const LIFT = MARK + '\n    imageRGB = u_render_content * u_reveal_progress > 0.5 ? 0.2 + 0.8 * smoothstep(0.03, 0.82, pow(clamp(imageRGB, 0.0, 1.0), 0.85)) : imageRGB;';
+            const NOGRID = 'nogrid_opacity = drawLLLogo(uv_resolution, nogrid_opacity, 1.0);';
+            const PUNCH = NOGRID + `
+    vec2 apP = vec2(gl_FragCoord.x - u_apGrid.x, u_apGrid.z - (gl_FragCoord.y - u_apGrid.y)) / u_apGrid.w;
+    float apH = u_apOn * u_render_content * texture(u_apHoles, (floor(apP + 0.5) + 0.5) / u_apSize).r;
+    nogrid_opacity = max(nogrid_opacity, apH);
+    nogrid_content = mix(nogrid_content, texture(u_content, st).rgb, apH);`;
+            const DECL = 'uniform sampler2D u_apHoles;\nuniform float u_apOn;\nuniform vec4 u_apGrid;\nuniform vec2 u_apSize;\nvoid main()';
+            const UNIT = 15, CELL = 8;
+            const holes = window.__svcHoles = { on: 0, w: 0, h: 0, data: null, dirty: false, cell: CELL };
+            const progs = new WeakMap(), cur = new WeakMap(), texs = new WeakMap();
+            const info = (gl, p) => {
+                if (!p) return null;
+                let i = progs.get(p);
+                if (i === undefined) {
+                    const loc = gl.getUniformLocation(p, 'u_apHoles');
+                    i = loc ? { loc, on: gl.getUniformLocation(p, 'u_apOn'), grid: gl.getUniformLocation(p, 'u_apGrid'), size: gl.getUniformLocation(p, 'u_apSize') } : null;
+                    progs.set(p, i);
+                }
+                return i;
+            };
+            const bind = (gl) => {
+                const i = info(gl, cur.get(gl));
+                if (!i) return;
+                if (!holes.on || !holes.data) { gl.uniform1f(i.on, 0); return; }
+                let t = texs.get(gl);
+                const prev = gl.getParameter(gl.ACTIVE_TEXTURE);
+                gl.activeTexture(gl.TEXTURE0 + UNIT);
+                if (!t) {
+                    t = { tex: gl.createTexture(), gen: -1 };
+                    texs.set(gl, t);
+                    gl.bindTexture(gl.TEXTURE_2D, t.tex);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                } else gl.bindTexture(gl.TEXTURE_2D, t.tex);
+                if (holes.dirty || t.gen !== holes.gen) {
+                    const flip = gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
+                    const pre = gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+                    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, holes.w, holes.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, holes.data);
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip);
+                    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, pre);
+                    holes.dirty = false;
+                    t.gen = holes.gen;
+                }
+                gl.activeTexture(prev);
+                const vp = gl.getParameter(gl.VIEWPORT);
+                gl.uniform1i(i.loc, UNIT);
+                gl.uniform1f(i.on, 1);
+                gl.uniform4f(i.grid, vp[0], vp[1], vp[3], CELL * vp[2] / Math.max(1, window.innerWidth));
+                gl.uniform2f(i.size, holes.w, holes.h);
+            };
             [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach((C) => {
                 if (!C) return;
-                const src = C.prototype.shaderSource;
-                C.prototype.shaderSource = function (s, code) {
-                    return src.call(this, s, typeof code === 'string' && code.indexOf(MARK) > -1 ? code.replace(MARK, LIFT) : code);
+                const P = C.prototype, src = P.shaderSource, use = P.useProgram, da = P.drawArrays, de = P.drawElements;
+                P.shaderSource = function (s, code) {
+                    if (typeof code === 'string' && code.indexOf(MARK) > -1) {
+                        code = code.replace(MARK, LIFT);
+                        if (code.indexOf(NOGRID) > -1) code = code.replace(NOGRID, PUNCH).replace('void main()', DECL);
+                    }
+                    return src.call(this, s, code);
                 };
+                P.useProgram = function (p) { cur.set(this, p); return use.call(this, p); };
+                P.drawArrays = function (a, b, c) { bind(this); return da.call(this, a, b, c); };
+                P.drawElements = function (a, b, c, d) { bind(this); return de.call(this, a, b, c, d); };
             });
         })();
     </script>
@@ -835,7 +909,7 @@
         }
 
         .marquee-track.track-line-1 span {
-            color: #b8664e !important;
+            color: var(--m1, #000) !important;
         }
 
         .marquee-track.track-line-2 span {
@@ -852,7 +926,7 @@
 
         .hero-marquee-outline-clip .marquee-track.track-line-1 span {
             color: transparent !important;
-            -webkit-text-stroke: 1.4px #b8664e;
+            -webkit-text-stroke: 1.4px var(--m1, #FFED29);
         }
 
         .hero-marquee-outline-clip .marquee-track.track-line-2 span {
@@ -3617,6 +3691,30 @@
                 .map((root) => root.querySelector('.track-line-1')).filter(Boolean);
             let line1Scale = '';
             let line1Y = '';
+            const line2Tracks = [marqueeBg, marqueeOutline].filter(Boolean)
+                .map((root) => root.querySelector('.track-line-2')).filter(Boolean);
+            line2Tracks.forEach((t) => { t.style.transition = 'none'; });
+            const marqueeRoots = [marqueeBg, marqueeOutline, marqueeInCard].filter(Boolean);
+            let line1Colour = '';
+            let line2State = '';
+            // Unscaled layout of both lines inside the marquee frame, read from real rects (transforms divided out)
+            const lineGeo = { c1: 0, h1: 0, c2: 0, h2: 0, gap: 0 };
+            function measureLineGeo() {
+                if (!marqueeBg) return;
+                const l1 = marqueeBg.querySelector('.track-line-1');
+                const l2 = marqueeBg.querySelector('.track-line-2');
+                if (!l1 || !l2) return;
+                const r1 = l1.getBoundingClientRect();
+                const r2 = l2.getBoundingClientRect();
+                const s1 = parseFloat(l1.style.scale) || 1;
+                const ty1 = parseFloat((l1.style.translate || '0 0').split(' ')[1]) || 0;
+                const s2 = parseFloat(getComputedStyle(l2).scale) || 1;
+                lineGeo.h1 = r1.height / s1;
+                lineGeo.c1 = (r1.top + r1.bottom) / 2 - ty1;
+                lineGeo.h2 = r2.height / s2;
+                lineGeo.c2 = (r2.top + r2.bottom) / 2;
+                lineGeo.gap = (lineGeo.c2 - lineGeo.h2 / 2) - (lineGeo.c1 + lineGeo.h1 / 2);
+            }
             // Slide 1: line 1 rides at the character's ear line, easing back to its slide-2 slot as the card shrinks
             let line1EarShift = 0;
             function measureLine1EarShift() {
@@ -3628,7 +3726,8 @@
                 line1EarShift = eng.earScreenY() - lineCentre;
             }
             measureLine1EarShift();
-            if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measureLine1EarShift(); updateSlideMotion(true); });
+            measureLineGeo();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measureLine1EarShift(); measureLineGeo(); updateSlideMotion(true); });
 
             // One clock per line drives the base, the in-card copy and the outline clone every frame, so the glyphs
             // inside the card are always the exact glyphs of the line passing behind it
@@ -3808,6 +3907,30 @@
                     line1Tracks.forEach((t) => { t.style.scale = s1; t.style.translate = '0 ' + ty + 'px'; });
                 }
 
+                const col = 'rgb(' + Math.round(255 * growK) + ',' + Math.round(237 * growK) + ',' + Math.round(41 * growK) + ')';
+                if (col !== line1Colour) {
+                    line1Colour = col;
+                    marqueeRoots.forEach((r) => r.style.setProperty('--m1', col));
+                }
+
+                // Line 2 only fades in once the real gap below line 1's scaled, shifted box clears a minimum
+                if (line2Tracks.length && lineGeo.h1) {
+                    const bottom1 = lineGeo.c1 + (+ty) + (+s1) * lineGeo.h1 / 2;
+                    const top2 = lineGeo.c2 - 0.96 * lineGeo.h2 / 2;
+                    const minGap = Math.max(4, lineGeo.gap * 0.35);
+                    const span = Math.max(4, lineGeo.gap * 0.5);
+                    const g = Math.max(0, Math.min(1, (top2 - bottom1 - minGap) / span));
+                    const gate = Math.max(0, Math.min(1, (shrinkP - 0.25) / 0.2));
+                    let k = g * gate;
+                    k = k * k * (3 - 2 * k);
+                    const st2 = k.toFixed(3);
+                    if (st2 !== line2State) {
+                        line2State = st2;
+                        const sc = (0.96 + 0.04 * k).toFixed(4);
+                        line2Tracks.forEach((t) => { t.style.opacity = st2; t.style.scale = sc; t.style.visibility = k > 0 ? 'visible' : 'hidden'; });
+                    }
+                }
+
                 if (marqueeBg) {
                     if (shrinkP > 0.25) {
                         marqueeBg.classList.add('is-active');
@@ -3827,6 +3950,7 @@
             window.addEventListener('resize', () => {
                 updateViewportCache();
                 measureLine1EarShift();
+                measureLineGeo();
                 syncOutlineMarquee();
                 updateSlideMotion(true);
             }, { passive: true });

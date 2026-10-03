@@ -795,6 +795,12 @@
                 nextDetect = now + 250;
             }
 
+            // Slide 1 never lets it doze: it keeps prowling to bait the pointer
+            const prowl = section === 'hero' && !leash;
+            if (prowl) {
+                lastActive = now;
+                if (state === 'sleep') wake(now, true);
+            }
             if ((state === 'idle' || state === 'walk' || state === 'groom') && now - lastActive > 18000 && !say && !queue.length) {
                 state = 'sleep';
                 speed = 0;
@@ -944,8 +950,11 @@
                         return { x: gx, y: gy };
                     };
                     // While it's talking it only picks calm things so the bubble stays readable
-                    const menu = say
+                    const menu = say && !prowl
                         ? [['pause', 3], ['groom', 2]]
+                        : prowl
+                        ? [['roam', 34], ['scuttle', 24], ['circle', 10], ['fly', 10], ['pause', 2],
+                            ['visit', mouse.seen && now - lastVisit > 3500 ? 6 : 0]]
                         : [['roam', 28], ['scuttle', 16], ['pause', 16], ['groom', 12], ['circle', 8], ['fly', 8],
                             ['visit', mouse.seen && now - lastVisit > 3500 ? 9 : 0]];
                     let roll = Math.random() * menu.reduce((a, m) => a + m[1], 0);
@@ -1048,7 +1057,7 @@
                         } else if (through) {
                             act.i++;
                         } else {
-                            pauseUntil = now + (act.type === 'scuttle' ? 150 + Math.random() * 400 : 300 + Math.random() * 800);
+                            pauseUntil = now + (prowl ? 60 + Math.random() * 160 : act.type === 'scuttle' ? 150 + Math.random() * 400 : 300 + Math.random() * 800);
                             act = null;
                         }
                         travelled = 0;
@@ -1255,8 +1264,9 @@
             if (rest && btn) {
                 window.__pixelBugLeash(() => {
                     const r = btn.getBoundingClientRect();
-                    restSpot.x = r.right + 38;
+                    restSpot.x = r.left - 38;
                     restSpot.y = r.top + r.height / 2 + 4;
+                    restSpot.heading = 0;
                     return restSpot;
                 });
             } else if (!rest && leash) {
