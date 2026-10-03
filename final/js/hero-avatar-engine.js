@@ -125,6 +125,7 @@
   var lastBoilTime = 0;
 
   var isRunning = false;
+  var animReqId = null;
   // The art (source rows 187..847) is fitted to the visible part of the canvas, which the page shows object-fit: cover
   // anchored centre-bottom: its foot sits on the canvas's bottom edge (half a pixel past it, so no seam) and its height
   // is a fixed share of what the viewport actually shows. The spectacles SVG (xMidYMax slice) is re-anchored to match.

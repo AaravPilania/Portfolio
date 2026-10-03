@@ -166,7 +166,7 @@
         margin: 0 !important;
         border: 0 !important;
         line-height: 1 !important;
-        min-width: 0.95em !important;
+        min-width: 0 !important;
         min-height: 1em !important;
         flex-shrink: 0 !important;
     }
@@ -189,7 +189,8 @@
         font-family: 'Brier', serif, sans-serif !important;
         font-size: clamp(1.15rem, 1.6vw, 1.5rem) !important;
         font-weight: 700 !important;
-        letter-spacing: -0.02em !important;
+        letter-spacing: 0 !important;
+        padding-right: 0.07em !important;
         text-transform: uppercase !important;
         color: #ffffff !important;
         text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95), 0 0 24px rgba(0, 0, 0, 0.8) !important;
@@ -633,6 +634,23 @@
 };</script>
 
     <meta name="generator" content="WP Rocket 3.23.3.3" data-wpr-features="wpr_cdn wpr_desktop" />
+    <script src="/js/page-transition.js"></script>
+    <script>
+        /* Slide 04's backdrop dither reads the raw video luminance, so its dark scenes crush to empty cells and the
+           contrast swings with whatever frame is up. The theme bundle is vendored, so its grid shader is remapped as it
+           compiles: a fixed floor and a soft gamma give every cell at least ~7 of its 16 dots, the same on every frame. */
+        (function () {
+            const MARK = 'float imageRGB = (tex.r + tex.g + tex.b) / 3.0;';
+            const LIFT = MARK + '\n    imageRGB = u_render_content * u_reveal_progress > 0.5 ? 0.44 + 0.56 * pow(clamp(imageRGB, 0.0, 1.0), 0.72) : imageRGB;';
+            [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach((C) => {
+                if (!C) return;
+                const src = C.prototype.shaderSource;
+                C.prototype.shaderSource = function (s, code) {
+                    return src.call(this, s, typeof code === 'string' && code.indexOf(MARK) > -1 ? code.replace(MARK, LIFT) : code);
+                };
+            });
+        })();
+    </script>
     <script src="/js/hero-avatar-engine.js"></script>
 
     <!-- Motion & Graphic Dependencies: GSAP, ScrollTrigger, Flip, SplitType, Rive, & Three.js -->
@@ -817,7 +835,7 @@
         }
 
         .marquee-track.track-line-1 span {
-            color: #d9b994 !important;
+            color: #b8664e !important;
         }
 
         .marquee-track.track-line-2 span {
@@ -834,7 +852,7 @@
 
         .hero-marquee-outline-clip .marquee-track.track-line-1 span {
             color: transparent !important;
-            -webkit-text-stroke: 1.4px #d9b994;
+            -webkit-text-stroke: 1.4px #b8664e;
         }
 
         .hero-marquee-outline-clip .marquee-track.track-line-2 span {
@@ -1695,7 +1713,25 @@
     <script src="intros/ap-intro-core.js"></script>
     <script src="intros/plotter-bleed.js"></script>
     <script>
-        APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED));
+        (function () {
+            // The full loader plays once per session; later visits, and arrivals through the page transition, open on
+            // the finished hero exactly as the loader would leave it
+            let seen = !!window.__ptIncoming;
+            try { seen = seen || !!sessionStorage.getItem('ap-intro-seen'); sessionStorage.setItem('ap-intro-seen', '1'); } catch (e) { /* no storage: play it */ }
+            if (!seen) { APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED)); return; }
+            if (typeof window.__setIntroManual === 'function') window.__setIntroManual();
+            const pre = document.getElementById('preloader'), ov = document.getElementById('transition-overlay');
+            if (pre) pre.style.display = 'none';
+            if (ov) ov.style.display = 'none';
+            const t0 = performance.now();
+            (function claim() {
+                if ((document.readyState !== 'loading' && window.__heroAvatarEngine) || performance.now() - t0 > 6000) {
+                    if (typeof window.__renderIntroAt === 'function') window.__renderIntroAt(99);
+                    document.body.classList.add('is-loaded');
+                    window.dispatchEvent(new CustomEvent('intro-complete'));
+                } else setTimeout(claim, 40);
+            })();
+        })();
     </script>
 
     
@@ -3362,6 +3398,7 @@
             <h2 class="wt-title" id="wtTitle"><span class="wt-ln"><span class="wt-li">Let&rsquo;s build</span></span><span class="wt-ln"><span class="wt-li">something <em>together.</em></span></span></h2>
             <a class="wt-cta" href="contact.html" data-no-swup>Say hello<span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
         </div>
+        <a class="wt-contact" href="/contact" data-no-swup tabindex="-1"><span class="wt-contact__t">Get in contact</span><span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
         <div class="wt-signature-wrap" id="wtSigWrap" aria-hidden="true">
             <canvas class="wt-signature-gl" id="wtSigCanvas"></canvas>
         </div>

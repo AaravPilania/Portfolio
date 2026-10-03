@@ -583,6 +583,7 @@
             if (!press || reduced) return;
             if (state !== 'held' && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) {
                 const now = performance.now();
+                if (rest) { press = null; doze(now); return; }
                 lastActive = now;
                 state = 'held';
                 react('held', now);
@@ -637,6 +638,7 @@
             mouse.t = now;
             mouse.seen = true;
             if (state === 'held' || press) return;
+            if (rest) { lastActive = now; if (!e.target.closest || !e.target.closest('a, button')) doze(now); return; }
             if (state === 'flip') {
                 lastActive = now;
                 react('click', now);
@@ -1235,6 +1237,41 @@
             if (say && say.pri >= USER) queue.unshift(text);
             else speak(text, now, 'scene', SECTION);
         };
+        // The last screen: it parks beside the contact button and hibernates there until the page is scrolled back up.
+        // Taps still get a boop; calling it over or dragging it only gets a sleepy refusal.
+        const DOZE = ['zzz… resting.', 'hibernating. scroll up to wake me.', 'mm… five more minutes.', 'off duty. try the button.'];
+        const NUDGE = ['the contact page is wild. go look.', 'psst. that button. press it.', 'there\'s a calendar that dances. just saying.', 'go on, say hello. i\'ll wait here.'];
+        let rest = false, restSaid = 0, nudgeN = 0;
+        const restSpot = { x: 0, y: 0, heading: Math.PI };
+        const doze = (now) => {
+            if (now - restSaid < 1400) return;
+            restSaid = now;
+            spawn('z', 2);
+            speak(DOZE[(Math.random() * DOZE.length) | 0], now, 'rest', USER);
+        };
+        window.addEventListener('wt:end', (e) => {
+            rest = !!e.detail;
+            const btn = doc.querySelector('.wt-contact');
+            if (rest && btn) {
+                window.__pixelBugLeash(() => {
+                    const r = btn.getBoundingClientRect();
+                    restSpot.x = r.right + 38;
+                    restSpot.y = r.top + r.height / 2 + 4;
+                    return restSpot;
+                });
+            } else if (!rest && leash) {
+                window.__pixelBugLeash(null);
+            }
+        });
+        setInterval(() => {
+            if (!rest || !live || say || document.hidden) return;
+            const now = performance.now();
+            if (now - restSaid < 6000) return;
+            restSaid = now;
+            if (nudgeN++ % 3 === 2) { spawn('z', 3); return; }
+            speak(NUDGE[nudgeN === 1 ? 0 : (Math.random() * NUDGE.length) | 0], now, 'nudge', SECTION);
+        }, 4500);
+
         const bugPos = { x: 0, y: 0 };
         window.__pixelBugPos = () => {
             if (!live) return null;

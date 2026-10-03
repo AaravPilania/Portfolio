@@ -325,16 +325,20 @@
     // One pinned screen, scrubbed by the section's scroll progress: the headline leaves, the stickers drop the moment it
     // has gone, then the footer links and the signature arrive; the signature finishes as the page ends
     // Section scroll is 2.6 viewports: the dots finish the headline ~0.17 in, it holds until ~0.75, rises by ~1.35
-    const T_RISE0 = 0.29, T_RISE1 = 0.52, RISE_W = 0.42;
-    const T_FALL = T_RISE1, T_LIFT = T_RISE1 - 0.04;
-    const T_BAR0 = 0.54, T_BAR1 = 0.62, T_SIG0 = 0.54, T_SIG1 = 0.97;
+    // The signature is written before the drop so it is already a solid object when the stickers land on it
+    const T_RISE0 = 0.25, T_RISE1 = 0.46, RISE_W = 0.42;
+    const T_SIG0 = 0.43, T_SIG1 = 0.66;
+    const T_FALL = 0.7, T_LIFT = 0.66;
+    const T_BAR0 = 0.7, T_BAR1 = 0.78;
     const Mt = window.Matter;
     const STEP = 1000 / 60;
-    const C_WALL = 1, C_SOLID = 2, C_GHOST = 4;
+    const C_WALL = 1, C_SOLID = 2, C_GHOST = 4, C_SIG = 8;
+    let sigParts = [];
     const foot = document.querySelector('.sig-footer');
     const floorEl = stage.querySelector('.sig-bar') || (foot && foot.querySelector('.sig-bar'));
     const sigCanvas = document.getElementById('wtSigCanvas');
     const sigWrap = document.getElementById('wtSigWrap');
+    const contactEl = stage.querySelector('.wt-contact');
     let sigEngine = null;
     let titleChars = [];
 
@@ -460,6 +464,20 @@
         return true;
     }
 
+    // The signature as a static chain of capsules laid along its ribbon, each as thick as the ink at that point
+    function sigCollider() {
+        if (sigParts.length) Mt.Composite.remove(engine.world, sigParts);
+        sigParts = [];
+        if (!sigEngine || !sigEngine.ready || !sigWrap) return;
+        const r = sigWrap.getBoundingClientRect();
+        sigParts = sigEngine.segments(Math.max(14, W / 90)).map((g) => Mt.Bodies.rectangle(r.left + g.x, r.top + g.y, g.len, g.th, {
+            isStatic: true, angle: g.a, friction: 0.4, frictionStatic: 0.8, restitution: 0.12,
+            chamfer: { radius: g.th * 0.49 },
+            collisionFilter: { category: C_SIG, mask: C_SOLID },
+        }));
+        Mt.Composite.add(engine.world, sigParts);
+    }
+
     // Bodies are built once per raster and reused, so the drop frame only repositions them
     function bodies() {
         if (!Mt) return;
@@ -506,18 +524,20 @@
             const b = s.body;
             if (!b || b.collisionFilter.category === C_SOLID) continue;
             s.ghost += dt;
-            let clear = s.ghost > 1.4;
-            if (!clear) {
-                clear = true;
-                for (const o of items) {
-                    const c = o.body;
-                    if (!c || c === b || c.collisionFilter.category !== C_SOLID) continue;
-                    const A = b.bounds, B = c.bounds;
+            const hits = (list) => {
+                const A = b.bounds;
+                for (const c of list) {
+                    if (!c || c === b) continue;
+                    const B = c.bounds;
                     if (A.max.x < B.min.x || A.min.x > B.max.x || A.max.y < B.min.y || A.min.y > B.max.y) continue;
-                    if (Mt.Collision.collides(b, c)) { clear = false; break; }
+                    if (Mt.Collision.collides(b, c)) return true;
                 }
-            }
-            if (clear) b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 };
+                return false;
+            };
+            // Never solid while inside the signature: it is static, so an overlap there would fire the sticker off
+            if (hits(sigParts)) continue;
+            const clear = s.ghost > 1.4 || !hits(items.map((o) => (o.body && o.body.collisionFilter.category === C_SOLID ? o.body : null)));
+            if (clear) b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID | C_SIG, group: 0 };
         }
     }
 
@@ -526,6 +546,7 @@
     function fall() {
         if (built < items.length || !world()) return;
         clearBodies();
+        sigCollider();
         mode = 'fall'; fallT = 0; acc = 0; resting = false;
         for (const s of items) {
             const h = (s.img.bh * s.side) / s.ppu;
@@ -569,7 +590,7 @@
         if (!s || !s.body) return false;
         const b = s.body, py = e.clientY - footTop;
         Mt.Sleeping.set(b, false);
-        b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 };
+        b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID | C_SIG, group: 0 };
         for (const o of items) if (o.body && o.body.isSleeping) Mt.Sleeping.set(o.body, false);
         const c = Mt.Constraint.create({
             pointA: { x: e.clientX, y: py },
@@ -717,7 +738,7 @@ void main() {
     p.x += cos(p.y * 0.0068 * uDpr - T * 0.48) * 22.0 * w;
     float keep = step(1.5, a2.w);
     vec3 ink = mix(uInk, uSun, a2.w - 2.0 * keep);
-    gl_PointSize = mix(1.65, uGrow, keep * smoothstep(0.7, 1.0, t)) * uDpr;
+    gl_PointSize = mix(1.65 + 1.1 * w, uGrow, keep * smoothstep(0.7, 1.0, t)) * uDpr;
     gl_Position = uP < a1.x ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
     float a = keep > 0.5
         ? mix(0.38, 1.0, smoothstep(0.2, 0.8, t)) * (1.0 - smoothstep(a1.z, a1.z + ${D_REVEAL.toFixed(3)}, uP))
@@ -802,11 +823,31 @@ void main() {
 
     const fract = (v) => v - Math.floor(v);
     const hashN = (x, y) => fract(Math.sin(x * 12.98923445328 + y * 4.137643425614414) * 43758.54432453);
-    const svcField = () => window.__svcField || null;
     const wave = (x, T) => {
         const k = x * dpr;
         return Math.sin(k * 0.0032 + T * 0.65) * 115 + Math.cos(k * 0.0068 - T * 0.48) * 55 + Math.sin(k * 0.0135 + T * 0.85) * 22;
     };
+    // Slide 04's backdrop is drawn by the theme's WebGL grid, which can't be read back; without the 2D grid engine the
+    // same 8px lattice is laid over the section itself, dithered toward its bottom wave, so the grains always have a source
+    const SYN_STEP = 8, synHide = { cut: null, band: 0 };
+    const synth = {
+        get canvas() { return svc; },
+        hide: synHide,
+        get time() { return performance.now() / 666; },
+        get cols() { return Math.ceil(W / SYN_STEP) + 1; },
+        botWave(c) { return svc.offsetHeight - 125 + wave(c * SYN_STEP, this.time) * 0.3; },
+        each(y0, y1, fn) {
+            const nc = this.cols, sh = svc.offsetHeight, bw = new Float32Array(nc);
+            for (let c = 0; c < nc; c++) bw[c] = this.botWave(c) + 125;
+            for (let y = Math.max(0, Math.ceil(y0 / SYN_STEP)) * SYN_STEP; y <= Math.min(y1, sh + 160); y += SYN_STEP) {
+                for (let c = 0; c < nc; c++) {
+                    const d = hashN(c * 3.17, y * 0.731);
+                    if (d < 0.5 - 0.5 * lstep(bw[c] - 40, bw[c] + 80, y)) fn(c * SYN_STEP, y, c, hashN(c * 0.913, y * 2.41));
+                }
+            }
+        },
+    };
+    const svcField = () => window.__svcField || (svc ? synth : null);
 
     // The grid's lit cells over its last viewport, each with the scroll progress at which the front reaches it. The front
     // starts as the grid's bottom wave (frozen at this instant) and climbs one viewport between R0 and R1; in canvas CSS
@@ -924,7 +965,7 @@ void main() {
             this.w = 0; this.h = 0; this.dpr = 1;
             const D = window.__SIG_DATA;
             if (!D || !this.ctx) return;
-            const ROT = 22 * Math.PI / 180, NIB = 16, HAIR = 2, R_MED = 5.4;
+            const ROT = 22 * Math.PI / 180, NIB = 27, HAIR = 3.6, R_MED = 5.4;
             const co = Math.cos(ROT), si = Math.sin(ROT), cx = D.w / 2, cy = D.h / 2;
             let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
             this.strokes = D.s.map((st) => {
@@ -933,7 +974,7 @@ void main() {
                     const dx = st[i * 4] - cx, dy = (D.h - st[i * 4 + 1]) - cy;
                     const x = dx * co - dy * si, y = dx * si + dy * co;
                     o[i * 4] = x; o[i * 4 + 1] = y;
-                    o[i * 4 + 2] = NIB * Math.min(1.35, Math.max(0.55, st[i * 4 + 2] / R_MED));
+                    o[i * 4 + 2] = NIB * Math.min(1.25, Math.max(0.78, st[i * 4 + 2] / R_MED));
                     o[i * 4 + 3] = st[i * 4 + 3];
                 }
                 // The trace wobbles by a pixel; a nib magnifies that into serrated edges, so the line is relaxed first
@@ -967,6 +1008,30 @@ void main() {
             this.cv.width = Math.round(w * dpr);
             this.cv.height = Math.round(h * dpr);
             this.shown = -1;
+        }
+
+        // The finished ribbon as straight pieces of about `step` CSS px, in the canvas box: centre, length, angle, and
+        // the ink's thickness there (the nib's projection across the direction of travel, never under the hairline)
+        segments(step) {
+            if (!this.ready || !this.w) return [];
+            const B = this.box, sc = Math.min(this.w / B.w, this.h / B.h);
+            const ox = (this.w - B.w * sc) / 2, oy = (this.h - B.h * sc) / 2, nx = this.nib.x, ny = this.nib.y;
+            const X = (v) => ox + (v - B.x) * sc, Y = (v) => oy + (v - B.y) * sc;
+            const out = [];
+            for (const o of this.strokes) {
+                const n = o.length / 4;
+                let a = 0;
+                for (let i = 1; i < n; i++) {
+                    const dx = X(o[i * 4]) - X(o[a * 4]), dy = Y(o[i * 4 + 1]) - Y(o[a * 4 + 1]), len = Math.hypot(dx, dy);
+                    if (len < step && i < n - 1) continue;
+                    if (len < 2) continue;
+                    const w = (o[a * 4 + 2] + o[i * 4 + 2]) / 2, ux = dx / len, uy = dy / len;
+                    const th = Math.max(this.hair * 2, 2 * w * Math.abs(ux * ny - uy * nx)) * sc;
+                    out.push({ x: X(o[a * 4]) + dx / 2, y: Y(o[a * 4 + 1]) + dy / 2, len: len + th * 0.6, th: Math.max(6, th), a: Math.atan2(dy, dx) });
+                    a = i;
+                }
+            }
+            return out;
         }
 
         render(progress, tiltX = 0, tiltY = 0) {
@@ -1176,8 +1241,20 @@ void main() {
             floorEl.style.transform = k < 1 ? `translate3d(0, ${((1 - k) * 18).toFixed(1)}px, 0)` : '';
             floorEl.style.pointerEvents = k > 0.5 ? '' : 'none';
         }
+        const end = wtProgress >= T_BAR0 && wtTop <= 1;
+        if (end !== sec.classList.contains('is-end')) {
+            sec.classList.toggle('is-end', end);
+            document.documentElement.classList.toggle('is-wt-end', end);
+            if (contactEl) contactEl.tabIndex = end ? 0 : -1;
+            window.dispatchEvent(new CustomEvent('wt:end', { detail: end }));
+        }
         const sigAppear = lstep(T_SIG0, T_SIG0 + 0.03, wtProgress);
-        if (sigWrap) sigWrap.style.opacity = sigAppear.toFixed(3);
+        if (sigWrap) {
+            sigWrap.style.opacity = sigAppear.toFixed(3);
+            const rise = 1 - ease(lstep(T_SIG0, T_SIG0 + 0.12, wtProgress));
+            const tf = rise > 0.001 ? `translate3d(-50%, calc(-50% + ${(rise * 9).toFixed(2)}vh), 0)` : '';
+            if (sigWrap.style.transform !== tf) sigWrap.style.transform = tf;
+        }
         if (sigEngine) sigEngine.render(lstep(T_SIG0, T_SIG1, wtProgress), look.x / (W * 0.5), look.y / (H * 0.5));
 
         wtH = sr.height;
