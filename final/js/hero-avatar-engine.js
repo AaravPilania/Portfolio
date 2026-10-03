@@ -147,21 +147,25 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fitArt, { once: true });
   window.addEventListener('resize', function () { fitArt(); if (!isRunning) renderFrame(performance.now()); }, { passive: true });
 
-  // Smirk: the drawn mouth is painted out in skin and redrawn level on the left, its right corner lifting into the
-  // moustache; three boil frames like the rest of the linework
-  var mouthEraser = new Path2D("M 799 538 L 884 537 L 885 564 L 799 565 Z");
-  var smirkFrames = [
-    new Path2D("M 806 546 C 822 548, 840 547, 856 544 C 868 541, 878 535, 888 526 L 893 535 C 884 545, 872 553, 858 558 C 840 563, 822 563, 807 560 C 800 559, 799 547, 806 546 Z"),
-    new Path2D("M 806.4 546.4 C 822.2 548.3, 840.3 547.4, 856.2 544.2 C 868.4 541.2, 878.3 535.4, 888.3 526.3 L 893.2 535.4 C 884.1 545.3, 871.8 553.4, 857.7 558.3 C 839.8 563.2, 821.9 563.3, 806.8 560.3 C 799.8 559.1, 799.3 547.3, 806.4 546.4 Z"),
-    new Path2D("M 805.7 545.8 C 821.8 547.7, 839.8 546.8, 855.8 543.7 C 867.7 540.8, 877.8 534.7, 887.7 525.6 L 892.8 534.6 C 883.8 544.6, 872.2 552.7, 858.3 557.7 C 840.2 562.8, 822.2 562.7, 807.2 559.8 C 800.2 558.8, 799 546.8, 805.7 545.8 Z")
-  ];
+  // Everything below the shoulder line and the collar curve is the tee's hatching; it is refilled in the shirt tone
+  var SHIRT_COLOR = '#566a55';
+  var shirtClip = new Path2D("M 380 900 L 380 648 L 736 648 L 736 688 C 760 712, 800 728, 840 731 C 885 731, 930 718, 968 686 L 968 648 L 1300 648 L 1300 900 Z");
 
-  window.addEventListener('mousemove', function (e) {
+  // Viewport y of the character's ear line, for the slide-1 marquee
+  var EAR_Y = 490;
+  function earScreenY() {
+    var vw = window.innerWidth || 1920, vh = window.innerHeight || 1080;
+    var s = Math.max(vw / CANVAS_W, vh / CANVAS_H);
+    return (EAR_Y * ART_SCALE + ART_OFFSET_Y - CANVAS_H) * s + vh;
+  }
+
+  var lastMouseAt = -1e9;
+  function aimAt(clientX, clientY) {
     var winW = window.innerWidth || 1920;
     var winH = window.innerHeight || 1080;
 
-    var srcMouseX = (e.clientX / winW) * SRC_W;
-    var srcMouseY = (e.clientY / winH) * SRC_H;
+    var srcMouseX = (clientX / winW) * SRC_W;
+    var srcMouseY = (clientY / winH) * SRC_H;
 
     var faceX = FACE_CENTER_X * ART_SCALE + ART_OFFSET_X;
     var faceY = FACE_CENTER_Y * ART_SCALE + ART_OFFSET_Y;
@@ -174,7 +178,19 @@
 
     targetDx = normX * MAX_TRAVEL_X;
     targetDy = normY * MAX_TRAVEL_Y;
-  });
+  }
+
+  window.addEventListener('mousemove', function (e) {
+    lastMouseAt = performance.now();
+    aimAt(e.clientX, e.clientY);
+  }, { passive: true });
+
+  // Once the pointer rests, the eyes follow the pixel bug
+  function aimAtBug(now) {
+    if (now - lastMouseAt < 900 || typeof window.__pixelBugPos !== 'function') return;
+    var p = window.__pixelBugPos();
+    if (p) aimAt(p.x, p.y);
+  }
 
   function renderEyeballWithOptics(frames, eyeCenter, curDx, curDy, activeFrame) {
     var cx = eyeCenter.x + curDx;
@@ -220,6 +236,7 @@
       boilFrame = (boilFrame + 1) % 3;
     }
 
+    if (now) aimAtBug(now);
     curDx += (targetDx - curDx) * 0.12;
     curDy += (targetDy - curDy) * 0.12;
 
@@ -253,11 +270,12 @@
     ctx.fillStyle = '#0a0a0a';
     ctx.fill(baseFrames[boilFrame], 'evenodd');
 
-    // 7. Smirk
-    ctx.fillStyle = SKIN_COLOR;
-    ctx.fill(mouthEraser);
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fill(smirkFrames[boilFrame]);
+    // 7. Tee
+    ctx.save();
+    ctx.clip(shirtClip);
+    ctx.fillStyle = SHIRT_COLOR;
+    ctx.fill(baseFrames[boilFrame], 'evenodd');
+    ctx.restore();
 
     ctx.restore(); // Restore art transform
     ctx.restore(); // Restore canvas scale
@@ -299,7 +317,8 @@
     },
     render: function () {
       renderFrame(performance.now());
-    }
+    },
+    earScreenY: earScreenY
   };
 
   start();

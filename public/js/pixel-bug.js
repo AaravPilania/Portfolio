@@ -284,8 +284,8 @@
             @keyframes pbCaret { 50% { opacity: 0; } }
             .pb-trail { position: fixed; inset: 0; z-index: 9999989; pointer-events: none; overflow: hidden; }
             .pb-dot { position: absolute; left: 0; top: 0; width: ${S}px; height: ${S}px; margin: ${-S / 2}px 0 0 ${-S / 2}px; background: #b89a2e;
-                opacity: 0; animation: pbDot 3.4s linear forwards; will-change: opacity; }
-            @keyframes pbDot { 0% { opacity: 0; } 5% { opacity: 0.9; } 70% { opacity: 0.9; } 100% { opacity: 0; } }
+                opacity: 0; animation: pbDot 1.8s linear forwards; will-change: opacity; }
+            @keyframes pbDot { 0% { opacity: 0; } 4% { opacity: 0.85; } 25% { opacity: 0.7; } 100% { opacity: 0; } }
         `;
         doc.head.appendChild(style);
 
@@ -1234,6 +1234,13 @@
             wake(now, true);
             if (say && say.pri >= USER) queue.unshift(text);
             else speak(text, now, 'scene', SECTION);
+        };
+        const bugPos = { x: 0, y: 0 };
+        window.__pixelBugPos = () => {
+            if (!live) return null;
+            bugPos.x = x;
+            bugPos.y = y;
+            return bugPos;
         };
         window.__pixelBugState = () => ({ live, state, x, y, section, leash: !!leash, leashPhase: leash && leash.ap ? leash.ap.phase : null, say: say && say.text, sayKind: say && say.kind, queue: queue.length, flips,
             entering: entering(), parts: parts.length, act: act && act.type, phase: act && act.phase, speed, lift, skin: skinKey,

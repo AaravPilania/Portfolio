@@ -1417,6 +1417,9 @@ void main() {
             preloadAllProjectAssets();
 
             this.section = document.getElementById('section-projects');
+            // Shares the section's stacking context so the media paints over the shrunk hero screen still in view
+            // behind the first rows, and under the rows themselves
+            if (this.section && this.section.parentNode) this.section.parentNode.insertBefore(this.canvas, this.section);
             this.renderer = new THREE.WebGLRenderer({
                 canvas: this.canvas,
                 alpha: true,
@@ -1681,6 +1684,50 @@ void main() {
                     if (ctaLink && ctaLink.href) {
                         window.open(ctaLink.href, '_blank');
                     }
+                });
+            });
+
+            // Launch arrows: the box lights up and the pixel bug lands on it with its under-construction tag
+            let ucOwner = null;
+            let ucOff = null;
+            const ucSummon = (btn) => {
+                clearTimeout(ucOff);
+                if (ucOwner && ucOwner !== btn) ucOwner.classList.remove('is-uc');
+                btn.classList.add('is-uc');
+                if (ucOwner === btn) return;
+                ucOwner = btn;
+                const box = btn.children[1];
+                if (typeof window.__pixelBugLeash !== 'function') return;
+                window.__pixelBugLeash(() => {
+                    const r = box.getBoundingClientRect();
+                    return { x: r.left + r.width * 0.5, y: r.top - r.height * 0.35, heading: Math.PI };
+                }, {
+                    onArrive: () => { if (ucOwner === btn && window.__pixelBugSay) window.__pixelBugSay('under construction'); }
+                });
+            };
+            const ucRelease = (delay) => {
+                clearTimeout(ucOff);
+                ucOff = setTimeout(() => {
+                    if (!ucOwner) return;
+                    ucOwner.classList.remove('is-uc');
+                    ucOwner = null;
+                    if (window.__pixelBugLeash) window.__pixelBugLeash(null);
+                    if (window.__pixelBugSay) window.__pixelBugSay('');
+                }, delay);
+            };
+            section.querySelectorAll('.js-launch-uc').forEach((btn) => {
+                btn.addEventListener('mouseenter', () => ucSummon(btn));
+                btn.addEventListener('mouseleave', () => ucRelease(1200));
+                btn.addEventListener('focus', () => ucSummon(btn));
+                btn.addEventListener('blur', () => ucRelease(400));
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    ucSummon(btn);
+                    ucRelease(2600);
+                });
+                btn.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ucSummon(btn); ucRelease(2600); }
                 });
             });
 

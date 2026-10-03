@@ -152,19 +152,6 @@
             g.mark('c', 22, 26, 46, 48, INK);
         } },
         { n: 'C++', w: 90, h: 100, k: 0.95, d: (g) => g.mark('cplusplus', 0, 0, 90, 100, '#00599C') },
-        { n: 'SQL', w: 84, h: 100, k: 0.9, d: (g) => {
-            const c = g.c;
-            c.beginPath();
-            c.ellipse(42, 82, 36, 12, 0, 0, Math.PI);
-            c.lineTo(6, 18);
-            c.ellipse(42, 18, 36, 12, 0, Math.PI, Math.PI * 2);
-            c.closePath();
-            c.fillStyle = SUN; c.fill();
-            c.lineWidth = 3.5; c.strokeStyle = VOID; c.stroke();
-            for (const y of [40, 61]) { c.beginPath(); c.ellipse(42, y, 36, 12, 0, 0, Math.PI); c.stroke(); }
-            c.beginPath(); c.ellipse(42, 18, 36, 12, 0, 0, Math.PI * 2); c.stroke();
-            g.text('SQL', 42, 23, 13, VOID, MONO, 600);
-        } },
         { n: 'React', w: 100, h: 100, k: 1.15, d: (g) => {
             g.dot(50, 50, 50, '#20232A');
             const c = g.c;
@@ -185,26 +172,10 @@
         }) },
         { n: 'GSAP', w: 150, h: 64, k: 0.95, d: (g) => { g.plate(0, 0, 150, 64, 14, '#0E100F'); g.mark('gsap', 14, 10, 122, 44, '#0AE448'); } },
         { n: 'Three.js', w: 100, h: 100, k: 1, d: (g) => g.mark('threedotjs', 4, 4, 92, 92, VOID) },
-        { n: 'React Three Fiber', w: 132, h: 76, k: 0.9, d: (g) => {
-            g.plate(0, 0, 132, 76, 16, VOID);
-            g.text('R3F', 66, 46, 38, INK, SANS, 800);
-            g.text('react-three-fiber', 66, 63, 9.5, 'rgba(244,242,234,0.62)');
-        } },
         { n: 'PWA', w: 132, h: 50, k: 0.85, d: (g) => g.mark('pwa', 0, 0, 132, 50, '#5A0FC8') },
 
         { n: 'FastAPI', w: 100, h: 100, k: 0.95, d: (g) => g.mark('fastapi', 0, 0, 100, 100, '#009688') },
         { n: 'Node.js', w: 92, h: 100, k: 1, d: (g) => g.mark('nodedotjs', 0, 0, 92, 100, '#5FA04E') },
-        { n: 'REST APIs', w: 168, h: 56, k: 0.9, d: (g) => {
-            g.plate(0, 0, 168, 56, 28, SUN);
-            g.text('GET /api', 20, 35, 17, VOID, MONO, 500, 'left');
-            g.plate(110, 12, 46, 32, 16, VOID);
-            g.text('200', 133, 33, 14, SUN, MONO, 500);
-        } },
-        { n: 'asyncio', w: 150, h: 64, k: 0.85, d: (g) => {
-            g.plate(0, 0, 150, 64, 12, '#3776AB');
-            g.text('await', 75, 37, 30, '#FFD43B', SANS, 800);
-            g.text('asyncio', 75, 54, 10, INK);
-        } },
         { n: 'PostgreSQL', w: 100, h: 100, k: 1.1, d: (g) => g.mark('postgresql', 0, 0, 100, 100, '#336791') },
         { n: 'SQLite', w: 92, h: 100, k: 0.9, d: (g) => g.mark('sqlite', 0, 0, 92, 100, '#003B57') },
         { n: 'ChromaDB', w: 124, h: 84, k: 0.85, d: (g) => {
@@ -233,39 +204,6 @@
                 g.path(`M${x + 24} 22h-14l-10 16 10 16h14l-10-16z`, '#008BFB');
             }
         } },
-        { n: 'Sentence Transformers', w: 176, h: 64, k: 0.9, d: (g) => {
-            g.plate(0, 0, 176, 64, 12, VOID);
-            g.text('[.12 -.48 .91 \u2026]', 88, 33, 15, SUN);
-            g.text('sentence-transformers', 88, 51, 9.5, 'rgba(244,242,234,0.62)');
-        } },
-        { n: 'RAG', w: 120, h: 72, k: 0.85, d: (g) => { g.plate(0, 0, 120, 72, 14, SUN); g.text('RAG', 60, 53, 46, VOID, DISPLAY, 700); } },
-        { n: 'LLM Orchestration', w: 186, h: 60, k: 0.9, d: (g) => {
-            const c = g.c;
-            g.plate(0, 0, 186, 60, 30, VOID);
-            c.lineWidth = 2; c.strokeStyle = INK;
-            for (const a of [-60, 60, 180]) {
-                const x = 32 + 17 * Math.cos(a * Math.PI / 180), y = 30 + 17 * Math.sin(a * Math.PI / 180);
-                c.beginPath(); c.moveTo(32, 30); c.lineTo(x, y); c.stroke();
-                g.dot(x, y, 4, INK);
-            }
-            g.dot(32, 30, 8, SUN);
-            g.text('LLM', 60, 31, 22, INK, SANS, 800, 'left');
-            g.text('orchestration', 60, 46, 10, 'rgba(244,242,234,0.62)', MONO, 500, 'left');
-        } },
-        { n: 'Multi-Agent Pipelines', w: 170, h: 70, k: 0.9, d: (g) => {
-            const c = g.c;
-            c.lineWidth = 3; c.strokeStyle = VOID;
-            for (const x0 of [43, 102]) {
-                c.beginPath(); c.moveTo(x0, 28); c.lineTo(x0 + 20, 28); c.stroke();
-                g.path(`M${x0 + 24} 28l-7-5v10z`, VOID);
-            }
-            [26, 85, 144].forEach((x, i) => {
-                g.dot(x, 28, 15, SUN);
-                c.beginPath(); c.arc(x, 28, 15, 0, Math.PI * 2); c.stroke();
-                g.text('A' + (i + 1), x, 32, 11, VOID, MONO, 600);
-            });
-            g.text('multi-agent pipeline', 85, 63, 10, VOID);
-        } },
 
         { n: 'Git', w: 100, h: 100, k: 0.95, d: (g) => g.mark('git', 0, 0, 100, 100, '#F05032') },
         { n: 'GitHub', w: 100, h: 100, k: 1.05, d: (g) => g.mark('github', 0, 0, 100, 100, VOID) },
@@ -279,16 +217,6 @@
             chrome(g, 46, 46, 44);
             g.plate(56, 72, 42, 24, 7, VOID);
             g.text('CDP', 77, 88.5, 12, INK, MONO, 600);
-        } },
-        { n: 'Tesseract OCR', w: 100, h: 100, k: 0.85, d: (g) => {
-            const c = g.c;
-            g.plate(32, 32, 36, 36, 1, SUN);
-            c.lineWidth = 4; c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = VOID;
-            c.strokeRect(10, 10, 80, 80); c.strokeRect(32, 32, 36, 36);
-            c.beginPath();
-            for (const [a, b] of [[10, 32], [90, 68]]) for (const [p, q] of [[10, 32], [90, 68]]) { c.moveTo(a, p); c.lineTo(b, q); }
-            c.stroke();
-            g.text('OCR', 50, 54, 11, VOID, MONO, 600);
         } },
     ];
 
@@ -396,9 +324,10 @@
     const HEAD = 1.12; // raster headroom for the hover lift
     // One pinned screen, scrubbed by the section's scroll progress: the headline leaves, the stickers drop the moment it
     // has gone, then the footer links and the signature arrive; the signature finishes as the page ends
-    const T_RISE0 = 0.03, T_RISE1 = 0.34, RISE_W = 0.42;
+    // Section scroll is 2.6 viewports: the dots finish the headline ~0.17 in, it holds until ~0.75, rises by ~1.35
+    const T_RISE0 = 0.29, T_RISE1 = 0.52, RISE_W = 0.42;
     const T_FALL = T_RISE1, T_LIFT = T_RISE1 - 0.04;
-    const T_BAR0 = 0.4, T_BAR1 = 0.52, T_SIG0 = 0.4, T_SIG1 = 0.97;
+    const T_BAR0 = 0.54, T_BAR1 = 0.62, T_SIG0 = 0.54, T_SIG1 = 0.97;
     const Mt = window.Matter;
     const STEP = 1000 / 60;
     const C_WALL = 1, C_SOLID = 2, C_GHOST = 4;
@@ -761,7 +690,7 @@
     // pour in with the rest and dissolve as they arrive.
     const dotsCv = sec.querySelector('.wt-dots');
     const svc = document.querySelector('.ll-section--services');
-    const R0 = 0.0, R1 = 0.62, D_LAND = 0.9, D_REVEAL = 0.05, SRC_RGB = [249 / 255, 244 / 255, 235 / 255];
+    const R0 = 0.0, R1 = 0.62, D_LAND = 1.12, D_REVEAL = 0.05, SRC_RGB = [249 / 255, 244 / 255, 235 / 255];
     const INK3 = [0.957, 0.949, 0.918], SUN3 = [1, 0.929, 0.161];
     // The flight is evaluated per vertex from static attributes, so a frame is a handful of uniforms and one draw
     const dgl = dotsCv && !STATIC ? dotsCv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false }) : null;
@@ -923,7 +852,9 @@ void main() {
         tix.sort((p, q) => tg.t[p * 4] - tg.t[q * 4]);
         const a = new Float32Array(total * 12), keepAt = new Int32Array(n).fill(-1);
         for (let k = 0; k < total; k++) { const g = Math.floor((k * n) / total); if (keepAt[g] < 0 || r() < 1 / (k - keepAt[g] + 1)) keepAt[g] = k; }
-        const landOf = (s) => Math.min(D_LAND, Math.max(src.r[s] + 0.1, src.r[s] + 0.16 + 0.12 * hashN(src.x[s] * 0.013, src.y[s] * 0.017)));
+        // The headline only enters the viewport from bp ~0.5 and pins at 1, so the dots stay airborne until it is on
+        // screen and touch down while it pins: the whole descent is seen
+        const landOf = (s) => Math.min(D_LAND, Math.max(src.r[s] + 0.32, 0.72 + 0.4 * src.r[s] + 0.12 * hashN(src.x[s] * 0.013, src.y[s] * 0.017)));
         const cl = new Float32Array(tg.chars);
         for (let g = 0; g < n; g++) {
             const ci = tg.t[tix[g] * 4 + 3];
@@ -977,108 +908,69 @@ void main() {
         titleChars = Array.from(title.querySelectorAll('.wt-char:not(.wt-space)'));
     }
 
-    // The signature as a three.js ink tube: every stroke of the trace (signature-data.js) is a tube whose radius follows the
-    // pen's width, with round caps at its ends and joins. Each vertex carries the geodesic pen time from the first touch,
-    // so one uniform writes it on along the hand's path; the head of the line catches a little light as it moves.
+    // The signature as a broad flat-nib ribbon: every stroke of the trace (signature-data.js) is swept by a nib held at a
+    // fixed angle, so the width comes from the stroke's direction against the nib (full on the downstrokes, a hairline
+    // where it runs along the edge) and the trace's own pressure. Each point carries the geodesic pen time from the first
+    // touch, so the ribbon is written on along the hand's path. The whole hand is turned so it climbs less steeply.
     class SignatureGL {
         constructor(canvas) {
             this.cv = canvas;
+            this.ctx = canvas.getContext('2d');
             this.progress = 0;
             this.target = 0;
             this.tilt = { x: 0, y: 0 };
             this.ready = false;
             this.shown = -1;
-            const T = window.THREE, D = window.__SIG_DATA;
-            if (!T || !D) return;
-            try {
-                this.r = new T.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true });
-            } catch (e) { return; }
-            this.r.setClearColor(0x000000, 0);
-            this.scene = new T.Scene();
-            this.cam = new T.PerspectiveCamera(30, D.w / D.h, 0.1, 20);
-            this.cam.position.set(0, 0, 4.15);
-            const k = 2 / Math.max(D.w, D.h), cx = D.w / 2, cy = D.h / 2, RING = 10;
-            const pos = [], nor = [], tim = [], idx = [];
-            let base = 0;
-            for (const s of D.s) {
-                const n = s.length / 4;
-                if (n < 2) continue;
+            this.w = 0; this.h = 0; this.dpr = 1;
+            const D = window.__SIG_DATA;
+            if (!D || !this.ctx) return;
+            const ROT = 22 * Math.PI / 180, NIB = 16, HAIR = 2, R_MED = 5.4;
+            const co = Math.cos(ROT), si = Math.sin(ROT), cx = D.w / 2, cy = D.h / 2;
+            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+            this.strokes = D.s.map((st) => {
+                const n = st.length / 4, o = new Float32Array(n * 4);
                 for (let i = 0; i < n; i++) {
-                    const a = Math.max(0, i - 1) * 4, b = Math.min(n - 1, i + 1) * 4;
-                    let tx = s[b] - s[a], ty = s[b + 1] - s[a + 1];
-                    const tl = Math.hypot(tx, ty) || 1;
-                    tx /= tl; ty /= tl;
-                    const x = (s[i * 4] - cx) * k, y = (s[i * 4 + 1] - cy) * k, rr = s[i * 4 + 2] * k;
-                    for (let j = 0; j < RING; j++) {
-                        const th = (j / RING) * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
-                        const nx = -ty * c, ny = tx * c, nz = sn;
-                        pos.push(x + nx * rr, y + ny * rr, nz * rr * 0.7);
-                        nor.push(nx, ny, nz);
-                        tim.push(s[i * 4 + 3]);
+                    const dx = st[i * 4] - cx, dy = (D.h - st[i * 4 + 1]) - cy;
+                    const x = dx * co - dy * si, y = dx * si + dy * co;
+                    o[i * 4] = x; o[i * 4 + 1] = y;
+                    o[i * 4 + 2] = NIB * Math.min(1.35, Math.max(0.55, st[i * 4 + 2] / R_MED));
+                    o[i * 4 + 3] = st[i * 4 + 3];
+                }
+                // The trace wobbles by a pixel; a nib magnifies that into serrated edges, so the line is relaxed first
+                for (let pass = 0; pass < 3; pass++) {
+                    const q = o.slice();
+                    for (let i = 2; i < n - 2; i++) {
+                        for (let c = 0; c < 3; c++) {
+                            o[i * 4 + c] = (q[(i - 2) * 4 + c] + 2 * q[(i - 1) * 4 + c] + 3 * q[i * 4 + c] + 2 * q[(i + 1) * 4 + c] + q[(i + 2) * 4 + c]) / 9;
+                        }
                     }
                 }
-                for (let i = 0; i < n - 1; i++) {
-                    for (let j = 0; j < RING; j++) {
-                        const p0 = base + i * RING + j, p1 = base + i * RING + ((j + 1) % RING);
-                        idx.push(p0, p0 + RING, p1, p1, p0 + RING, p1 + RING);
-                    }
+                for (let i = 0; i < n; i++) {
+                    const x = o[i * 4], y = o[i * 4 + 1];
+                    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
                 }
-                base += n * RING;
-            }
-            const ico = new T.IcosahedronGeometry(1, 1);
-            const ip = ico.attributes.position.array, iN = ico.attributes.normal.array, ii = ico.index ? ico.index.array : null;
-            const nv = ip.length / 3;
-            for (let c = 0; c < D.c.length; c += 4) {
-                const x = (D.c[c] - cx) * k, y = (D.c[c + 1] - cy) * k, rr = D.c[c + 2] * k;
-                for (let v = 0; v < nv; v++) {
-                    pos.push(x + ip[v * 3] * rr, y + ip[v * 3 + 1] * rr, ip[v * 3 + 2] * rr * 0.7);
-                    nor.push(iN[v * 3], iN[v * 3 + 1], iN[v * 3 + 2]);
-                    tim.push(D.c[c + 3]);
-                }
-                if (ii) for (let q = 0; q < ii.length; q++) idx.push(base + ii[q]);
-                else for (let q = 0; q < nv; q++) idx.push(base + q);
-                base += nv;
-            }
-            ico.dispose();
-            const g = new T.BufferGeometry();
-            g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
-            g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
-            g.setAttribute('aT', new T.Float32BufferAttribute(tim, 1));
-            g.setIndex(base > 65535 ? new T.Uint32BufferAttribute(idx, 1) : new T.Uint16BufferAttribute(idx, 1));
-            this.u = { uP: { value: 0 }, uC: { value: new T.Color(SUN) } };
-            const m = new T.ShaderMaterial({
-                uniforms: this.u,
-                transparent: true,
-                vertexShader: `attribute float aT; varying float vT; varying vec3 vN; varying vec3 vV;
-void main() { vT = aT; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }`,
-                fragmentShader: `uniform float uP; uniform vec3 uC; varying float vT; varying vec3 vN; varying vec3 vV;
-void main() {
-    if (vT > uP) discard;
-    vec3 n = normalize(vN), v = normalize(vV), l = normalize(vec3(-0.45, 0.6, 0.85));
-    float d = max(dot(n, l), 0.0);
-    float s = pow(max(dot(reflect(-l, n), v), 0.0), 36.0);
-    float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-    float head = (1.0 - smoothstep(0.0, 0.03, uP - vT)) * step(uP, 0.999);
-    vec3 c = uC * (0.62 + 0.48 * d) + vec3(1.0, 0.98, 0.86) * (0.5 * s + 0.12 * rim + 0.45 * head);
-    gl_FragColor = vec4(c, 1.0);
-}`,
+                return o;
             });
-            this.mesh = new T.Mesh(g, m);
-            this.scene.add(this.mesh);
+            const pad = NIB * 1.5;
+            this.box = { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 };
+            // The nib's edge, 42 degrees above the horizontal of the turned hand: the climbing baseline keeps some body
+            this.nib = { x: Math.cos(-42 * Math.PI / 180), y: Math.sin(-42 * Math.PI / 180) };
+            this.hair = HAIR;
+            const wrap = canvas.parentElement;
+            if (wrap) wrap.style.aspectRatio = (this.box.w / this.box.h).toFixed(4);
             this.ready = true;
         }
 
         resize(w, h, dpr = 1) {
             if (!this.ready) return;
-            this.r.setPixelRatio(dpr);
-            this.r.setSize(w, h, false);
-            this.cam.aspect = w / h;
-            this.cam.updateProjectionMatrix();
+            this.w = w; this.h = h; this.dpr = dpr;
+            this.cv.width = Math.round(w * dpr);
+            this.cv.height = Math.round(h * dpr);
             this.shown = -1;
         }
 
         render(progress, tiltX = 0, tiltY = 0) {
-            if (!this.ready) return;
+            if (!this.ready || !this.w) return;
             this.target = progress;
             this.progress += (this.target - this.progress) * 0.18;
             if (Math.abs(this.target - this.progress) < 1e-4) this.progress = this.target;
@@ -1088,10 +980,46 @@ void main() {
             if (Math.abs(key - this.shown) < 1e-3) return;
             this.shown = key;
             // Eased pen speed: the hand lands, runs, and slows into the last flick
-            this.u.uP.value = p <= 0 ? -1 : p >= 1 ? 1.01 : 0.5 - 0.5 * Math.cos(Math.PI * p);
-            this.mesh.rotation.y = this.tilt.x * 0.32;
-            this.mesh.rotation.x = -this.tilt.y * 0.26;
-            this.r.render(this.scene, this.cam);
+            const P = p <= 0 ? -1 : p >= 1 ? 1.01 : 0.5 - 0.5 * Math.cos(Math.PI * p);
+            const c = this.ctx, B = this.box, d = this.dpr;
+            const sc = Math.min(this.w / B.w, this.h / B.h);
+            c.setTransform(1, 0, 0, 1, 0, 0);
+            c.clearRect(0, 0, this.cv.width, this.cv.height);
+            if (P < 0) return;
+            const ox = (this.w - B.w * sc) / 2 + this.tilt.x * 6, oy = (this.h - B.h * sc) / 2 + this.tilt.y * 4;
+            c.setTransform(d * sc, 0, 0, d * sc, d * ox - d * sc * B.x, d * oy - d * sc * B.y);
+            const nx = this.nib.x, ny = this.nib.y;
+            const body = new Path2D(), hair = new Path2D();
+            const quad = (ax, ay, aw, bx, by, bw) => {
+                const p0x = ax + nx * aw, p0y = ay + ny * aw, p1x = bx + nx * bw, p1y = by + ny * bw;
+                const p2x = bx - nx * bw, p2y = by - ny * bw, p3x = ax - nx * aw, p3y = ay - ny * aw;
+                // One winding for every quad so overlapping sweeps union under nonzero fill
+                if ((p1x - p0x) * (p3y - p0y) - (p1y - p0y) * (p3x - p0x) >= 0) {
+                    body.moveTo(p0x, p0y); body.lineTo(p1x, p1y); body.lineTo(p2x, p2y); body.lineTo(p3x, p3y);
+                } else {
+                    body.moveTo(p0x, p0y); body.lineTo(p3x, p3y); body.lineTo(p2x, p2y); body.lineTo(p1x, p1y);
+                }
+                body.closePath();
+                hair.moveTo(ax, ay); hair.lineTo(bx, by);
+            };
+            for (const o of this.strokes) {
+                const n = o.length / 4;
+                for (let i = 0; i < n - 1; i++) {
+                    const A = i * 4, Bq = A + 4, ta = o[A + 3], tb = o[Bq + 3];
+                    if (Math.min(ta, tb) > P) continue;
+                    if (Math.max(ta, tb) <= P) { quad(o[A], o[A + 1], o[A + 2], o[Bq], o[Bq + 1], o[Bq + 2]); continue; }
+                    const [F, G] = ta < tb ? [A, Bq] : [Bq, A];
+                    const k = (P - o[F + 3]) / Math.max(1e-6, o[G + 3] - o[F + 3]);
+                    quad(o[F], o[F + 1], o[F + 2], o[F] + (o[G] - o[F]) * k, o[F + 1] + (o[G + 1] - o[F + 1]) * k, o[F + 2] + (o[G + 2] - o[F + 2]) * k);
+                }
+            }
+            c.fillStyle = SUN;
+            c.fill(body);
+            c.strokeStyle = SUN;
+            c.lineWidth = this.hair * 2;
+            c.lineCap = 'round';
+            c.lineJoin = 'round';
+            c.stroke(hair);
         }
     }
 
@@ -1109,7 +1037,7 @@ void main() {
     function revealChars() {
         if (charIn.length !== titleChars.length) charIn = new Float32Array(titleChars.length);
         if (STATIC || !tg) { charIn.fill(1); return; }
-        if (!dots) { charIn.fill(easeIO(lstep(0.8, 0.95, bp))); return; }
+        if (!dots) { charIn.fill(easeIO(lstep(0.95, 1.12, bp))); return; }
         for (let i = 0; i < charIn.length; i++) charIn[i] = easeIO(lstep(dots.cl[i], dots.cl[i] + D_REVEAL, bp));
     }
 
