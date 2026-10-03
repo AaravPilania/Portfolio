@@ -317,10 +317,33 @@ body.gc {
     color: #fff;
 }
 
+/* camera on: letters turn signal yellow and the scramble glyphs white, letter by letter, and back when it stops */
+@property --gc-chc {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #fff;
+}
+
+@property --gc-glc {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #FFED29;
+}
+
 .gc-ch {
+    --gc-chc: #fff;
+    --gc-glc: var(--sig);
     position: relative;
     display: block;
+    color: var(--gc-chc);
     text-box: trim-both cap alphabetic;
+    transition: --gc-chc 0.32s var(--p4), --gc-glc 0.32s var(--p4);
+    transition-delay: calc(var(--ci, 0) * 34ms);
+}
+
+.gc.is-live .gc-ch {
+    --gc-chc: var(--sig);
+    --gc-glc: #fff;
 }
 
 .gc-ch--sp {
@@ -335,10 +358,10 @@ body.gc {
     content: attr(data-s);
     position: absolute;
     inset: 0;
-    color: var(--sig);
+    color: var(--gc-glc);
     text-align: center;
     text-box: trim-both cap alphabetic;
-    clip-path: inset(-50% 0);
+    clip-path: inset(-0.02em 0);
 }
 
 @supports not (text-box: trim-both cap alphabetic) {
@@ -414,21 +437,24 @@ body.gc {
 .gc-form {
     position: absolute;
     left: var(--m);
-    bottom: var(--sec);
+    top: 50%;
     width: max(calc(460 * var(--u)), calc(var(--col) * 5 + var(--g) * 4));
+    max-height: calc(100dvh - 32 * var(--u));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: calc(18 * var(--u)) calc(20 * var(--u)) calc(20 * var(--u));
     color: var(--off);
     visibility: hidden;
     opacity: 0;
-    transform: translate3d(0, calc(28 * var(--u)), 0) scale(0.965);
-    transform-origin: 0 100%;
+    transform: translate3d(0, calc(-50% + 28 * var(--u)), 0) scale(0.965);
+    transform-origin: 0 50%;
     transition: opacity 0.35s var(--p4), transform 0.6s var(--expo), visibility 0s linear 0.6s;
 }
 
 .gc.is-brief .gc-form {
     visibility: visible;
     opacity: 1;
-    transform: none;
+    transform: translate3d(0, -50%, 0);
     transition: opacity 0.45s var(--p4) 0.12s, transform 0.75s var(--expo) 0.12s, visibility 0s;
 }
 
@@ -540,11 +566,11 @@ body.gc {
     border-radius: 0;
     background: none;
     color: var(--off);
-    font-family: var(--brier);
-    font-size: calc(20 * var(--u));
-    font-weight: 700;
-    line-height: 1.3;
-    letter-spacing: -0.01em;
+    font-family: var(--suisse);
+    font-size: max(16px, calc(16 * var(--u)));
+    font-weight: 400;
+    line-height: 1.45;
+    letter-spacing: 0;
     outline: none;
     resize: none;
     transition: border-color 0.25s ease;
@@ -552,7 +578,9 @@ body.gc {
 
 .gc-field input::placeholder,
 .gc-field textarea::placeholder {
-    color: rgb(249 244 235 / 0.28);
+    color: rgb(249 244 235 / 0.36);
+    font-family: var(--suisse);
+    font-weight: 400;
 }
 
 .gc-field input:focus,
@@ -988,19 +1016,19 @@ body.gc {
 
 .gc-reach {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr;
     gap: calc(4 * var(--u));
     margin-top: calc(8 * var(--u));
 }
 
 .gc-ico {
     display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    flex-direction: row;
+    align-items: center;
     gap: calc(10 * var(--u));
     min-width: 0;
-    height: calc(54 * var(--u));
-    padding: calc(8 * var(--u));
+    height: calc(36 * var(--u));
+    padding: 0 calc(10 * var(--u));
     border: 1px solid rgb(249 244 235 / 0.2);
     border-radius: calc(4 * var(--u));
     color: var(--off);
@@ -1021,9 +1049,10 @@ body.gc {
 }
 
 .gc-ico svg {
+    flex: none;
     width: calc(14 * var(--u));
     height: calc(14 * var(--u));
-    transform-origin: 0 0;
+    transform-origin: 50% 50%;
     transition: transform 0.45s var(--expo);
 }
 
@@ -1062,16 +1091,25 @@ body.gc {
     text-overflow: ellipsis;
 }
 
-.gc-mail__k {
-    flex: none;
+.gc-mail {
     text-transform: uppercase;
-    opacity: 0.5;
+}
+
+.gc-mail__a {
+    flex: none;
+    width: calc(7 * var(--u));
+    height: calc(8 * var(--u));
+    transition: transform 0.45s var(--expo);
 }
 
 .gc-mail:hover,
 .gc-mail:focus-visible {
     background: var(--off);
     color: #000;
+}
+
+.gc-mail:hover .gc-mail__a {
+    transform: translate3d(calc(2 * var(--u)), calc(-2 * var(--u)), 0);
 }
 
 
@@ -1182,11 +1220,8 @@ body.gc {
     .gc-form {
         left: var(--m);
         right: var(--m);
-        bottom: calc(16 * var(--u));
         width: auto;
         max-height: calc(100dvh - 90 * var(--u));
-        overflow-y: auto;
-        overscroll-behavior: contain;
     }
 
     .gc-form__row {

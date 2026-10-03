@@ -1,7 +1,8 @@
-// Page transition between the main site and /contact, the intro's ink bleed run backwards. Leaving: from the click, a
-// sheet of AP marks inks in cell by cell through the site's own 4x4 dither ramp, its wet edge in signal yellow.
-// Arriving: the same sheet pixelates up to the intro's pixel size, then those pixels dither out from the point that was
-// clicked on the page before. Loaded in <head> so the arriving page is covered before its first paint.
+// Page transition between the main site and /contact, the intro's ink bleed in three beats. Leaving: from the click, a
+// sheet of AP marks inks in cell by cell through the site's 4x4 dither ramp, its wet edge in signal yellow. Arriving:
+// the same sheet breaks into the intro's pixels (each cell one block, paper or black by how much mark it held), then
+// those pixels dither away from the point that was clicked. Every arrival runs it: a link, back/forward, or a page
+// restored from the bfcache. Loaded in <head> so the arriving page is covered before its first paint.
 (() => {
     'use strict';
 
@@ -24,17 +25,24 @@
         sessionStorage.removeItem(KEY);
         const s = raw && JSON.parse(raw);
         if (s && Date.now() - s.t < 10000) incoming = s;
-    } catch (e) { /* storage blocked: plain navigation */ }
+    } catch (e) { /* storage blocked */ }
+    if (!incoming && page(location.pathname)) {
+        const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        if (nav && nav.type === 'back_forward') incoming = { x: 0.5, y: 0.5 };
+    }
     window.__ptIncoming = !!incoming;
+    window.__ptScroll = (incoming && incoming.s) || null;
 
     const style = document.createElement('style');
     style.textContent = `html.pt-hold::after{content:"";position:fixed;inset:0;background:#000;z-index:${Z};pointer-events:none}
-.pt-canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:${Z};pointer-events:none}`;
+.pt-canvas{position:fixed;left:0;top:0;width:100vw;height:100vh;display:block;z-index:${Z};pointer-events:none}`;
     document.head.appendChild(style);
     if (incoming && !reduce) root.classList.add('pt-hold');
 
-    let vw = 0, vh = 0, dpr = 1, P = 0, cols = 0, rows = 0, cv = null, ctx = null, sheet = null;
+    let vw = 0, vh = 0, dpr = 1, P = 0, cols = 0, rows = 0, cv = null, ctx = null, sheet = null, run = 0;
 
+    // on <html>, not <body>: a transformed or contained body would turn position:fixed into "at the top of the page",
+    // which only covers the screen from the first slide
     function setup() {
         vw = window.innerWidth; vh = window.innerHeight;
         dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -47,10 +55,10 @@
             ctx = cv.getContext('2d');
         }
         cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
-        if (!cv.isConnected) document.body.appendChild(cv);
+        if (cv.parentNode !== root) root.appendChild(cv);
     }
 
-    // The full-screen sheet of marks; the tile under the click is the one yellow mark
+    // The full-screen sheet of marks; the tile under the click is the one yellow mark. Returns that tile's centre.
     function buildSheet(ox, oy) {
         sheet = document.createElement('canvas');
         sheet.width = cv.width; sheet.height = cv.height;
@@ -72,6 +80,7 @@
                 g.restore();
             }
         }
+        return { x: cx + hi * PITCH_X, y: cy + hj * PITCH_Y };
     }
 
     // Each cell's turn: mostly distance from the origin, broken up by the 4x4 ordered-dither threshold
@@ -87,15 +96,37 @@
         return th;
     }
 
+    // One block per cell, 1-bit: paper where the cell held more mark than its dither threshold, else black; the cell
+    // under the yellow mark stays yellow
+    function blocks(hot) {
+        const small = document.createElement('canvas');
+        small.width = cols; small.height = rows;
+        const sg = small.getContext('2d', { willReadFrequently: true });
+        sg.imageSmoothingEnabled = true;
+        sg.imageSmoothingQuality = 'high';
+        sg.drawImage(sheet, 0, 0, cols * P * dpr, rows * P * dpr, 0, 0, cols, rows);
+        const px = sg.getImageData(0, 0, cols, rows).data, out = new Array(cols * rows);
+        const hc = Math.floor(hot.x / P), hr = Math.floor(hot.y / P);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const i = r * cols + c, cov = (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / (3 * 240);
+                out[i] = c === hc && r === hr ? SIGNAL : cov * 1.6 > (BAYER[(r & 3) * 4 + (c & 3)] + 0.5) / 16 ? PAPER : '#000';
+            }
+        }
+        return out;
+    }
+
     const EDGE = 0.07;
 
-    function cover(ox, oy, href) {
-        try { sessionStorage.setItem(KEY, JSON.stringify({ x: ox / window.innerWidth, y: oy / window.innerHeight, t: Date.now() })); } catch (e) { /* ignore */ }
+    function cover(ox, oy, href, scroll) {
+        try { sessionStorage.setItem(KEY, JSON.stringify({ x: ox / window.innerWidth, y: oy / window.innerHeight, s: scroll || null, t: Date.now() })); } catch (e) { /* ignore */ }
         if (reduce) { location.href = href; return; }
+        const id = ++run;
         setup();
         buildSheet(ox, oy);
         const th = order(ox, oy, 0.3), D = 640, t0 = performance.now();
         const step = (now) => {
+            if (id !== run) return;
             const k = easeIO(clamp01((now - t0) / D)) * (1 + EDGE);
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, cv.width, cv.height);
@@ -114,47 +145,41 @@
         requestAnimationFrame(step);
     }
 
-    function reveal() {
+    function reveal(at, waitLoad) {
+        const id = ++run;
         setup();
-        const ox = incoming.x * vw, oy = incoming.y * vh;
-        buildSheet(ox, oy);
+        const ox = at.x * vw, oy = at.y * vh;
+        const hot = buildSheet(ox, oy);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.drawImage(sheet, 0, 0);
         root.classList.remove('pt-hold');
-        const small = document.createElement('canvas'), sg = small.getContext('2d');
-        const th = order(ox, oy, 0.38);
+        const fill = blocks(hot), brk = order(ox, oy, 0.85), th = order(ox, oy, 0.38);
         const go = () => {
-            const D1 = 340, D2 = 760, t0 = performance.now();
+            const D1 = 300, D2 = 720, t0 = performance.now(), s = P * dpr;
             const step = (now) => {
-                const t = now - t0, s = P * dpr;
+                if (id !== run) return;
+                const t = now - t0;
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
-                ctx.clearRect(0, 0, cv.width, cv.height);
-                // The marks melt into blocks, growing to the loader's pixel size on the same cell grid
-                const p = Math.max(1, Math.round(1 + (P - 1) * Math.pow(clamp01(t / D1), 1.6)));
-                small.width = Math.ceil(vw / p); small.height = Math.ceil(vh / p);
-                sg.imageSmoothingEnabled = true;
-                sg.drawImage(sheet, 0, 0, small.width * p * dpr, small.height * p * dpr, 0, 0, small.width, small.height);
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(small, 0, 0, small.width * p * dpr, small.height * p * dpr);
-                if (t > D1) {
-                    const k = easeIO(clamp01((t - D1) / D2)) * (1 + EDGE);
-                    ctx.fillStyle = SIGNAL;
-                    for (let i = 0; i < th.length; i++) {
-                        const e = k - th[i];
-                        if (e < 0) continue;
-                        const x = (i % cols) * s, y = ((i / cols) | 0) * s;
-                        if (e < EDGE) ctx.fillRect(x, y, s, s);
-                        else ctx.clearRect(x, y, s, s);
-                    }
+                // beat two: each cell trades its slice of the marks for its single block, in dither order
+                const kb = clamp01(t / D1) * (1 + EDGE);
+                const kd = t > D1 ? easeIO(clamp01((t - D1) / D2)) * (1 + EDGE) : -1;
+                for (let i = 0; i < th.length; i++) {
+                    const x = (i % cols) * s, y = ((i / cols) | 0) * s, e = kd - th[i];
+                    // beat three: the blocks dither away, a yellow wet edge running ahead of the page
+                    if (e >= EDGE) { ctx.clearRect(x, y, s, s); continue; }
+                    if (e >= 0) { ctx.fillStyle = SIGNAL; ctx.fillRect(x, y, s, s); continue; }
+                    if (kb >= brk[i]) { ctx.fillStyle = fill[i]; ctx.fillRect(x, y, s, s); }
                 }
-                if (t < D1 + D2 + 40) requestAnimationFrame(step);
-                else cv.remove();
+                if (t < D1 + D2 + 60) requestAnimationFrame(step);
+                else if (cv.isConnected) cv.remove();
             };
             requestAnimationFrame(step);
         };
+        if (!waitLoad || document.readyState === 'complete') { requestAnimationFrame(go); return; }
         let started = false;
         const once = () => { if (!started) { started = true; requestAnimationFrame(go); } };
-        if (document.readyState === 'complete') once();
-        else { window.addEventListener('load', once, { once: true }); setTimeout(once, 2200); }
+        window.addEventListener('load', once, { once: true });
+        setTimeout(once, 1400);
     }
 
     window.addEventListener('click', (e) => {
@@ -168,17 +193,21 @@
         e.stopImmediatePropagation();
         let x = e.clientX, y = e.clientY;
         if (!e.detail) { const r = a.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top + r.height / 2; }
-        cover(x, y, u.href);
+        u.hash = '';
+        cover(x, y, u.href, a.dataset.scroll);
     }, true);
 
-    // Back/forward from the bfcache returns to a page still wearing its cover
+    // Back/forward from the bfcache returns to a page still wearing its cover: it arrives like any other
     window.addEventListener('pageshow', (e) => {
-        if (e.persisted && cv && cv.isConnected) cv.remove();
-        root.classList.remove('pt-hold');
+        if (!e.persisted) return;
+        run++;
+        if (reduce) { if (cv && cv.isConnected) cv.remove(); root.classList.remove('pt-hold'); return; }
+        reveal({ x: 0.5, y: 0.5 }, false);
     });
 
     if (incoming && !reduce) {
-        if (document.body) reveal();
-        else document.addEventListener('DOMContentLoaded', reveal, { once: true });
-    }
+        const at = { x: clamp01(incoming.x), y: clamp01(incoming.y) };
+        if (document.body) reveal(at, true);
+        else document.addEventListener('DOMContentLoaded', () => reveal(at, true), { once: true });
+    } else root.classList.remove('pt-hold');
 })();

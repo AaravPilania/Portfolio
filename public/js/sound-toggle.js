@@ -5,7 +5,8 @@
 //   SiteSound.gate(opts)             -> Promise<boolean> sound wanted; opts { kicker, title, body, onChoose(sound) }
 //                                       onChoose runs synchronously inside the click, where audio may be unlocked
 //   SiteSound.toggle(opts)           -> { el, set(muted), get muted() }; opts { muted, onChange(muted), clock() (seconds
-//                                       of music time), beat (seconds), onset() (0..1 per frame, optional), mount
+//                                       of music time at a performance.now() timestamp), beat (seconds), onset() (0..1
+//                                       per frame, optional), onsetDelay() (seconds from analysis to audible), mount
 //                                       (element, default body), hotkey ('m') }
 window.SiteSound = (() => {
     'use strict';
@@ -97,7 +98,7 @@ window.SiteSound = (() => {
     function toggle(opts = {}) {
         let muted = !!opts.muted;
         const beat = opts.beat || 0.5;
-        const clock = opts.clock || (() => performance.now() / 1000);
+        const clock = opts.clock || ((now) => now / 1000);
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'ss-toggle' + (opts.mount ? '' : ' ss-toggle--fixed');
@@ -117,14 +118,24 @@ window.SiteSound = (() => {
         function rest() {
             for (const c of cells) { c.style.transform = ''; c.style.opacity = ''; c.classList.remove('is-down'); }
         }
-        // onsets between beats (busy vocals, fills) book an extra block, so the slot runs faster when the track does
-        let extra = 0, kickAt = -1e9;
-        function frame(now) {
+        // onsets between beats (busy vocals, fills) book an extra block, so the slot runs faster when the track does.
+        // The analyser hears a sample before the speakers do: each onset waits out that lead before it books.
+        let extra = 0, kickAt = -1e9, lastTs = 0, dt = 1000 / 60;
+        const due = [];
+        function frame(ts) {
             raf = 0;
-            if (muted || document.hidden) return;
-            const b = clock() / beat, nb = Math.floor(b), ph = b - nb;
+            if (muted || document.hidden) { lastTs = 0; due.length = 0; return; }
+            if (lastTs) dt += (Math.min(34, Math.max(6, ts - lastTs)) - dt) * 0.05;
+            lastTs = ts;
+            // sampled half a frame ahead, the same instant the calendar renders for, so both step on the same vsync
+            const now = ts + dt / 2;
+            const b = clock(now) / beat, nb = Math.floor(b), ph = b - nb;
             const o = opts.onset ? opts.onset() : 0;
-            if (o > 0 && ph > 0.16 && ph < 0.84) { extra++; kickAt = now; }
+            if (o > 0) due.push(performance.now() + (opts.onsetDelay ? opts.onsetDelay() : 0) * 1000);
+            while (due.length && due[0] <= now) {
+                const at = due.shift(), pa = (b - (now - at) / 1000 / beat) % 1;
+                if (pa > 0.16 && pa < 0.84) { extra++; kickAt = at; }
+            }
             const n = nb + extra, at = ORDER[((n % 4) + 4) % 4], prev = ORDER[(((n - 1) % 4) + 4) % 4];
             const hit = Math.max(Math.exp(-ph * 7), Math.exp(-(now - kickAt) * 0.009));
             for (let i = 0; i < 4; i++) {

@@ -107,6 +107,7 @@ const CONTACT = {
     // through the rest of the word, the gap between the two slabs takes the nearest letter of each.
     const SCR = '#$*@(0%1>';
     head.setAttribute('aria-label', [...head.querySelectorAll('.gc-ink')].map((n) => n.textContent).join(' '));
+    let ci = 0;
     const rows = [...head.querySelectorAll('.gc-ink')].map((ink) => {
         const text = ink.textContent, chars = [];
         ink.textContent = '';
@@ -115,21 +116,24 @@ const CONTACT = {
             const s = document.createElement('span');
             s.className = ch === ' ' ? 'gc-ch gc-ch--sp' : 'gc-ch';
             s.textContent = ch === ' ' ? '\u00a0' : ch;
+            s.style.setProperty('--ci', ci++);
             ink.append(s);
             if (ch !== ' ') chars.push({ el: s, start: 0, until: 0, last: 0, raf: 0 });
         }
         return chars;
     });
-    // each letter only scrambles through glyphs no wider than itself, so nothing spills out of its cell
+    // each letter only scrambles through glyphs no wider than itself and inside cap height and baseline, so nothing
+    // spills out of its cell either way
     let pools = false;
     function fitPools() {
         const cs = getComputedStyle(rows[0][0].el), mc = document.createElement('canvas').getContext('2d');
         mc.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-        const gw = [...SCR].map((g) => [g, mc.measureText(g).width]);
-        const narrow = gw.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+        const cap = mc.measureText('H').actualBoundingBoxAscent * 1.03, low = parseFloat(cs.fontSize) * 0.02;
+        const gw = [...SCR].map((g) => { const m = mc.measureText(g); return [g, m.width, m.actualBoundingBoxAscent <= cap && m.actualBoundingBoxDescent <= low]; });
+        const narrow = gw.filter((g) => g[2]).reduce((a, b) => (b[1] < a[1] ? b : a), ['#', Infinity])[0];
         for (const chars of rows) for (const c of chars) {
             const w = c.el.getBoundingClientRect().width + 0.5;
-            c.pool = gw.filter((g) => g[1] <= w).map((g) => g[0]).join('') || narrow;
+            c.pool = gw.filter((g) => g[2] && g[1] <= w).map((g) => g[0]).join('') || narrow;
         }
         pools = true;
     }
@@ -193,8 +197,11 @@ const CONTACT = {
         root.classList.add('is-entered');
         lineIn(head, 0.62);
         monos.forEach((el) => monoIn(el, { delay: 0.72 }));
-        if (location.hash === '#brief') setTimeout(() => brief(true), 900);
+        if (wantBrief) setTimeout(() => brief(true), 900);
     }
+    // an old /contact#brief link still opens the form, but the address bar stays /contact
+    const wantBrief = location.hash === '#brief';
+    if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
     (function waitStart() {
         if (window.CalendarClock && CalendarClock.started()) enter();
         else setTimeout(waitStart, 80);
@@ -217,17 +224,25 @@ const CONTACT = {
         root.classList.toggle('is-brief', open);
         openBtn.setAttribute('aria-expanded', String(open));
         form.inert = !open;
+        window.dispatchEvent(new CustomEvent('ap:glyph', { detail: open ? 'mail' : null }));
         if (open) {
-            if (cam) camMode(false);
             lineOut(head);
             setTimeout(() => (form.dataset.state === 'done' ? $('gcFormAgain') : f.elements.name).focus({ preventScroll: true }), 450);
         } else {
             lineIn(head, 0.1);
-            openBtn.focus({ preventScroll: true });
+            if (form.contains(document.activeElement)) openBtn.focus({ preventScroll: true });
         }
     }
     openBtn.addEventListener('click', () => brief(true));
+    $('gcFormOpen').addEventListener('click', () => brief(true));
     $('gcBriefClose').addEventListener('click', () => brief(false));
+    // a tap anywhere off the form closes it; the side column (camera, grid, links) stays usable underneath
+    document.addEventListener('pointerdown', (e) => {
+        if (!briefOpen || !e.isPrimary) return;
+        const t = e.target;
+        if (form.contains(t) || openBtn.contains(t) || t.closest('.gc-side, .ap-nav, .ss-gate')) return;
+        brief(false);
+    });
     window.addEventListener('ap:hash', (e) => { if (e.detail === '#brief') brief(true); });
     $('gcFormAgain').addEventListener('click', () => {
         f.reset();
@@ -273,19 +288,6 @@ const CONTACT = {
         }
     });
 
-    // ------------------------------------------------------------ copy the email from its box
-    const mailK = $('gcMailK');
-    $('gcMailText').textContent = CONTACT.email;
-    let mailT = 0;
-    $('gcMail').addEventListener('click', async () => {
-        let ok = false;
-        try { await navigator.clipboard.writeText(CONTACT.email); ok = true; } catch (e) { /* no clipboard */ }
-        if (!ok) { location.href = 'mailto:' + CONTACT.email; return; }
-        mailK.textContent = 'Copied';
-        clearTimeout(mailT);
-        mailT = setTimeout(() => { mailK.textContent = 'Copy'; }, 1600);
-    });
-
     // ------------------------------------------------------------ panel
     function setPanel(open) {
         panel.classList.toggle('is-open', open);
@@ -297,16 +299,14 @@ const CONTACT = {
     panel.querySelector('.gc-panel__head').addEventListener('click', () => setPanel(!panel.classList.contains('is-open')));
     setPanel(desktop.matches);
 
-    // ------------------------------------------------------------ camera mode: the brief closes, the panel opens
+    // ------------------------------------------------------------ camera mode: the panel opens, an open brief stays
     let cam = false;
     function camMode(on) {
         if (on === cam) return;
         cam = on;
         root.classList.toggle('is-cam', on);
-        if (on) {
-            if (briefOpen) brief(false);
-            setPanel(true);
-        } else if (state !== 'idle') stop('');
+        if (on) setPanel(true);
+        else if (state !== 'idle') stop('');
     }
 
     // ------------------------------------------------------------ booth
@@ -376,12 +376,20 @@ const CONTACT = {
         }
     }
 
+    // With srcset, naturalWidth is density-corrected (the 480w file at 214px reads as 214 wide) while drawImage crops
+    // in file pixels, so the grid reads from a plain copy of the chosen file whose natural size is its real size
+    let pic = null;
     function paintPhoto() {
         if (sel < 0 || state === 'live') return;
         if (!photo.complete || !photo.naturalWidth) { photo.addEventListener('load', paintPhoto, { once: true }); return; }
+        if (!pic || pic.src !== photo.currentSrc) {
+            pic = new Image();
+            pic.src = photo.currentSrc || photo.src;
+        }
+        if (!pic.complete || !pic.naturalWidth) { pic.addEventListener('load', paintPhoto, { once: true }); return; }
         sizeBooth();
         fresh = true;
-        paintGrid(bctx, booth.width, booth.height, photo, photo.naturalWidth, photo.naturalHeight, COLS[sel], false, 0.3);
+        paintGrid(bctx, booth.width, booth.height, pic, pic.naturalWidth, pic.naturalHeight, COLS[sel], false, 0.3);
         shot.classList.add('is-on');
     }
 

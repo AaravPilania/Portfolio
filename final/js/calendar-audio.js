@@ -133,6 +133,8 @@ window.CalendarAudio = (() => {
 
     return {
         init, start, resume, levels, onset,
+        // an onset reported now reaches the speakers after the output latency, less the half analysis window it lags by
+        onsetDelay: () => (ctx ? Math.max(0, (ctx.outputLatency || ctx.baseLatency || 0) - (vox ? vox.fftSize / 2 / ctx.sampleRate : 0)) : 0),
         available: () => !!AC,
         time: () => (source ? ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) - startAt : null),
         // Audible position at a performance.now() timestamp (e.g. a rAF time). currentTime advances in audio-callback

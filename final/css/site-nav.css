@@ -133,6 +133,28 @@ body:has(.ll-header .js-menu.is-revealed) .ap-nav--site .ap-nav__pill {
     height: auto;
 }
 
+/* the pixel mark sits exactly over the vector one and only shows while it is a glyph or on its way to one */
+.ap-nav__px {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    display: block;
+    width: 100%;
+    aspect-ratio: 803 / 644;
+    opacity: 0;
+    transform: translate3d(0, -50%, 0);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.ap-nav__mark.is-px .ap-nav__px {
+    opacity: 1;
+}
+
+.ap-nav__mark.is-px svg {
+    opacity: 0;
+}
+
 .ap-nav__msg {
     position: absolute;
     max-width: calc(100% - 112 * var(--u));
