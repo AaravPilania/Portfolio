@@ -208,6 +208,41 @@
         let time = 0;
         let lastFrameTime = performance.now();
 
+        // Slide 05 lifts this grid's own dots into its headline: it reads the lit cells here, and hides each one as it
+        // leaves through `hide` (a cell goes once its CSS y passes cut[col] - dither * band)
+        const hide = { cut: null, band: 0 };
+        const lit = (cell, c) => {
+            const by = cell.baseY;
+            const t = topWave[c], b = botWave[c], z = 125 * dpr;
+            if (by < t - z || by > b + z) return false;
+            const n = cell.dither * 0.65 + cell.blockNoise * 0.35;
+            if (by < t) return n <= (by - (t - z)) / z;
+            if (by > b) return n <= ((b + z) - by) / z;
+            return true;
+        };
+        window.__svcField = {
+            canvas, hide,
+            get dpr() { return dpr; },
+            get time() { return time; },
+            get sectionHeight() { return sectionHeight; },
+            get cols() { return cols; },
+            top: topExtendCss,
+            botWave: (c) => botWave[c] / dpr,
+            // Lit cells whose CSS y lies in [y0, y1] of canvas space: fn(xCss, yCss, col, dither)
+            each(y0, y1, fn) {
+                const r0 = Math.max(0, Math.floor((y0 * dpr) / step)), r1 = Math.min(rows, Math.ceil((y1 * dpr) / step));
+                for (let r = r0; r < r1; r++) {
+                    const row = gridCells[r];
+                    if (!row) continue;
+                    for (let c = 0; c < cols; c++) {
+                        const cell = row[c];
+                        if (lit(cell, c)) fn(cell.baseX / dpr, cell.baseY / dpr, c, cell.dither);
+                    }
+                }
+            },
+        };
+        const hidden = (cell, c) => hide.cut && cell.baseY / dpr > hide.cut[c] - cell.dither * hide.band;
+
         function draw(now) {
             requestAnimationFrame(draw);
 
@@ -342,6 +377,7 @@
                             continue;
                         }
                     }
+                    if (hidden(cell, c)) continue;
 
                     // Kinetic variable wave displacement on every particle
                     const wx1 = Math.sin(c * 0.085 + waveT + cell.phaseOffset) * (1.8 * dpr);
@@ -391,7 +427,7 @@
                         const topCrestY = topWave[c];
                         const botCrestY = botWave[c];
 
-                        if (by < topCrestY || by > botCrestY) continue;
+                        if (by < topCrestY || by > botCrestY || hidden(cell, c)) continue;
 
                         const u = (cell.baseX - vidX) / vidW;
                         const v = (by - vidY) / vidH;

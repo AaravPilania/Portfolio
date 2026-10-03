@@ -125,7 +125,36 @@
   var lastBoilTime = 0;
 
   var isRunning = false;
-  var animReqId = null;
+  // The art (source rows 187..847) is fitted to the visible part of the canvas, which the page shows object-fit: cover
+  // anchored centre-bottom: its foot sits on the canvas's bottom edge (half a pixel past it, so no seam) and its height
+  // is a fixed share of what the viewport actually shows. The spectacles SVG (xMidYMax slice) is re-anchored to match.
+  var ART_TOP = 187, ART_BOTTOM = 846.5, ART_FILL = 0.9;
+  var FACE_ANCHOR = { x: 832.4, y: 443.0 };
+  var ART_SCALE = 1.125, ART_OFFSET_X = 0, ART_OFFSET_Y = 0;
+  function fitArt() {
+    var vw = window.innerWidth || 1920, vh = window.innerHeight || 1080;
+    var visH = vh / Math.max(vw / CANVAS_W, vh / CANVAS_H);
+    ART_SCALE = Math.min(1.6, (ART_FILL * visH) / (ART_BOTTOM - ART_TOP));
+    ART_OFFSET_X = (CANVAS_W - CANVAS_W * ART_SCALE) / 2;
+    ART_OFFSET_Y = CANVAS_H - ART_BOTTOM * ART_SCALE;
+    var anchor = document.getElementById('spectaclesFaceAnchor');
+    if (anchor) {
+      anchor.setAttribute('transform', 'translate(' + (FACE_ANCHOR.x * ART_SCALE + ART_OFFSET_X).toFixed(2) + ', ' +
+        (FACE_ANCHOR.y * ART_SCALE + ART_OFFSET_Y).toFixed(2) + ') scale(' + ART_SCALE.toFixed(4) + ') rotate(-7.595)');
+    }
+  }
+  fitArt();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fitArt, { once: true });
+  window.addEventListener('resize', function () { fitArt(); if (!isRunning) renderFrame(performance.now()); }, { passive: true });
+
+  // Smirk: the drawn mouth is painted out in skin and redrawn level on the left, its right corner lifting into the
+  // moustache; three boil frames like the rest of the linework
+  var mouthEraser = new Path2D("M 799 538 L 884 537 L 885 564 L 799 565 Z");
+  var smirkFrames = [
+    new Path2D("M 806 546 C 822 548, 840 547, 856 544 C 868 541, 878 535, 888 526 L 893 535 C 884 545, 872 553, 858 558 C 840 563, 822 563, 807 560 C 800 559, 799 547, 806 546 Z"),
+    new Path2D("M 806.4 546.4 C 822.2 548.3, 840.3 547.4, 856.2 544.2 C 868.4 541.2, 878.3 535.4, 888.3 526.3 L 893.2 535.4 C 884.1 545.3, 871.8 553.4, 857.7 558.3 C 839.8 563.2, 821.9 563.3, 806.8 560.3 C 799.8 559.1, 799.3 547.3, 806.4 546.4 Z"),
+    new Path2D("M 805.7 545.8 C 821.8 547.7, 839.8 546.8, 855.8 543.7 C 867.7 540.8, 877.8 534.7, 887.7 525.6 L 892.8 534.6 C 883.8 544.6, 872.2 552.7, 858.3 557.7 C 840.2 562.8, 822.2 562.7, 807.2 559.8 C 800.2 558.8, 799 546.8, 805.7 545.8 Z")
+  ];
 
   window.addEventListener('mousemove', function (e) {
     var winW = window.innerWidth || 1920;
@@ -134,8 +163,11 @@
     var srcMouseX = (e.clientX / winW) * SRC_W;
     var srcMouseY = (e.clientY / winH) * SRC_H;
 
-    var deltaX = srcMouseX - FACE_CENTER_X;
-    var deltaY = srcMouseY - FACE_CENTER_Y;
+    var faceX = FACE_CENTER_X * ART_SCALE + ART_OFFSET_X;
+    var faceY = FACE_CENTER_Y * ART_SCALE + ART_OFFSET_Y;
+
+    var deltaX = srcMouseX - faceX;
+    var deltaY = srcMouseY - faceY;
 
     var normX = Math.max(-1, Math.min(1, deltaX / (SRC_W * 0.45)));
     var normY = Math.max(-1, Math.min(1, deltaY / (SRC_H * 0.45)));
@@ -200,6 +232,11 @@
     // 2. Scale to canvas
     ctx.scale(scaleX, scaleY);
 
+    // 2b. Transform art so its bottom edge meets the bottom of the canvas and screen
+    ctx.save();
+    ctx.translate(ART_OFFSET_X, ART_OFFSET_Y);
+    ctx.scale(ART_SCALE, ART_SCALE);
+
     // 3. Natural skin tone layer (#e9af8e) for face, neck, and ears
     ctx.fillStyle = SKIN_COLOR;
     ctx.fill(skinFrames[boilFrame]);
@@ -216,7 +253,14 @@
     ctx.fillStyle = '#0a0a0a';
     ctx.fill(baseFrames[boilFrame], 'evenodd');
 
-    ctx.restore();
+    // 7. Smirk
+    ctx.fillStyle = SKIN_COLOR;
+    ctx.fill(mouthEraser);
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fill(smirkFrames[boilFrame]);
+
+    ctx.restore(); // Restore art transform
+    ctx.restore(); // Restore canvas scale
   }
 
   function loop(now) {

@@ -394,12 +394,20 @@
     // t, x re-rolled across +-5 world units every pass, y from -7/aspect to +7/aspect, spin +-mix(0.5, 1) rad/s, scale
     // popping in with linearStep(w/2, w/2 + 0.5, activeRatio), a camera that leans 0.05 rad toward the pointer
     const HEAD = 1.12; // raster headroom for the hover lift
-    const FALL = 0.85, LIFT = 0.95; // footer top, in viewport heights, that drops / lifts the stickers
+    // One pinned screen, scrubbed by the section's scroll progress: the headline leaves, the stickers drop the moment it
+    // has gone, then the footer links and the signature arrive; the signature finishes as the page ends
+    const T_RISE0 = 0.03, T_RISE1 = 0.34, RISE_W = 0.42;
+    const T_FALL = T_RISE1, T_LIFT = T_RISE1 - 0.04;
+    const T_BAR0 = 0.4, T_BAR1 = 0.52, T_SIG0 = 0.4, T_SIG1 = 0.97;
     const Mt = window.Matter;
     const STEP = 1000 / 60;
     const C_WALL = 1, C_SOLID = 2, C_GHOST = 4;
     const foot = document.querySelector('.sig-footer');
-    const floorEl = foot && foot.querySelector('.sig-bar');
+    const floorEl = stage.querySelector('.sig-bar') || (foot && foot.querySelector('.sig-bar'));
+    const sigCanvas = document.getElementById('wtSigCanvas');
+    const sigWrap = document.getElementById('wtSigWrap');
+    let sigEngine = null;
+    let titleChars = [];
 
     let W = 0, H = 0, dpr = 1, vTop = 0, unitA = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
     let raf = 0, last = 0, svcVis = false, time = STATIC ? 31 : 0, active = STATIC ? 1 : 0, inState = false;
@@ -469,8 +477,9 @@
             area += (s.def.w + cut) * (s.def.h + cut) * s.side * s.side;
         }
         pitH = Math.round(Math.min(H * 1.2, Math.max(H * 0.3, area / (W * 0.5))));
-        if (foot) foot.style.setProperty('--sig-pit', pitH + 'px');
-        if (foot && floorEl) floorY = floorEl.getBoundingClientRect().top - foot.getBoundingClientRect().top;
+        // The stickers land on the viewport's own bottom edge
+        floorY = H;
+        if (sigEngine && sigWrap) sigEngine.resize(sigWrap.offsetWidth || 420, sigWrap.offsetHeight || 390, dpr);
         if ((dctx || dgl) && (!document.fonts || document.fonts.status === 'loaded')) buildDots();
         items.forEach((s) => { s.proto = null; });
         if (!rebuild && built >= items.length) bodies();
@@ -495,7 +504,7 @@
             }
             buildMs += performance.now() - t0;
             if (built < items.length) setTimeout(step, 16);
-            else { queued = false; bodies(); if (STATIC) staticPile(); dirty = true; kick(); }
+            else { queued = false; world(); if (STATIC) staticPile(); dirty = true; kick(); }
         };
         const go = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(step);
         if (document.fonts && document.fonts.load) {
@@ -504,10 +513,9 @@
         } else go();
     }
 
-    // Physics lives in footer coordinates: the floor is the top of the footer's bottom bar, the walls its edges.
-    // Stickers keep their conveyor size; the footer's pit is sized to them instead (measure).
+    // Physics lives in viewport coordinates (the stage stays pinned to the end of the page): the floor is the bottom edge
     function world() {
-        if (!Mt || !foot) return false;
+        if (!Mt) return false;
         if (!engine) engine = Mt.Engine.create({ enableSleeping: true, positionIterations: 8, velocityIterations: 6 });
         engine.gravity.y = 1;
         engine.gravity.scale = (0.0022 * H) / 1000;
@@ -584,17 +592,18 @@
         }
     }
 
-    // The bodies inherit each sticker's on-screen velocity. Footer space scrolls with the page, so the page's own
-    // velocity is taken out; without that every sticker lurched by the scroll speed on the drop frame.
+    // Each sticker lets go exactly where it rides, at rest, at its own size: gravity alone takes it down. Ones parked
+    // below the viewport by the conveyor rain in from above instead of spawning inside the floor.
     function fall() {
         if (built < items.length || !world()) return;
         clearBodies();
         mode = 'fall'; fallT = 0; acc = 0; resting = false;
-        const cap = H * 0.022;
         for (const s of items) {
-            s.k0 = s.ks; s.o0 = s.o;
-            const vy = Math.max(-cap, Math.min(cap, (s.vy - footVel) / 60));
-            spawn(s, s.x, s.y - footTop, s.a, (s.cr[3] - 0.5) * 1.6, vy, s.va / 60);
+            const h = (s.img.bh * s.side) / s.ppu;
+            let y = s.y;
+            if (y > floorY - h * 0.5) y = -h - s.cr[3] * H * 0.6;
+            s.ks = s.k0 = 1; s.o0 = s.o;
+            spawn(s, s.x, y, s.a, 0, 0, s.va / 60);
         }
     }
 
@@ -744,38 +753,47 @@
         ctx.globalAlpha = 1;
     }
 
-    // Slide 04's own dots set the headline. The services backdrop (backdrop_theme's section shader) dissolves bottom-up
-    // through a 4x4 ordered dither in every 8px cell, offset by a value-noise field; the same maths gives the exact scroll
-    // position at which each 2px dot of the lower half winks out, and at that instant a dot of its colour and size leaves
-    // that spot and falls to a point of the title's glyphs. The lit dots are read off the backdrop canvas once, just before
-    // the wipe begins. Dots beyond the glyph count pour in with the rest and dissolve as they land; the real text takes
-    // over at the end so the words finish crisp.
+    // Slide 04's own dots set the headline. Its grid (services-reaction-diffusion: 1.65px ivory dots in 8px cells, bounded
+    // below by a travelling sine wave) is read once, just before the hand-over: the lit cells of its last viewport. A wavy
+    // front, the shape of the grid's bottom wave, then sweeps up through them with the scroll; as it passes a cell, the grid
+    // stops drawing that dot and the same dot leaves the same spot here, riding the grid's wave on its way down to a point
+    // of the title's glyphs. A glyph's real letter exists only once its own dots have landed; dots beyond the glyph count
+    // pour in with the rest and dissolve as they arrive.
     const dotsCv = sec.querySelector('.wt-dots');
     const svc = document.querySelector('.ll-section--services');
-    const D_GAP = 0.2, D_DROP = 0.12, D_LAND = 0.86, D_TYPE = 0.88, D_MAX = 30000;
-    // Dither rank of each sub-dot, indexed by its (x, y) slot in the cell as drawLLLogo numbers them
-    const BAYER = [0, 13, 6, 10, 5, 14, 2, 15, 1, 8, 12, 9, 7, 4, 11, 3];
+    const R0 = 0.0, R1 = 0.62, D_LAND = 0.9, D_REVEAL = 0.05, SRC_RGB = [249 / 255, 244 / 255, 235 / 255];
     const INK3 = [0.957, 0.949, 0.918], SUN3 = [1, 0.929, 0.161];
     // The flight is evaluated per vertex from static attributes, so a frame is a handful of uniforms and one draw
     const dgl = dotsCv && !STATIC ? dotsCv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false }) : null;
     const dctx = dotsCv && !STATIC && !dgl ? dotsCv.getContext('2d') : null;
     let tg = null, src = null, dots = null, dotsP = NaN, dotsShown = false, gp = null, snapArmed = true, bp = -1, svcB = 1e5;
+    let charIn = new Float32Array(0);
 
+    const WAVE = `float wv(float x, float T) {
+    float k = x * uDpr;
+    return sin(k * 0.0032 + T * 0.65) * 115.0 + cos(k * 0.0068 - T * 0.48) * 55.0 + sin(k * 0.0135 + T * 0.85) * 22.0;
+}`;
     const VS = `attribute vec4 a0; attribute vec4 a1; attribute vec4 a2;
-uniform float uP, uTop, uFade, uGrow, uDpr; uniform vec2 uRes; uniform vec3 uInk, uSun;
+uniform float uP, uTop, uSrc, uGrow, uDpr, uWT; uniform vec2 uRes; uniform vec3 uInk, uSun;
 varying vec4 vC;
+${WAVE}
 void main() {
     float t = clamp((uP - a1.x) / (a1.y - a1.x), 0.0, 1.0);
     float e = t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(2.0 - 2.0 * t, 3.0) / 2.0;
     float w = sin(3.14159265 * t);
-    vec2 d = vec2(a0.z, uTop + a0.w) - a0.xy;
-    vec2 p = a0.xy + d * e + vec2(-d.y, d.x) / max(length(d), 1.0) * a1.z * w + vec2(0.0, a1.w * w);
+    vec2 s = vec2(a0.x, uSrc + a0.y);
+    vec2 p = mix(s, vec2(a0.z, uTop + a0.w), e);
+    float T = uWT + t * 3.2;
+    p.y += (wv(p.x, T) - wv(s.x, uWT)) * 0.34 * w;
+    p.x += cos(p.y * 0.0068 * uDpr - T * 0.48) * 22.0 * w;
     float keep = step(1.5, a2.w);
     vec3 ink = mix(uInk, uSun, a2.w - 2.0 * keep);
-    gl_PointSize = (2.0 + uGrow * keep) * uDpr;
+    gl_PointSize = mix(1.65, uGrow, keep * smoothstep(0.7, 1.0, t)) * uDpr;
     gl_Position = uP < a1.x ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
-    float a = uFade * mix(1.0 - smoothstep(0.55, 1.0, t), 1.0, keep);
-    vC = vec4(mix(a2.rgb, ink, smoothstep(0.45, 1.0, t) * keep) * a, a);
+    float a = keep > 0.5
+        ? mix(0.38, 1.0, smoothstep(0.2, 0.8, t)) * (1.0 - smoothstep(a1.z, a1.z + ${D_REVEAL.toFixed(3)}, uP))
+        : mix(0.38, 0.8, smoothstep(0.1, 0.5, t)) * (1.0 - smoothstep(0.55, 1.0, t));
+    vC = vec4(mix(a2.rgb, ink, smoothstep(0.3, 0.9, t) * keep) * a, a);
 }`;
     const FS = 'precision mediump float; varying vec4 vC; void main() { gl_FragColor = vC; }';
 
@@ -787,7 +805,7 @@ void main() {
         g.linkProgram(pr);
         if (!g.getProgramParameter(pr, g.LINK_STATUS)) return null;
         const u = {};
-        ['uP', 'uTop', 'uFade', 'uGrow', 'uDpr', 'uRes', 'uInk', 'uSun'].forEach((k) => { u[k] = g.getUniformLocation(pr, k); });
+        ['uP', 'uTop', 'uSrc', 'uGrow', 'uDpr', 'uWT', 'uRes', 'uInk', 'uSun'].forEach((k) => { u[k] = g.getUniformLocation(pr, k); });
         return { pr, u, buf: g.createBuffer(), a0: g.getAttribLocation(pr, 'a0'), a1: g.getAttribLocation(pr, 'a1'), a2: g.getAttribLocation(pr, 'a2'), n: 0 };
     }
 
@@ -829,13 +847,13 @@ void main() {
         const off = mk(cw, ch), o = off.getContext('2d', { willReadFrequently: true });
         o.textBaseline = 'alphabetic';
         o.textAlign = 'left';
-        for (const g of gl) {
+        // Red carries the glyph's index, green whether it is the yellow word
+        gl.forEach((g, gi) => {
             o.font = g.font;
-            o.fillStyle = g.sun ? '#0f0' : '#f00';
+            o.fillStyle = `rgb(${gi + 1},${g.sun ? 255 : 0},0)`;
             o.fillText(g.c, g.x - x0 + pad, g.y - y0 + pad + o.measureText(g.c).fontBoundingBoxAscent);
-        }
+        });
         const px = o.getImageData(0, 0, cw, ch).data;
-        // Even lattice steps keep the glyph dots on the backdrop's 2px quantisation
         let step = Math.min(6, Math.max(2, 2 * Math.round(fs / 76)));
         let out;
         for (;;) {
@@ -844,124 +862,270 @@ void main() {
                 for (let x = step >> 1; x < cw; x += step) {
                     const i = (y * cw + x) * 4;
                     if (px[i + 3] < 140) continue;
-                    out.push(x + x0 - pad, y + y0 - pad, px[i + 1] > px[i] ? 1 : 0);
+                    out.push(x + x0 - pad, y + y0 - pad, px[i + 1] > 127 ? 1 : 0, Math.min(gl.length - 1, Math.max(0, px[i] - 1)));
                 }
             }
-            if (out.length / 3 <= 9000 || step >= 10) break;
+            if (out.length / 4 <= 9000 || step >= 10) break;
             step += 2;
         }
-        return { t: out, n: out.length / 3, step };
+        return { t: out, n: out.length / 4, step, chars: gl.length };
     }
 
     const fract = (v) => v - Math.floor(v);
     const hashN = (x, y) => fract(Math.sin(x * 12.98923445328 + y * 4.137643425614414) * 43758.54432453);
-    function vnoise(x, y) {
-        const ix = Math.floor(x), iy = Math.floor(y);
-        let ux = x - ix, uy = y - iy;
-        ux = ux * ux * (3 - 2 * ux); uy = uy * uy * (3 - 2 * uy);
-        const a = hashN(ix, iy) + (hashN(ix + 1, iy) - hashN(ix, iy)) * ux;
-        const b = hashN(ix, iy + 1) + (hashN(ix + 1, iy + 1) - hashN(ix, iy + 1)) * ux;
-        const r = a + (b - a) * uy;
-        return r * r;
-    }
-    // Exit progress at which sub-dot (i, j) (2px units, j counted up from the viewport's bottom) is switched off
-    function releaseAt(i, j) {
-        const xs = (i + 0.5) / (W / 2), ys = (j + 0.5) / (H / 2);
-        const R = ys * 0.7 + 0.15 + 0.15 * 0.5 * vnoise(xs * 8, ys * 8);
-        const rank = BAYER[(((j & 3) + 1) & 3) * 4 + (((i & 3) + 2) & 3)];
-        return R * (1 - D_GAP) + D_GAP * (0.5 - Math.sin(Math.asin(1 - (2 * rank) / 16) / 3));
-    }
+    const svcField = () => window.__svcField || null;
+    const wave = (x, T) => {
+        const k = x * dpr;
+        return Math.sin(k * 0.0032 + T * 0.65) * 115 + Math.cos(k * 0.0068 - T * 0.48) * 55 + Math.sin(k * 0.0135 + T * 0.85) * 22;
+    };
 
-    // Lit 2px dots of the lower half of the backdrop as it stands before the wipe
+    // The grid's lit cells over its last viewport, each with the scroll progress at which the front reaches it. The front
+    // starts as the grid's bottom wave (frozen at this instant) and climbs one viewport between R0 and R1; in canvas CSS
+    // space a cell leaves once y + dither * band > f0[col] - climbed, the grid's own `hide` test.
     function snapshot() {
-        const bc = document.querySelector('canvas.js-canvas');
-        if (!bc || !bc.width || !bc.height) return false;
-        const hh = Math.ceil(H / 2) + 2, k = bc.height / H;
-        let d;
-        try {
-            const c = mk(W, hh), g = c.getContext('2d', { willReadFrequently: true });
-            g.drawImage(bc, 0, (H - hh) * k, W * k, hh * k, 0, 0, W, hh);
-            d = g.getImageData(0, 0, W, hh).data;
-        } catch (e) { return false; }
-        const cols = Math.floor(W / 2), rows = Math.floor(H / 4);
-        const xs = [], ys = [], cs = [], rs = [];
-        for (let j = 0; j < rows; j++) {
-            const py = H - 2 * j - 1 - (H - hh);
-            if (py < 0 || py >= hh) continue;
-            for (let i = 0; i < cols; i++) {
-                const o = (py * W + 2 * i) * 4;
-                if (d[o] + d[o + 1] + d[o + 2] < 36) continue;
-                xs.push(2 * i + 1); ys.push(H - 2 * j - 1); cs.push(d[o], d[o + 1], d[o + 2]); rs.push(releaseAt(i, j));
-            }
-        }
+        const F = svcField();
+        if (!F || !F.canvas || !F.cols) return false;
+        const cr = F.canvas.getBoundingClientRect();
+        const nc = F.cols, f0 = new Float32Array(nc);
+        let lo = 1e9, hi = -1e9;
+        for (let c = 0; c < nc; c++) { f0[c] = F.botWave(c) + 125; lo = Math.min(lo, f0[c]); hi = Math.max(hi, f0[c]); }
+        const range = H * 0.95, band = 60, xs = [], ys = [], rs = [];
+        F.each(lo - range - band, hi + 2, (x, y, c, d) => {
+            const rel = R0 + ((f0[c] - y - d * band) / range) * (R1 - R0);
+            if (rel > R1) return;
+            xs.push(x + cr.left); ys.push(y); rs.push(Math.max(R0, rel));
+        });
         if (xs.length < 64) return false;
-        src = { n: xs.length, x: xs, y: ys, c: cs, r: rs };
+        src = { n: xs.length, x: xs, y: ys, r: rs, f0, cut: new Float32Array(nc), range, band, cv: F.canvas };
         assemble();
         return true;
     }
 
+    function updateHide() {
+        const F = svcField();
+        if (!F) return;
+        if (!src || !dots || bp < R0 || src.cv !== F.canvas || src.f0.length !== F.cols) { F.hide.cut = null; return; }
+        const k = Math.min(1, (bp - R0) / (R1 - R0)) * src.range;
+        for (let c = 0; c < src.cut.length; c++) src.cut[c] = src.f0[c] - k;
+        F.hide.band = src.band;
+        F.hide.cut = src.cut;
+    }
+
     function assemble() {
         dots = null;
-        if (!tg || !src) { title.style.opacity = ''; return; }
-        const r = rng(7331), nS = src.n, n = Math.min(tg.n, nS), total = Math.min(nS, D_MAX);
-        const idx = new Uint32Array(nS);
-        for (let i = 0; i < nS; i++) idx[i] = i;
-        for (let i = 0; i < total; i++) { const j = i + Math.floor(r() * (nS - i)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+        if (!tg || !src) return;
+        const r = rng(7331), total = src.n, n = Math.min(tg.n, total);
         // Every dot heads for the glyph point of its rank in x, one per point landing, so the field pours down as one
-        // sheet instead of criss-crossing; drift and drop come from a smooth field over the source position
-        const ord = Array.from(idx.subarray(0, total)).sort((p, q) => src.x[p] - src.x[q]);
+        // sheet instead of criss-crossing
+        const ord = Array.from({ length: total }, (_, i) => i).sort((p, q) => src.x[p] - src.x[q]);
         const tix = [];
         for (let k = 0; k < n; k++) tix.push(Math.floor((k * tg.n) / n));
-        tix.sort((p, q) => tg.t[p * 3] - tg.t[q * 3]);
-        const kOff = stTop - svcB, a = new Float32Array(total * 12), keepAt = new Int32Array(n).fill(-1);
+        tix.sort((p, q) => tg.t[p * 4] - tg.t[q * 4]);
+        const a = new Float32Array(total * 12), keepAt = new Int32Array(n).fill(-1);
         for (let k = 0; k < total; k++) { const g = Math.floor((k * n) / total); if (keepAt[g] < 0 || r() < 1 / (k - keepAt[g] + 1)) keepAt[g] = k; }
+        const landOf = (s) => Math.min(D_LAND, Math.max(src.r[s] + 0.1, src.r[s] + 0.16 + 0.12 * hashN(src.x[s] * 0.013, src.y[s] * 0.017)));
+        const cl = new Float32Array(tg.chars);
+        for (let g = 0; g < n; g++) {
+            const ci = tg.t[tix[g] * 4 + 3];
+            cl[ci] = Math.max(cl[ci], landOf(ord[keepAt[g]]));
+        }
+        for (let i = 0; i < cl.length; i++) if (!cl[i]) cl[i] = D_LAND;
         let w = 0, r0 = 1;
         const put = (k) => {
             const s = ord[k], g = Math.floor((k * n) / total), ti = tix[g], keep = keepAt[g] === k;
-            const sx = src.x[s], sy = src.y[s], tx = tg.t[ti * 3], ty = tg.t[ti * 3 + 1], rel = src.r[s];
-            const f = vnoise(sx * 0.006 + 3.1, sy * 0.006 + 7.7), f2 = vnoise(sx * 0.011 + 11.3, sy * 0.009 + 1.9);
-            const drop = H * D_DROP * (0.6 + 0.9 * f);
-            const meet = 1 - (sy + drop - kOff - ty) / H;
             const o = w * 12;
-            a[o] = sx; a[o + 1] = sy; a[o + 2] = tx; a[o + 3] = ty;
-            a[o + 4] = rel; a[o + 5] = Math.max(rel + 0.1, Math.min(D_LAND, meet));
-            a[o + 6] = (f2 - 0.3) * 0.12 * Math.hypot(tx - sx, drop);
-            a[o + 7] = H * 0.035 * (0.5 + f);
-            a[o + 8] = src.c[s * 3] / 255; a[o + 9] = src.c[s * 3 + 1] / 255; a[o + 10] = src.c[s * 3 + 2] / 255;
-            a[o + 11] = tg.t[ti * 3 + 2] + (keep ? 2 : 0);
-            r0 = Math.min(r0, rel);
+            a[o] = src.x[s]; a[o + 1] = src.y[s]; a[o + 2] = tg.t[ti * 4]; a[o + 3] = tg.t[ti * 4 + 1];
+            a[o + 4] = src.r[s]; a[o + 5] = landOf(s);
+            a[o + 6] = cl[tg.t[ti * 4 + 3]]; a[o + 7] = 0;
+            a[o + 8] = SRC_RGB[0]; a[o + 9] = SRC_RGB[1]; a[o + 10] = SRC_RGB[2];
+            a[o + 11] = tg.t[ti * 4 + 2] + (keep ? 2 : 0);
+            r0 = Math.min(r0, src.r[s]);
             w++;
         };
         // Landing dots last, so they draw over the ones that dissolve
         for (let k = 0; k < total; k++) if (keepAt[Math.floor((k * n) / total)] !== k) put(k);
         for (let k = 0; k < total; k++) if (keepAt[Math.floor((k * n) / total)] === k) put(k);
-        dots = { n: total, land: n, a, step: tg.step, r0 };
+        dots = { n: total, land: n, a, step: tg.step, r0, cl, end: Math.max(...cl) + D_REVEAL + 0.01 };
         glUpload();
         dotsP = NaN;
         dirty = true;
     }
 
+    function wrapTitleChars() {
+        if (!title || title.dataset.charsSplit === 'true') {
+            titleChars = title ? Array.from(title.querySelectorAll('.wt-char:not(.wt-space)')) : [];
+            return;
+        }
+        title.dataset.charsSplit = 'true';
+        const walk = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const text = node.textContent;
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < text.length; i++) {
+                    const ch = text[i];
+                    const span = document.createElement('span');
+                    span.className = 'wt-char' + (/\s/.test(ch) ? ' wt-space' : '');
+                    span.textContent = ch === ' ' ? '\u00a0' : ch;
+                    frag.appendChild(span);
+                }
+                node.parentNode.replaceChild(frag, node);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                Array.from(node.childNodes).forEach(walk);
+            }
+        };
+        walk(title);
+        titleChars = Array.from(title.querySelectorAll('.wt-char:not(.wt-space)'));
+    }
+
+    // The signature as a three.js ink tube: every stroke of the trace (signature-data.js) is a tube whose radius follows the
+    // pen's width, with round caps at its ends and joins. Each vertex carries the geodesic pen time from the first touch,
+    // so one uniform writes it on along the hand's path; the head of the line catches a little light as it moves.
+    class SignatureGL {
+        constructor(canvas) {
+            this.cv = canvas;
+            this.progress = 0;
+            this.target = 0;
+            this.tilt = { x: 0, y: 0 };
+            this.ready = false;
+            this.shown = -1;
+            const T = window.THREE, D = window.__SIG_DATA;
+            if (!T || !D) return;
+            try {
+                this.r = new T.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true });
+            } catch (e) { return; }
+            this.r.setClearColor(0x000000, 0);
+            this.scene = new T.Scene();
+            this.cam = new T.PerspectiveCamera(30, D.w / D.h, 0.1, 20);
+            this.cam.position.set(0, 0, 4.15);
+            const k = 2 / Math.max(D.w, D.h), cx = D.w / 2, cy = D.h / 2, RING = 10;
+            const pos = [], nor = [], tim = [], idx = [];
+            let base = 0;
+            for (const s of D.s) {
+                const n = s.length / 4;
+                if (n < 2) continue;
+                for (let i = 0; i < n; i++) {
+                    const a = Math.max(0, i - 1) * 4, b = Math.min(n - 1, i + 1) * 4;
+                    let tx = s[b] - s[a], ty = s[b + 1] - s[a + 1];
+                    const tl = Math.hypot(tx, ty) || 1;
+                    tx /= tl; ty /= tl;
+                    const x = (s[i * 4] - cx) * k, y = (s[i * 4 + 1] - cy) * k, rr = s[i * 4 + 2] * k;
+                    for (let j = 0; j < RING; j++) {
+                        const th = (j / RING) * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
+                        const nx = -ty * c, ny = tx * c, nz = sn;
+                        pos.push(x + nx * rr, y + ny * rr, nz * rr * 0.7);
+                        nor.push(nx, ny, nz);
+                        tim.push(s[i * 4 + 3]);
+                    }
+                }
+                for (let i = 0; i < n - 1; i++) {
+                    for (let j = 0; j < RING; j++) {
+                        const p0 = base + i * RING + j, p1 = base + i * RING + ((j + 1) % RING);
+                        idx.push(p0, p0 + RING, p1, p1, p0 + RING, p1 + RING);
+                    }
+                }
+                base += n * RING;
+            }
+            const ico = new T.IcosahedronGeometry(1, 1);
+            const ip = ico.attributes.position.array, iN = ico.attributes.normal.array, ii = ico.index ? ico.index.array : null;
+            const nv = ip.length / 3;
+            for (let c = 0; c < D.c.length; c += 4) {
+                const x = (D.c[c] - cx) * k, y = (D.c[c + 1] - cy) * k, rr = D.c[c + 2] * k;
+                for (let v = 0; v < nv; v++) {
+                    pos.push(x + ip[v * 3] * rr, y + ip[v * 3 + 1] * rr, ip[v * 3 + 2] * rr * 0.7);
+                    nor.push(iN[v * 3], iN[v * 3 + 1], iN[v * 3 + 2]);
+                    tim.push(D.c[c + 3]);
+                }
+                if (ii) for (let q = 0; q < ii.length; q++) idx.push(base + ii[q]);
+                else for (let q = 0; q < nv; q++) idx.push(base + q);
+                base += nv;
+            }
+            ico.dispose();
+            const g = new T.BufferGeometry();
+            g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+            g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+            g.setAttribute('aT', new T.Float32BufferAttribute(tim, 1));
+            g.setIndex(base > 65535 ? new T.Uint32BufferAttribute(idx, 1) : new T.Uint16BufferAttribute(idx, 1));
+            this.u = { uP: { value: 0 }, uC: { value: new T.Color(SUN) } };
+            const m = new T.ShaderMaterial({
+                uniforms: this.u,
+                transparent: true,
+                vertexShader: `attribute float aT; varying float vT; varying vec3 vN; varying vec3 vV;
+void main() { vT = aT; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }`,
+                fragmentShader: `uniform float uP; uniform vec3 uC; varying float vT; varying vec3 vN; varying vec3 vV;
+void main() {
+    if (vT > uP) discard;
+    vec3 n = normalize(vN), v = normalize(vV), l = normalize(vec3(-0.45, 0.6, 0.85));
+    float d = max(dot(n, l), 0.0);
+    float s = pow(max(dot(reflect(-l, n), v), 0.0), 36.0);
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+    float head = (1.0 - smoothstep(0.0, 0.03, uP - vT)) * step(uP, 0.999);
+    vec3 c = uC * (0.62 + 0.48 * d) + vec3(1.0, 0.98, 0.86) * (0.5 * s + 0.12 * rim + 0.45 * head);
+    gl_FragColor = vec4(c, 1.0);
+}`,
+            });
+            this.mesh = new T.Mesh(g, m);
+            this.scene.add(this.mesh);
+            this.ready = true;
+        }
+
+        resize(w, h, dpr = 1) {
+            if (!this.ready) return;
+            this.r.setPixelRatio(dpr);
+            this.r.setSize(w, h, false);
+            this.cam.aspect = w / h;
+            this.cam.updateProjectionMatrix();
+            this.shown = -1;
+        }
+
+        render(progress, tiltX = 0, tiltY = 0) {
+            if (!this.ready) return;
+            this.target = progress;
+            this.progress += (this.target - this.progress) * 0.18;
+            if (Math.abs(this.target - this.progress) < 1e-4) this.progress = this.target;
+            this.tilt.x += (tiltX - this.tilt.x) * 0.1;
+            this.tilt.y += (tiltY - this.tilt.y) * 0.1;
+            const p = this.progress, key = p * 1e4 + this.tilt.x * 1e2 + this.tilt.y;
+            if (Math.abs(key - this.shown) < 1e-3) return;
+            this.shown = key;
+            // Eased pen speed: the hand lands, runs, and slows into the last flick
+            this.u.uP.value = p <= 0 ? -1 : p >= 1 ? 1.01 : 0.5 - 0.5 * Math.cos(Math.PI * p);
+            this.mesh.rotation.y = this.tilt.x * 0.32;
+            this.mesh.rotation.x = -this.tilt.y * 0.26;
+            this.r.render(this.scene, this.cam);
+        }
+    }
+
     function buildDots() {
         if (!dctx && !dgl) return;
+        wrapTitleChars();
         tg = glyphTargets();
         src = null; dots = null; snapArmed = true;
-        if (!tg || !tg.n) { tg = null; sec.classList.remove('wt--dots'); title.style.opacity = ''; return; }
+        updateHide();
+        if (!tg || !tg.n || tg.chars !== titleChars.length) { tg = null; sec.classList.remove('wt--dots'); return; }
         sec.classList.add('wt--dots');
+    }
+
+    // Per-glyph presence 0..1: a letter appears only as its own dots touch down (a plain fade if the grid can't be read)
+    function revealChars() {
+        if (charIn.length !== titleChars.length) charIn = new Float32Array(titleChars.length);
+        if (STATIC || !tg) { charIn.fill(1); return; }
+        if (!dots) { charIn.fill(easeIO(lstep(0.8, 0.95, bp))); return; }
+        for (let i = 0; i < charIn.length; i++) charIn[i] = easeIO(lstep(dots.cl[i], dots.cl[i] + D_REVEAL, bp));
     }
 
     function drawDots() {
         if (bp < -0.45) snapArmed = true;
-        if (snapArmed && bp > -0.3 && bp < 0.6 && snapshot()) snapArmed = false;
-        if (!dots) {
-            if (title.style.opacity !== '') title.style.opacity = '';
-            return;
-        }
+        if (snapArmed && bp > -0.3 && bp < R0 + 0.04 && snapshot()) snapArmed = false;
+        updateHide();
+        revealChars();
+        if (!dots) return;
         if (bp === dotsP && !dirty) return;
         dotsP = bp;
-        const typeK = easeIO(lstep(D_TYPE, 1, bp));
-        const op = typeK <= 0 ? '0' : typeK >= 1 ? '1' : typeK.toFixed(3);
-        if (title.style.opacity !== op) title.style.opacity = op;
-        const show = bp >= dots.r0 && typeK < 1;
+        const show = bp >= dots.r0 && bp < dots.end;
+        const F = svcField();
+        const srcTop = src.cv.getBoundingClientRect().top;
+        const wt = F ? F.time : 0;
+        const grow = Math.max(2, dots.step * 0.92);
         if (dgl) {
             if (!gp || !gp.n) return;
             const g = dgl;
@@ -986,9 +1150,10 @@ void main() {
             const u = gp.u;
             g.uniform1f(u.uP, bp);
             g.uniform1f(u.uTop, stageTopNow());
-            g.uniform1f(u.uFade, 1 - typeK);
-            g.uniform1f(u.uGrow, (dots.step * 0.92 - 2) * typeK);
+            g.uniform1f(u.uSrc, srcTop);
+            g.uniform1f(u.uGrow, grow);
             g.uniform1f(u.uDpr, dpr);
+            g.uniform1f(u.uWT, wt);
             g.uniform2f(u.uRes, W, H);
             g.uniform3fv(u.uInk, INK3);
             g.uniform3fv(u.uSun, SUN3);
@@ -1003,31 +1168,37 @@ void main() {
         dctx.setTransform(1, 0, 0, 1, 0, 0);
         dctx.clearRect(0, 0, dotsCv.width, dotsCv.height);
         dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const a = dots.a, top = stageTopNow(), sz = 2 + (dots.step * 0.92 - 2) * typeK;
+        const a = dots.a, top = stageTopNow();
         const ink = new Path2D(), sun = new Path2D();
         for (let i = dots.n - dots.land; i < dots.n; i++) {
             const o = i * 12;
-            if (bp < a[o + 4]) continue;
+            if (bp < a[o + 4] || bp > a[o + 6] + D_REVEAL) continue;
             const t = clamp01((bp - a[o + 4]) / (a[o + 5] - a[o + 4])), e = easeIO(t), w = Math.sin(Math.PI * t);
-            const x = a[o] + (a[o + 2] - a[o]) * e, y = a[o + 1] + (top + a[o + 3] - a[o + 1]) * e + a[o + 7] * w;
+            const sx = a[o], sy = srcTop + a[o + 1];
+            let x = sx + (a[o + 2] - sx) * e, y = sy + (top + a[o + 3] - sy) * e;
+            const T = wt + t * 3.2;
+            y += (wave(x, T) - wave(sx, wt)) * 0.34 * w;
+            x += Math.cos(y * 0.0068 * dpr - T * 0.48) * 22 * w;
+            const sz = 1.65 + (grow - 1.65) * clamp01((t - 0.7) / 0.3);
             (a[o + 11] > 2.5 ? sun : ink).rect(x - sz / 2, y - sz / 2, sz, sz);
         }
-        dctx.globalAlpha = 1 - typeK;
         dctx.fillStyle = INK; dctx.fill(ink);
         dctx.fillStyle = SUN; dctx.fill(sun);
-        dctx.globalAlpha = 1;
     }
 
     function tick(dt, clock = dt) {
         const sr = sec.getBoundingClientRect();
         wtTop = sr.top - vTop;
         stTop = stage.getBoundingClientRect().top - vTop;
-        footTop = foot ? foot.getBoundingClientRect().top - vTop : 1e5;
+        footTop = 0;
         svcB = svc ? svc.getBoundingClientRect().bottom - vTop : wtTop;
         bp = 1 - svcB / H;
-        const moved = !(Math.abs(wtTop - lastWt) < 0.25 && Math.abs(footTop - lastFoot) < 0.25);
-        if (dt > 0 && lastFoot === lastFoot) footVel += ((footTop - lastFoot) / dt - footVel) * Math.min(1, dt * 30);
-        lastWt = wtTop; lastFoot = footTop;
+        
+        const maxScroll = Math.max(1, sr.height - H);
+        const wtProgress = clamp01(-wtTop / maxScroll);
+
+        const moved = !(Math.abs(wtTop - lastWt) < 0.25);
+        lastWt = wtTop; lastFoot = 0;
 
         if (!STATIC) {
             time += clock;
@@ -1038,9 +1209,48 @@ void main() {
             const kL = 1 - Math.pow(0.9, dt * 60), lean = H * 0.047;
             look.x += ((ptr.on ? -(ptr.cx / W * 2 - 1) * lean : 0) - look.x) * kL;
             look.y += ((ptr.on ? -(ptr.cy / H * 2 - 1) * lean : 0) - look.y) * kL;
-            if (mode !== 'fall' && footTop < FALL * H) fall();
-            else if (mode === 'fall' && footTop > LIFT * H) lift();
+
+            // The drop is a scroll position, not a stop: it fires the moment the last letter has left
+            if (mode !== 'fall' && wtProgress >= T_FALL) fall();
+            else if (mode === 'fall' && wtProgress < T_LIFT) lift();
         }
+
+        // Headline leaves letter by letter: each glyph rises and fades on its own eased window, staggered left to right
+        const riseT = lstep(T_RISE0, T_RISE1, wtProgress);
+        const nC = titleChars.length;
+        if (tg) revealChars();
+        for (let i = 0; i < nC; i++) {
+            const ch = titleChars[i];
+            const s0 = (i / Math.max(1, nC - 1)) * (1 - RISE_W);
+            const ep = easeIO(clamp01((riseT - s0) / RISE_W));
+            const op = (charIn[i] === undefined ? 1 : charIn[i]) * (1 - lstep(0.3, 0.85, ep));
+            const tf = ep > 0 ? `translate3d(0, ${(-150 * ep).toFixed(2)}%, 0) rotate(${((i % 2 ? -1 : 1) * 4 * ep).toFixed(2)}deg)` : '';
+            const os = op >= 0.999 ? '' : op.toFixed(3);
+            if (ch.style.transform !== tf) ch.style.transform = tf;
+            if (ch.style.opacity !== os) ch.style.opacity = os;
+        }
+        if (title.style.opacity !== '1') title.style.opacity = '1';
+        const lead = clamp01(riseT * 2.2);
+        if (kicker) {
+            kicker.style.transform = lead ? `translate3d(0, ${(-70 * easeIO(lead)).toFixed(1)}px, 0)` : '';
+            kicker.style.opacity = lead ? (1 - lead).toFixed(3) : '';
+        }
+        if (cta) {
+            cta.style.transform = lead ? `translate3d(0, ${(-50 * easeIO(lead)).toFixed(1)}px, 0)` : '';
+            cta.style.opacity = lead ? (1 - lead).toFixed(3) : '';
+            cta.style.pointerEvents = lead > 0.5 ? 'none' : '';
+        }
+
+        // Footer links, then the signature written on where the headline stood
+        if (floorEl) {
+            const k = easeIO(lstep(T_BAR0, T_BAR1, wtProgress));
+            floorEl.style.opacity = k.toFixed(3);
+            floorEl.style.transform = k < 1 ? `translate3d(0, ${((1 - k) * 18).toFixed(1)}px, 0)` : '';
+            floorEl.style.pointerEvents = k > 0.5 ? '' : 'none';
+        }
+        const sigAppear = lstep(T_SIG0, T_SIG0 + 0.03, wtProgress);
+        if (sigWrap) sigWrap.style.opacity = sigAppear.toFixed(3);
+        if (sigEngine) sigEngine.render(lstep(T_SIG0, T_SIG1, wtProgress), look.x / (W * 0.5), look.y / (H * 0.5));
 
         wtH = sr.height;
         const offY = STATIC ? stageTopNow() : Math.max(0, wtTop);
@@ -1049,7 +1259,7 @@ void main() {
             acc += dt * 1000;
             if (drag) {
                 drag.c.pointA.x = ptr.cx;
-                drag.c.pointA.y = ptr.cy - footTop;
+                drag.c.pointA.y = ptr.cy;
             }
             let n = 0;
             while (acc >= STEP && n < 4) {
@@ -1067,7 +1277,7 @@ void main() {
                 const b = s.body;
                 if (!b) continue;
                 s.x = s.qx + (b.position.x - s.qx) * al;
-                s.y = s.qy + (b.position.y - s.qy) * al + footTop;
+                s.y = s.qy + (b.position.y - s.qy) * al;
                 s.a = s.qa + (b.angle - s.qa) * al;
                 s.ks = s.k0 + (1 - s.k0) * kO;
                 s.o = s.o0 + (1 - s.o0) * kO;
@@ -1079,7 +1289,7 @@ void main() {
             const t = visible ? easeIO(Math.min(1, liftT / 1.1)) : 1;
             for (const s of items) {
                 floatPose(s, offY);
-                const l = s.l, ly = l.y + footTop;
+                const l = s.l, ly = l.y;
                 s.x = l.x + (s.fx - l.x) * t;
                 s.y = ly + (s.fy - ly) * t;
                 s.a = l.a + wrapPI(s.fa - l.a) * t;
@@ -1113,10 +1323,11 @@ void main() {
         svcB = svc.getBoundingClientRect().bottom - vTop;
         bp = 1 - svcB / H;
         if (bp < -0.45) snapArmed = true;
-        if (tg && snapArmed && bp > -0.3 && bp < 0.6) {
+        if (tg && snapArmed && bp > -0.3 && bp < R0 + 0.04) {
             stTop = stage.getBoundingClientRect().top - vTop;
             if (snapshot()) snapArmed = false;
         }
+        updateHide();
     }
 
     function frame(now) {
@@ -1146,6 +1357,27 @@ void main() {
     function init() {
         lastW = window.innerWidth; lastH = window.innerHeight;
         if (!STATIC) sec.classList.add('is-armed');
+        if (sigCanvas) {
+            sigEngine = new SignatureGL(sigCanvas);
+        }
+        wrapTitleChars();
+        const sigBar = stage.querySelector('.sig-bar');
+        if (sigBar) {
+            sigBar.addEventListener('click', (e) => {
+                const a = e.target.closest('[data-sig-to]');
+                if (!a) return;
+                const to = a.getAttribute('data-sig-to');
+                e.preventDefault();
+                if (to === '0') {
+                    window.scrollTo({ top: 0, behavior: STATIC ? 'auto' : 'smooth' });
+                } else {
+                    const target = document.querySelector(to);
+                    if (target) {
+                        target.scrollIntoView({ behavior: STATIC ? 'auto' : 'smooth' });
+                    }
+                }
+            });
+        }
         if (dgl) {
             dotsCv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); gp = null; }, false);
             dotsCv.addEventListener('webglcontextrestored', () => { glUpload(); dotsP = -1; dirty = true; kick(); }, false);
@@ -1191,7 +1423,6 @@ void main() {
             const io = new IntersectionObserver(watch);
             if (svc && (dgl || dctx)) new IntersectionObserver((es) => { svcVis = es[es.length - 1].isIntersecting; if (svcVis) kick(); }).observe(svc);
             io.observe(sec);
-            if (foot) io.observe(foot);
         } else {
             near = visible = true;
             queue();
