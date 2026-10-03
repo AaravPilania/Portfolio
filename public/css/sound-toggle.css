@@ -13,7 +13,7 @@
 .ss-gate {
     position: fixed;
     inset: 0;
-    z-index: 60;
+    z-index: 9500;
     display: grid;
     place-items: center;
     padding: 16px;
@@ -22,144 +22,113 @@
 .ss-gate__scrim {
     position: absolute;
     inset: 0;
-    background: rgba(18, 19, 22, 0.42);
+    background: var(--ss-void);
     opacity: 0;
     transition: opacity 0.5s ease;
 }
 
+/* the way in is a flashbang: the void blinks to paper before the vibrant page shows */
+.ss-gate__flash {
+    position: absolute;
+    inset: 0;
+    background: var(--ss-paper);
+    opacity: 0;
+    pointer-events: none;
+}
+
 .ss-gate__card {
     position: relative;
-    width: min(372px, 100%);
-    padding: 18px 18px 16px;
-    border-radius: 6px;
-    background: var(--ss-void);
+    display: grid;
+    justify-items: center;
+    gap: clamp(28px, 4.5vw, 52px);
+    width: min(760px, 100%);
     color: var(--ss-paper);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -24px rgba(0, 0, 0, 0.55), 0 12px 24px -16px rgba(0, 0, 0, 0.4);
+    text-align: center;
+}
+
+.ss-gate__title {
+    margin: 0;
+    font-family: var(--ss-display);
+    font-size: clamp(44px, 8.4vw, 112px);
+    font-weight: 700;
+    line-height: 0.92;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
     opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.985);
-    transition: opacity 0.45s ease, transform 0.7s var(--ss-ease);
+    transform: translate3d(0, 28px, 0);
+    transition: opacity 0.6s ease 0.08s, transform 0.9s var(--ss-ease) 0.08s;
 }
 
-/* the card is an event chip: its colour sits as a strip on the leading edge */
-.ss-gate__card::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 14px;
-    bottom: 14px;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: var(--ss-sig);
-    transform: scaleY(0);
-    transform-origin: top;
-    transition: transform 0.6s var(--ss-ease) 0.18s;
-}
-
-.ss-gate.is-in .ss-gate__scrim {
-    opacity: 1;
-}
-
-.ss-gate.is-in .ss-gate__card {
+.ss-gate.is-in .ss-gate__scrim,
+.ss-gate.is-in .ss-gate__title {
     opacity: 1;
     transform: none;
-}
-
-.ss-gate.is-in .ss-gate__card::before {
-    transform: none;
-}
-
-.ss-gate.is-out .ss-gate__scrim {
-    opacity: 0;
-    transition-duration: 0.45s;
-}
-
-.ss-gate.is-out .ss-gate__card {
-    opacity: 0;
-    transform: translate3d(0, -10px, 0) scale(0.98);
-    transition: opacity 0.3s ease, transform 0.45s var(--ss-ease);
 }
 
 .ss-gate.is-out {
     pointer-events: none;
 }
 
-.ss-gate__meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 18px;
-    font-family: var(--ss-mono);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(244, 242, 234, 0.55);
+.ss-gate.is-out .ss-gate__card {
+    opacity: 0;
+    transform: scale(1.04);
+    transition: opacity 0.18s ease, transform 0.4s var(--ss-ease);
 }
 
-.ss-gate__swatch {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--ss-sig);
+.ss-gate.is-out .ss-gate__flash {
+    animation: ss-flash 0.85s cubic-bezier(0.3, 0, 0.2, 1) forwards;
 }
 
-.ss-gate__clock {
-    margin-left: auto;
-    font-variant-numeric: tabular-nums;
+.ss-gate.is-out .ss-gate__scrim {
+    opacity: 0;
+    transition: opacity 0s linear 0.12s;
 }
 
-.ss-gate__title {
-    margin: 0;
-    font-family: var(--ss-display);
-    font-size: 34px;
-    font-weight: 700;
-    line-height: 0.98;
-    letter-spacing: -0.01em;
-}
-
-.ss-gate__body {
-    margin: 10px 0 20px;
-    font-family: var(--ss-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    color: rgba(244, 242, 234, 0.66);
-    text-wrap: pretty;
+@keyframes ss-flash {
+    0% { opacity: 0; }
+    14% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 .ss-gate__actions {
-    display: grid;
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
 }
 
 .ss-gate__btn {
     position: relative;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 12px;
-    height: 48px;
-    padding: 0 16px;
+    height: 54px;
+    padding: 0 26px 0 22px;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: 999px;
     font-family: var(--ss-mono);
     font-size: 11px;
     font-weight: 500;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    text-align: left;
     cursor: pointer;
     opacity: 0;
-    transform: translate3d(0, 8px, 0);
-    transition: opacity 0.4s ease, transform 0.6s var(--ss-ease), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    transform: translate3d(0, 12px, 0);
+    transition: opacity 0.45s ease, transform 0.7s var(--ss-ease), background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .ss-gate.is-in .ss-gate__btn {
     opacity: 1;
     transform: none;
-    transition-delay: 0.16s, 0.16s, 0s, 0s, 0s;
+    transition-delay: 0.3s, 0.3s, 0s, 0s, 0s;
 }
 
 .ss-gate.is-in .ss-gate__btn + .ss-gate__btn {
-    transition-delay: 0.24s, 0.24s, 0s, 0s, 0s;
+    transition-delay: 0.38s, 0.38s, 0s, 0s, 0s;
+}
+
+.ss-gate.is-in .ss-gate__btn:hover {
+    transform: translate3d(0, -2px, 0);
 }
 
 .ss-gate__btn--on {
@@ -173,17 +142,17 @@
 
 .ss-gate__btn--off {
     background: none;
-    border-color: rgba(244, 242, 234, 0.18);
+    border-color: rgba(244, 242, 234, 0.22);
     color: var(--ss-paper);
 }
 
 .ss-gate__btn--off:hover {
-    border-color: rgba(244, 242, 234, 0.5);
+    border-color: var(--ss-paper);
 }
 
 .ss-gate__btn:focus-visible {
     outline: 1px solid var(--ss-sig);
-    outline-offset: 3px;
+    outline-offset: 4px;
 }
 
 .ss-gate__eq,
@@ -230,14 +199,6 @@
 
 .ss-gate__btn--off:hover .ss-gate__flat i:nth-child(even) {
     transform: translate3d(0, 2px, 0) scaleY(0.16);
-}
-
-.ss-gate__foot {
-    margin: 14px 0 0;
-    font-family: var(--ss-mono);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    color: rgba(244, 242, 234, 0.4);
 }
 
 /* ---------- toggle ---------- */
@@ -330,14 +291,15 @@
 @media (prefers-reduced-motion: reduce) {
     .ss-gate__scrim,
     .ss-gate__card,
-    .ss-gate__card::before,
+    .ss-gate__title,
     .ss-gate__btn,
     .ss-toggle,
     .ss-toggle__roll {
         transition: none !important;
     }
 
-    .ss-gate__eq i {
+    .ss-gate__eq i,
+    .ss-gate.is-out .ss-gate__flash {
         animation: none;
         transform: scaleY(0.7);
     }

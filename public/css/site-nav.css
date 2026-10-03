@@ -30,10 +30,33 @@
     }
 }
 
+/* the main site: the theme's own menu keeps its box (scripts measure it) but hands the header to this one, which
+   appears with the rest of the chrome once the intro reveals it and sits above every slide */
+.ll-header .js-menu,
+.ll-header .js-menu.is-revealed,
+.ll-header .js-menu-blur {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.ap-nav--site .ap-nav__pill {
+    opacity: 0;
+    visibility: hidden;
+    animation: none;
+    transition: clip-path 0.55s var(--nav-ease), opacity 0.6s var(--nav-ease), visibility 0s linear 0.6s;
+}
+
+body:has(.ll-header .js-menu.is-revealed) .ap-nav--site .ap-nav__pill {
+    opacity: 1;
+    visibility: visible;
+    transition: clip-path 0.55s var(--nav-ease), opacity 0.6s var(--nav-ease), visibility 0s;
+}
+
 .ap-nav__scrim {
     position: fixed;
     inset: 0;
-    z-index: 19;
+    z-index: 9000;
     background: rgba(0, 0, 0, 0.4);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
@@ -52,7 +75,7 @@
     position: fixed;
     top: calc(16 * var(--u));
     left: 50%;
-    z-index: 20;
+    z-index: 9001;
     width: calc(100vw - 32 * var(--u));
     max-width: calc(438 * var(--u));
     color: var(--nav-ink);
@@ -104,6 +127,9 @@
 
 .ap-nav__msg {
     position: absolute;
+    max-width: calc(100% - 112 * var(--u));
+    overflow: hidden;
+    text-align: center;
     left: 50%;
     top: 50%;
     font-family: Sometype, Helvetica, Arial, sans-serif;

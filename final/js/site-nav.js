@@ -18,6 +18,44 @@
         if (!open && menu.contains(document.activeElement)) burger.focus({ preventScroll: true });
     }
 
+    // one markup on every page: the current one is found from the URL
+    const here = /^\/contact(\/|\.html)?$/.test(location.pathname) ? 'contact' : 'home';
+    for (const a of nav.querySelectorAll('[data-nav]')) {
+        if (a.dataset.nav !== here) continue;
+        a.setAttribute('aria-current', 'page');
+        a.querySelector('.ap-nav__ico').innerHTML = '<rect x="2" y="2" width="6" height="6" fill="currentColor" />';
+        a.insertAdjacentHTML('beforeend', '<span class="ap-nav__here" aria-hidden="true">You are here</span>');
+    }
+    if (here === 'contact') for (const a of nav.querySelectorAll('a[href^="/contact#"]')) a.addEventListener('click', (e) => {
+        e.preventDefault();
+        set(false);
+        window.dispatchEvent(new CustomEvent('ap:hash', { detail: a.hash }));
+    });
+
+    // the centre message types through its phrases as glyphs that resolve, every few seconds
+    const msg = nav.querySelector('.ap-nav__msg[data-labels]');
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (msg) {
+        const phrases = msg.dataset.labels.split('|'), G = '#$*@(0%1>';
+        let n = 0;
+        const swap = (text) => {
+            const t0 = performance.now(), D = 520 + text.length * 12;
+            const step = (now) => {
+                const k = Math.min(1, (now - t0) / D), fixed = Math.floor(Math.max(0, k * 1.4 - 0.4) * text.length), shown = Math.ceil(Math.min(1, k * 1.6) * text.length);
+                let s = text.slice(0, fixed);
+                for (let i = fixed; i < shown; i++) s += text[i] === ' ' ? ' ' : G[(Math.random() * G.length) | 0];
+                msg.textContent = s;
+                if (k < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        };
+        setInterval(() => {
+            if (document.hidden || reduce.matches || nav.classList.contains('is-open')) return;
+            n = (n + 1) % phrases.length;
+            swap(phrases[n]);
+        }, 4200);
+    }
+
     menu.inert = true;
     burger.addEventListener('click', () => set(!nav.classList.contains('is-open')));
     nav.querySelector('.ap-nav__hit').addEventListener('click', () => set(!nav.classList.contains('is-open')));

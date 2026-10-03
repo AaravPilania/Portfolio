@@ -794,7 +794,7 @@
             sLevel = t < T.coarsen || t >= T.dance ? TEXT_LV : COARSEN[Math.min(3, stepIn(t, T.coarsen))];
         } else {
             sMode = M_DANCE;
-            sArg = Math.max(0, Math.min(dance.n - 1, Math.floor((t - T.dance) * DANCE_FPS)));
+            sArg = Math.max(0, Math.floor((t - T.dance) * DANCE_FPS));
             const dl = G.danceLv;
             sLevel = t < T.refine3 ? dl[0] : t < T.refine5 ? dl[1] : t < T.sub7 ? dl[2] : t < T.fine ? dl[3] : dl[4];
             if (t >= T.dissolve) sDis = 1;
@@ -824,8 +824,9 @@
 
     // One dance step: frame f's meetings travelling to frame f+1's, on the current level (a level change is a hard cut
     // on the beat, like every other resolution step). Portrait windows keep frame f's offset for both ends.
-    function buildStep(lv, f) {
-        const f1 = Math.min(dance.n - 1, f + 1), sh = lv.shift ? lv.shift[f] : 0;
+    const frameAt = (k) => (k < dance.n ? k : dance.seam + 1 + ((k - dance.n) % (dance.n - 1 - dance.seam)));
+    function buildStep(lv, k) {
+        const f = frameAt(k), f1 = frameAt(k + 1), sh = lv.shift ? lv.shift[f] : 0;
         danceFine(f);
         fillCells(lv, M_DANCE, G.colA, G.keyA, sh);
         extractRuns(lv, G.colA, G.runA);
@@ -932,7 +933,15 @@
             for (let j = Math.max(0, f - 8); j <= Math.min(n - 1, f + 8); j++) { sum += cen[j]; k++; }
             cx[f] = sum / k;
         }
-        dance = { w, h, n, frames, cx };
+        // Past the last frame the dance keeps going from the earlier frame closest to it, so the dissolve never freezes it
+        let seam = 0, bestD = Infinity;
+        const last = (n - 1) * size;
+        for (let f = 0; f < n - 1 - DANCE_FPS * 2; f++) {
+            let d = 0;
+            for (let i = 0, o = f * size; i < size && d < bestD; i++) if (frames[o + i] !== frames[last + i]) d++;
+            if (d < bestD) { bestD = d; seam = f; }
+        }
+        dance = { w, h, n, frames, cx, seam };
         if (G) { buildSampler(); lastKey = -1; }
     }
 
@@ -955,7 +964,6 @@
 
     // ---------------------------------------------------------------- sound
     // The gate's answer starts the cycle: with sound, or silently on the same audio clock so unmuting stays in time.
-    // A visitor who already chose this session skips the gate when the browser lets audio start without a gesture.
     const audio = window.CalendarAudio && CalendarAudio.available() ? CalendarAudio : null;
     const sound = window.SiteSound || null;
     let toggle = null;
@@ -982,20 +990,8 @@
         CalendarAudio.onStart(() => { lastRaw = -Infinity; lastKey = -1; });
         CalendarAudio.init('audio/calendar-loop.mp3', LOOP, AUDIO_PAD).catch(() => {});
     }
-    const askGate = () => sound.gate({
-        kicker: 'Soundtrack · 28 s loop',
-        title: 'This calendar dances.',
-        body: 'A week of meetings, scored to sixteen bars of Alice Deejay\u2019s Better Off Alone on repeat. Best with sound.',
-        foot: window.matchMedia('(pointer: coarse)').matches ? 'Switch it any time, bottom right.' : 'Switch it any time, bottom right, or press M.',
-        onChoose: (s) => begin(s, true),
-    });
     if (!sound || frozen !== null || /[?&]gate=0\b/.test(location.search)) begin(false, false);
-    else {
-        const was = sound.pref();
-        if (was === 'off') begin(false, false);
-        else if (was === 'on' && audio) audio.resume({ muted: false }).then((ok) => (ok ? begin(true, false) : askGate()));
-        else askGate();
-    }
+    else sound.gate({ title: 'Ready for the flashbang?', onChoose: (s) => begin(s, true) });
 
     const pct = (arr, count, p) => {
         const a = Array.from(arr.subarray(0, Math.min(count, PERF_N))).sort((x, y) => x - y);

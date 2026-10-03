@@ -34,13 +34,11 @@ window.SiteSound = (() => {
             el.setAttribute('role', 'dialog');
             el.setAttribute('aria-modal', 'true');
             el.setAttribute('aria-labelledby', 'ssGateTitle');
-            el.setAttribute('aria-describedby', 'ssGateBody');
             el.innerHTML = `
                 <div class="ss-gate__scrim"></div>
+                <div class="ss-gate__flash" aria-hidden="true"></div>
                 <div class="ss-gate__card">
-                    <div class="ss-gate__meta"><i class="ss-gate__swatch" aria-hidden="true"></i><span>${esc(opts.kicker || 'Soundtrack')}</span><span class="ss-gate__clock" aria-hidden="true"></span></div>
                     <h2 class="ss-gate__title" id="ssGateTitle">${esc(opts.title || 'Sound on?')}</h2>
-                    <p class="ss-gate__body" id="ssGateBody">${esc(opts.body || 'This page has a soundtrack.')}</p>
                     <div class="ss-gate__actions">
                         <button class="ss-gate__btn ss-gate__btn--on" type="button" data-sound="1">
                             <span class="ss-gate__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Enter with sound</span>
@@ -49,16 +47,8 @@ window.SiteSound = (() => {
                             <span class="ss-gate__flat" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Enter without sound</span>
                         </button>
                     </div>
-                    ${opts.foot ? `<p class="ss-gate__foot">${esc(opts.foot)}</p>` : ''}
                 </div>`;
             document.body.appendChild(el);
-            const clock = el.querySelector('.ss-gate__clock');
-            const tick = () => {
-                const d = new Date(Date.now() + 5.5 * 3600e3);
-                clock.textContent = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} IST`;
-            };
-            tick();
-            const clockTimer = setInterval(tick, 10000);
             const prevFocus = document.activeElement;
             const buttons = [...el.querySelectorAll('button')];
             requestAnimationFrame(() => {
@@ -72,12 +62,11 @@ window.SiteSound = (() => {
                 done = true;
                 setPref(sound ? 'on' : 'off');
                 if (opts.onChoose) opts.onChoose(sound);
-                clearInterval(clockTimer);
                 document.removeEventListener('keydown', onKey, true);
                 el.classList.remove('is-in');
                 el.classList.add('is-out');
                 el.setAttribute('aria-hidden', 'true');
-                setTimeout(() => el.remove(), reduceMotion.matches ? 0 : 520);
+                setTimeout(() => el.remove(), reduceMotion.matches ? 0 : 900);
                 if (prevFocus && prevFocus.focus && prevFocus !== document.body) prevFocus.focus({ preventScroll: true });
                 resolve(sound);
             }

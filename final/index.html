@@ -594,6 +594,7 @@
     <link rel="stylesheet" href="/css/skills-wheel.css" media="all" />
     <link rel="stylesheet" href="/css/work-together.css" media="all" />
     <link rel="stylesheet" href="/css/footer-signature.css" media="all" />
+    <link rel="stylesheet" href="/css/site-nav.css" media="all" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Kalam:wght@700&family=Reenie+Beanie&display=swap" rel="stylesheet">
@@ -2143,7 +2144,7 @@
                                 </div>
                             </a>
 
-                            <a href="contact.html" data-no-swup
+                            <a href="/contact" data-no-swup
                                 class="ll-add-navItem h-[calc(50/16*1rem)] flex flex-shrink-0 items-center relative w-full js-nav-item">
                                 <div class="h-full w-full bg-white/10 opacity-0 inset-0 absolute js-backdrop"></div>
 
@@ -2780,7 +2781,7 @@
             class="fixed right-4 top-4 z-20 opacity-100 w-[calc(160/16*1rem)] flex flex-col pb-1 gap-y-1 pointer-events-auto -lg:hidden js-sticky-items">
 
 
-            <a href="contact.html" data-no-swup
+            <a href="/contact" data-no-swup
                 class="ll-block--contact-card !w-full backdrop-blur-sm w-full h-[calc(50/16*1rem)] ll-add-button overflow-hidden px-[calc(11/16*1rem)] flex gap-x-5 w-max rounded items-center pr-8 whitespace-nowrap relative"
                 data-component="blocks/contact_card">
                 <div class="absolute inset-0 h-full w-full bg-textPrimary opacity-60"></div>
@@ -2823,6 +2824,44 @@
             </div>
 
         </button>
+    </header>
+    <header class="ap-nav ap-nav--site">
+        <div class="ap-nav__scrim"></div>
+        <nav class="ap-nav__pill" aria-label="Main">
+            <div class="ap-nav__bar">
+                <button class="ap-nav__hit" type="button" tabindex="-1" aria-hidden="true"></button>
+                <a class="ap-nav__mark" href="/" aria-label="Aarav Pilania, home">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 803 644" aria-hidden="true">
+                        <path fill="currentColor" fill-rule="evenodd" d="M 0 644 L 98 644 L 99 359 L 352 359 L 353 644 L 468 644 L 469 440 L 706 440 L 706 341 L 803 339 L 803 95 L 711 94 L 711 0 L 411 0 L 410 95 L 352 94 L 352 0 L 100 0 L 99 95 L 0 95 Z M 468 95 L 662 94 L 663 141 L 712 143 L 712 292 L 663 293 L 662 341 L 469 341 Z M 99 95 L 352 94 L 353 253 L 100 254 Z" />
+                    </svg>
+                </a>
+                <span class="ap-nav__msg" aria-hidden="true" data-labels="Creative developer, India|Yes, the calendar dances|Bring the odd idea|Writes back within a day">Creative developer, India</span>
+                <button class="ap-nav__burger" type="button" aria-expanded="false" aria-controls="apNavMenu" aria-label="Open menu"><i></i><i></i><i></i></button>
+            </div>
+            <div class="ap-nav__menu" id="apNavMenu">
+                <ul class="ap-nav__list">
+                    <li><a class="ap-nav__item" href="/#section-projects" style="--i:0">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Work</span></a></li>
+                    <li><a class="ap-nav__item" href="/#work-together" style="--i:1">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Stack</span></a></li>
+                    <li><a class="ap-nav__item" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer" style="--i:2">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">GitHub</span>
+                        <svg class="ap-nav__ext" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="2" y="0" width="8" height="2" /><rect x="8" y="2" width="2" height="4" /><rect x="5" y="3" width="2" height="2" /><rect x="3" y="5" width="2" height="2" /><rect x="0" y="8" width="2" height="2" /><rect x="1" y="7" width="2" height="2" /></g></svg>
+                    </a></li>
+                    <li><a class="ap-nav__item" href="/contact" data-nav="contact" data-no-swup style="--i:3">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Contact</span></a></li>
+                </ul>
+                <div class="ap-nav__actions" style="--i:4">
+                    <button class="ap-nav__btn ap-nav__btn--ghost" type="button" data-copy="aaravpilania2006@gmail.com" style="--i:4">Copy email</button>
+                    <a class="ap-nav__btn ap-nav__btn--paper" href="mailto:aaravpilania2006@gmail.com?subject=A%20call%3F" style="--i:5">Schedule a call</a>
+                    <a class="ap-nav__btn ap-nav__btn--paper" href="/contact#brief" data-no-swup style="--i:6">Start a project</a>
+                </div>
+            </div>
+        </nav>
     </header>
 
     <canvas class="js-upper-canvas pointer-events-none h-dvh w-screen fixed inset-0 z-[8]"></canvas>
@@ -4188,6 +4227,7 @@
     <script src="/js/skills-wheel.js"></script>
     <script src="/js/work-together.js"></script>
     <script src="/js/footer-signature.js"></script>
+    <script src="/js/site-nav.js"></script>
     
 
     <!-- =======================================================
