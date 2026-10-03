@@ -13,7 +13,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preload" href="data/calendar-dance.bin" as="fetch" crossorigin>
-    <link rel="preload" href="fonts/Brier-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/playfair/playfair-display-700.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/playfair/playfair-display-700-italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="css/fonts-playfair.css">
     <link rel="stylesheet" href="css/site-nav.css">
     <link rel="stylesheet" href="css/sound-toggle.css">
     <link rel="stylesheet" href="css/calendar-contact.css">
@@ -33,7 +35,7 @@
                         <path fill="currentColor" fill-rule="evenodd" d="M 0 644 L 98 644 L 99 359 L 352 359 L 353 644 L 468 644 L 469 440 L 706 440 L 706 341 L 803 339 L 803 95 L 711 94 L 711 0 L 411 0 L 410 95 L 352 94 L 352 0 L 100 0 L 99 95 L 0 95 Z M 468 95 L 662 94 L 663 141 L 712 143 L 712 292 L 663 293 L 662 341 L 469 341 Z M 99 95 L 352 94 L 353 253 L 100 254 Z" />
                     </svg>
                 </a>
-                <span class="ap-nav__msg" aria-hidden="true">Contact</span>
+                <span class="ap-nav__msg" aria-hidden="true" data-labels="Contact|Your move|Week full, inbox open|Bring the odd idea">Contact</span>
                 <button class="ap-nav__burger" type="button" aria-expanded="false" aria-controls="apNavMenu" aria-label="Open menu"><i></i><i></i><i></i></button>
             </div>
             <div class="ap-nav__menu" id="apNavMenu">
@@ -67,54 +69,70 @@
     <div class="gc-times" id="gcTimes" aria-hidden="true"></div>
     <canvas class="gc-canvas" id="gcCanvas" aria-hidden="true"></canvas>
 
-    <aside class="gc-invite" id="gcInvite" aria-labelledby="gcInviteTitle">
-        <div class="gc-invite__head">
-            <i class="gc-invite__swatch" aria-hidden="true"></i>
-            <div class="gc-invite__heading">
-                <h2 class="gc-invite__title" id="gcInviteTitle">Work with Aarav</h2>
-                <p class="gc-invite__when">30 min · video call · <span id="gcInviteNow">New Delhi</span></p>
-            </div>
-            <button class="gc-invite__fold" id="gcInviteFold" type="button" aria-expanded="true" aria-controls="gcInviteBody" aria-label="Fold the invite"><i></i><i></i></button>
-        </div>
-        <div class="gc-invite__body" id="gcInviteBody">
-            <div class="gc-invite__inner">
-                <div class="gc-invite__people">
-                    <figure class="gc-slot gc-slot--photo">
-                        <img src="images/aarav-alpine-320.webp" srcset="images/aarav-alpine-320.webp 320w, images/aarav-alpine-480.webp 480w" sizes="(max-width: 699px) 76px, 132px" width="320" height="400" alt="Aarav Pilania in an alpine valley, mountains behind him" decoding="async">
-                        <figcaption class="gc-slot__chip"><b>Aarav</b> organizer</figcaption>
-                    </figure>
-                    <span class="gc-invite__x" aria-hidden="true">×</span>
-                    <figure class="gc-slot gc-slot--guest" id="gcGuest">
-                        <canvas class="gc-booth" id="gcBooth" aria-hidden="true"></canvas>
-                        <span class="gc-slot__empty" aria-hidden="true"><i>+</i>You</span>
-                        <span class="gc-booth__count" id="gcBoothCount" aria-hidden="true"></span>
-                        <span class="gc-booth__flash" aria-hidden="true"></span>
-                        <figcaption class="gc-slot__chip gc-slot__chip--guest"><b>You</b> <span id="gcGuestState">invited</span></figcaption>
-                    </figure>
+    <section class="gc-contact" id="gcContact" aria-labelledby="gcHead">
+        <canvas class="gc-contact__fringe" id="gcFringe" aria-hidden="true"></canvas>
+        <div class="gc-contact__grid">
+            <div class="gc-contact__lead">
+                <h2 class="gc-contact__head" id="gcHead"><span class="gc-line"><span>Pencil me <em>in.</em></span></span></h2>
+                <div class="gc-card" id="gcInvite" data-booth="idle">
+                    <div class="gc-card__sheet" id="gcInviteBody" role="group" aria-labelledby="gcInviteTitle">
+                        <div class="gc-card__head">
+                            <h3 class="gc-card__title" id="gcInviteTitle">Work with Aarav</h3>
+                            <p class="gc-card__when">30 min · video call · you’re invited</p>
+                        </div>
+                        <div class="gc-invite__people">
+                            <figure class="gc-slot gc-slot--photo">
+                                <img src="images/aarav-alpine-320.webp" srcset="images/aarav-alpine-320.webp 320w, images/aarav-alpine-480.webp 480w" sizes="(max-width: 699px) 40vw, 132px" width="320" height="400" alt="Aarav Pilania in an alpine valley, mountains behind him" loading="lazy" decoding="async">
+                                <figcaption class="gc-slot__chip"><b>Aarav</b> organizer</figcaption>
+                            </figure>
+                            <span class="gc-invite__x" aria-hidden="true">×</span>
+                            <figure class="gc-slot gc-slot--guest" id="gcGuest">
+                                <canvas class="gc-booth" id="gcBooth" aria-hidden="true"></canvas>
+                                <span class="gc-slot__empty" aria-hidden="true"><i>+</i>You</span>
+                                <span class="gc-booth__count" id="gcBoothCount" aria-hidden="true"></span>
+                                <span class="gc-booth__flash" aria-hidden="true"></span>
+                                <figcaption class="gc-slot__chip gc-slot__chip--guest"><b>You</b> <span id="gcGuestState">invited</span></figcaption>
+                            </figure>
+                        </div>
+                        <div class="gc-invite__rsvp">
+                            <button class="gc-invite__book" id="gcBook" type="button"><span class="gc-invite__rec" aria-hidden="true"></span><span id="gcBookLabel">Book yourself in</span></button>
+                            <button class="gc-invite__ghost" id="gcRetake" type="button" hidden>Retake</button>
+                            <button class="gc-invite__ghost" id="gcSave" type="button" hidden>Save invite</button>
+                        </div>
+                        <p class="gc-invite__msg" id="gcBoothMsg" role="status" aria-live="polite">Your camera books you in as a slot portrait. It stays on this device.</p>
+                    </div>
+                    <button class="gc-card__pill" id="gcInviteFold" type="button" aria-expanded="false" aria-controls="gcInviteBody" data-tip="Book yourself in">
+                        <img class="gc-card__face" src="images/aarav-alpine-320.webp" width="320" height="400" alt="" decoding="async">
+                        <span class="gc-card__line" data-scramble><b>Aarav</b> — writes back within a day</span>
+                        <span class="gc-card__toggle" aria-hidden="true">( <i>+</i> )</span>
+                        <span class="gc-sr">Open the invite: book yourself into Aarav’s calendar with your camera</span>
+                    </button>
                 </div>
-                <p class="gc-invite__bio">Creative developer in New Delhi. Interactive sites, motion and WebGL. Say hi about a project, a role or a wild idea.</p>
-                <ul class="gc-invite__links">
-                    <li class="gc-link" data-link="email">
-                        <a href="mailto:aaravpilania2006@gmail.com" id="gcMail"><span class="gc-link__k">Email</span><span class="gc-link__v">aaravpilania2006@gmail.com</span></a>
-                        <button class="gc-link__copy" type="button" data-copy="aaravpilania2006@gmail.com" aria-label="Copy email address">Copy</button>
-                    </li>
-                    <li class="gc-link" data-link="linkedin" hidden>
-                        <a href="#" target="_blank" rel="noopener noreferrer"><span class="gc-link__k">LinkedIn</span><span class="gc-link__v"></span></a>
-                    </li>
-                    <li class="gc-link" data-link="x" hidden>
-                        <a href="#" target="_blank" rel="noopener noreferrer"><span class="gc-link__k">X</span><span class="gc-link__v"></span></a>
-                    </li>
-                </ul>
-                <div class="gc-invite__rsvp">
-                    <button class="gc-invite__book" id="gcBook" type="button"><span class="gc-invite__rec" aria-hidden="true"></span><span id="gcBookLabel">Book yourself in</span></button>
-                    <button class="gc-invite__ghost" id="gcRetake" type="button" hidden>Retake</button>
-                    <button class="gc-invite__ghost" id="gcSave" type="button" hidden>Save invite</button>
-                    <a class="gc-invite__gh" id="gcGithub" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+            </div>
+            <div class="gc-contact__info">
+                <p class="gc-contact__label" data-scramble>[ Get in touch ]</p>
+                <p class="gc-contact__lines">
+                    <span class="gc-line"><span>Creative developer, New Delhi — IST, UTC+5:30</span></span>
+                    <span class="gc-line"><span><a class="gc-contact__mail" id="gcMail" href="mailto:aaravpilania2006@gmail.com">aaravpilania2006@gmail.com</a><button class="gc-copy" type="button" data-copy="aaravpilania2006@gmail.com" aria-label="Copy email address">Copy</button></span></span>
+                </p>
+                <div class="gc-contact__ctas">
+                    <a class="gc-cta" href="mailto:aaravpilania2006@gmail.com?subject=A%20project&amp;body=What%20it%20is%3A%0A%0AWhen%20it%20needs%20to%20exist%3A%0A%0AWhere%20it%20lives%20now%20(link%2C%20sketch%2C%20napkin)%3A%0A" data-tip="Bring the brief, or the napkin"><span class="gc-cta__t">Start a project</span><span class="gc-cta__a" aria-hidden="true"><i>↗</i><i>↗</i></span></a>
+                    <a class="gc-cta" href="mailto:aaravpilania2006@gmail.com?subject=A%20call%3F&amp;body=Two%20or%20three%20times%20that%20work%20for%20you%20(I%E2%80%99m%20on%20IST%2C%20UTC%2B5%3A30)%3A%0A%0AWhat%20we%E2%80%99ll%20talk%20about%3A%0A" data-tip="Take a slot, any slot"><span class="gc-cta__t">Schedule a call</span><span class="gc-cta__a" aria-hidden="true"><i>↗</i><i>↗</i></span></a>
                 </div>
-                <p class="gc-invite__msg" id="gcBoothMsg" role="status" aria-live="polite">Your camera books you in as a slot portrait. It stays on this device.</p>
             </div>
         </div>
-    </aside>
+        <footer class="gc-strip">
+            <span class="gc-strip__i gc-strip__i--role">Creative developer</span>
+            <span class="gc-strip__i gc-strip__i--city">New Delhi based</span>
+            <span class="gc-strip__i gc-strip__i--clock" aria-label="Time in New Delhi">[ <i class="gc-strip__dot" aria-hidden="true"></i> <time id="gcClock">--&#8202;:&#8202;--&#8202;:&#8202;--</time> ]</span>
+            <span class="gc-strip__i gc-strip__i--else">Elsewhere</span>
+            <a class="gc-strip__i gc-strip__i--link" id="gcGithub" data-link="github" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer">GitHub <i aria-hidden="true">+</i></a>
+            <a class="gc-strip__i gc-strip__i--link" data-link="linkedin" href="#" target="_blank" rel="noopener noreferrer" hidden>LinkedIn <i aria-hidden="true">+</i></a>
+            <a class="gc-strip__i gc-strip__i--link" data-link="x" href="#" target="_blank" rel="noopener noreferrer" hidden>X <i aria-hidden="true">+</i></a>
+            <span class="gc-strip__i gc-strip__i--year">© 2026</span>
+        </footer>
+    </section>
+    <div class="gc-tip" id="gcTip" aria-hidden="true"><span></span></div>
 
     <script src="js/sound-toggle.js"></script>
     <script src="js/site-nav.js"></script>

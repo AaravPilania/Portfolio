@@ -1,8 +1,10 @@
-// The invite card on the contact calendar: "Work with Aarav", organised by Aarav (his portrait is the organizer's
-// event block) with one open guest slot. "Book yourself in" turns on the camera and renders the visitor into that slot
-// as a stack of calendar meetings in the page's yellows; four beats of the soundtrack count in and the next downbeat
-// takes the shot. The camera stops right there, the slot keeps the portrait, the visitor is "going", and the RSVP is
-// one mail away. Frames are read from a 30 x 38 pixel canvas and never leave the page.
+// The contact band over the calendar: headline, Aarav's pill, [ Get in touch ], two mail buttons with a riding
+// tooltip, and a footer strip with New Delhi's clock. The pill opens the invite, "Work with Aarav", organised by Aarav
+// (his portrait is the organizer's event block) with one open guest slot. "Book yourself in" turns on the camera and
+// renders the visitor into that slot as a stack of calendar meetings in the page's yellows; four beats of the
+// soundtrack count in and the next downbeat takes the shot. The camera stops right there, the slot keeps the portrait,
+// the visitor is "going", and the RSVP is one mail away. Frames are read from a 30 x 38 pixel canvas and never leave
+// the page.
 const CONTACT = {
     email: 'aaravpilania2006@gmail.com',
     // full profile URLs; a link stays hidden while its value is empty
@@ -14,52 +16,154 @@ const CONTACT = {
 (() => {
     'use strict';
 
-    const card = document.getElementById('gcInvite');
-    if (!card) return;
+    const band = document.getElementById('gcContact'), card = document.getElementById('gcInvite');
+    if (!band || !card) return;
     const $ = (id) => document.getElementById(id);
-    const fold = $('gcInviteFold'), body = $('gcInviteBody'), nowEl = $('gcInviteNow');
+    const fold = $('gcInviteFold'), body = $('gcInviteBody'), toggleGlyph = fold.querySelector('.gc-card__toggle i');
     const guest = $('gcGuest'), booth = $('gcBooth'), countEl = $('gcBoothCount'), stateEl = $('gcGuestState');
     const book = $('gcBook'), bookLabel = $('gcBookLabel'), retake = $('gcRetake'), save = $('gcSave'), msg = $('gcBoothMsg');
-    const mail = $('gcMail');
     const MSG_IDLE = msg.textContent;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+    let rsvpHref = `mailto:${CONTACT.email}?subject=${encodeURIComponent('RSVP: Work with Aarav')}`;
 
     // ------------------------------------------------------------ links
-    const handle = (url) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
-    for (const key of ['linkedin', 'x']) {
-        const li = card.querySelector(`[data-link="${key}"]`), url = CONTACT[key];
-        if (!li || !url) continue;
-        li.querySelector('a').href = url;
-        li.querySelector('.gc-link__v').textContent = handle(url);
-        li.hidden = false;
+    for (const key of ['github', 'linkedin', 'x']) {
+        const a = band.querySelector(`[data-link="${key}"]`), url = CONTACT[key];
+        if (!a) continue;
+        if (url) a.href = url;
+        a.hidden = !url;
     }
-    if (CONTACT.github) $('gcGithub').href = CONTACT.github; else $('gcGithub').hidden = true;
-    for (const b of card.querySelectorAll('[data-copy]')) {
+    for (const b of band.querySelectorAll('[data-copy]')) {
         let t = 0;
+        const idle = b.textContent;
         b.addEventListener('click', async () => {
             try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { location.href = 'mailto:' + b.dataset.copy; return; }
             b.textContent = 'Copied';
+            b.classList.add('is-done');
             clearTimeout(t);
-            t = setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+            t = setTimeout(() => { b.textContent = idle; b.classList.remove('is-done'); }, 1600);
         });
     }
 
-    // ------------------------------------------------------------ card
+    // ------------------------------------------------------------ mono scramble (labels, the pill, the nav message)
+    const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+=/<>';
+    function scramble(el, to, ms = 520) {
+        if (reduce.matches) { el.textContent = to; return; }
+        cancelAnimationFrame(el.__scr || 0);
+        const t0 = performance.now();
+        const step = (now) => {
+            const k = Math.min(1, (now - t0) / ms);
+            let s = '';
+            for (let i = 0; i < to.length; i++) {
+                const ch = to[i];
+                s += ch === ' ' || i < k * to.length ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+            }
+            el.textContent = s;
+            if (k < 1) el.__scr = requestAnimationFrame(step);
+        };
+        el.__scr = requestAnimationFrame(step);
+    }
+    const label = band.querySelector('.gc-contact__label');
+    if (label) setTimeout(() => scramble(label, label.textContent, 700), 500);
+    // the pill keeps its markup; only the plain words after the name re-scramble on hover
+    const pillWords = fold.querySelector('.gc-card__line b').nextSibling;
+    if (pillWords && pillWords.nodeType === 3) {
+        const words = pillWords.textContent, span = document.createElement('span');
+        span.textContent = words;
+        pillWords.replaceWith(span);
+        fold.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') scramble(span, words, 420); });
+    }
+    const navMsg = document.querySelector('.ap-nav__msg[data-labels]');
+    if (navMsg && !reduce.matches) {
+        const phrases = navMsg.dataset.labels.split('|');
+        let i = 0;
+        setInterval(() => {
+            if (document.hidden) return;
+            i = (i + 1) % phrases.length;
+            scramble(navMsg, phrases[i], 600);
+        }, 4200);
+    }
+
+    // ------------------------------------------------------------ clock
+    const clockEl = $('gcClock');
+    const HS = '\u200a:\u200a';
     function clock() {
-        const d = new Date(Date.now() + 5.5 * 3600e3);
-        nowEl.textContent = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} in New Delhi`;
+        const d = new Date(Date.now() + 5.5 * 3600e3), p = (n) => String(n).padStart(2, '0');
+        clockEl.textContent = p(d.getUTCHours()) + HS + p(d.getUTCMinutes()) + HS + p(d.getUTCSeconds());
+        setTimeout(clock, 1000 - (Date.now() % 1000) + 5);
     }
     clock();
-    setInterval(clock, 15000);
 
+    // ------------------------------------------------------------ tooltip riding the cursor over [data-tip]
+    const tip = $('gcTip'), tipText = tip.firstElementChild;
+    let tipOn = null, tipX = 0, tipY = 0, tipRaf = 0;
+    const placeTip = () => { tipRaf = 0; tip.style.transform = `translate3d(${tipX}px, ${tipY}px, 0)`; };
+    for (const el of band.querySelectorAll('[data-tip]')) {
+        el.addEventListener('pointerenter', (e) => {
+            if (e.pointerType !== 'mouse' || !finePointer.matches) return;
+            tipOn = el;
+            tipText.textContent = el === fold && card.classList.contains('is-open') ? 'Fold it away' : el.dataset.tip;
+            tipX = e.clientX; tipY = e.clientY;
+            placeTip();
+            tip.classList.add('is-on');
+        });
+        el.addEventListener('pointermove', (e) => {
+            if (tipOn !== el) return;
+            tipX = e.clientX; tipY = e.clientY;
+            if (!tipRaf) tipRaf = requestAnimationFrame(placeTip);
+        });
+        el.addEventListener('pointerleave', () => { if (tipOn === el) { tipOn = null; tip.classList.remove('is-on'); } });
+    }
+
+    // ------------------------------------------------------------ the dithered top edge of the band
+    const fringe = $('gcFringe');
+    function drawFringe() {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const w = fringe.clientWidth, h = fringe.clientHeight;
+        if (!w || !h) return;
+        fringe.width = Math.round(w * dpr);
+        fringe.height = Math.round(h * dpr);
+        const x = fringe.getContext('2d');
+        x.clearRect(0, 0, fringe.width, fringe.height);
+        x.fillStyle = 'rgba(0,0,0,0.88)';
+        // 4 x 4 Bayer order: a cell of 2 px squares fills square by square as the band gets closer
+        const ORDER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+        const sq = 2, cell = sq * 4, rows = Math.ceil(h / cell), cols = Math.ceil(w / cell);
+        let seed = 7;
+        const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        for (let r = 0; r < rows; r++) {
+            const base = 1 - (r * cell + cell / 2) / h;
+            for (let c = 0; c < cols; c++) {
+                const d = r === 0 ? 1 : Math.max(0, Math.min(1, base * base * (3 - 2 * base) + (rand() - 0.5) * 0.14));
+                const n = Math.round(d * 16);
+                if (!n) continue;
+                for (let k = 0; k < 16; k++) {
+                    if (ORDER[k] >= n) continue;
+                    const px = c * cell + (k & 3) * sq, py = h - (r + 1) * cell + (k >> 2) * sq;
+                    x.fillRect(Math.round(px * dpr), Math.round(py * dpr), Math.round((px + sq) * dpr) - Math.round(px * dpr), Math.round((py + sq) * dpr) - Math.round(py * dpr));
+                }
+            }
+        }
+    }
+    let fringeT = 0;
+    window.addEventListener('resize', () => { clearTimeout(fringeT); fringeT = setTimeout(drawFringe, 120); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawFringe);
+    drawFringe();
+
+    // ------------------------------------------------------------ card
     const mobile = window.matchMedia('(max-width: 699px)');
     function setOpen(open) {
-        card.classList.toggle('is-folded', !open);
+        card.classList.toggle('is-open', open);
         fold.setAttribute('aria-expanded', String(open));
-        fold.setAttribute('aria-label', open ? 'Fold the invite' : 'Open the invite');
         body.inert = !open;
+        toggleGlyph.textContent = open ? '−' : '+';
+        if (tipOn === fold) tipText.textContent = open ? 'Fold it away' : fold.dataset.tip;
+        if (open) requestAnimationFrame(sizeBooth);
+        else if (state === 'live' || state === 'count' || state === 'waking') cancel(false);
     }
-    fold.addEventListener('click', () => setOpen(card.classList.contains('is-folded')));
-    setOpen(true);
+    fold.addEventListener('click', () => setOpen(!card.classList.contains('is-open')));
+    document.addEventListener('pointerdown', (e) => { if (card.classList.contains('is-open') && !card.contains(e.target)) setOpen(false); });
 
     // ------------------------------------------------------------ booth
     const COLS = 30, ROWS = 38;                 // camera samples
@@ -265,7 +369,7 @@ const CONTACT = {
         setState('booked');
         const d = new Date(snapAt + 5.5 * 3600e3);
         const when = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-        mail.href = `mailto:${CONTACT.email}?subject=${encodeURIComponent('RSVP: Work with Aarav')}&body=${encodeURIComponent(`Hi Aarav,\n\nI booked myself into your calendar on ${when}. Let's talk about:\n\n`)}`;
+        rsvpHref = `mailto:${CONTACT.email}?subject=${encodeURIComponent('RSVP: Work with Aarav')}&body=${encodeURIComponent(`Hi Aarav,\n\nI booked myself into your calendar on ${when}. Let's talk about:\n\n`)}`;
         say('Booked. The camera is off; send the RSVP to make it official.');
     }
 
@@ -285,14 +389,14 @@ const CONTACT = {
         x.drawImage(booth, 0, 0, booth.width, booth.height, 420, sy, sw, sh);
         x.restore();
         x.fillStyle = '#f4f2ea';
-        x.font = '700 64px Brier, Georgia, serif';
+        x.font = '700 64px "Playfair Display", Georgia, serif';
         x.fillText('Work with Aarav', 80, 110);
         x.font = '500 22px "IBM Plex Mono", monospace';
         x.fillStyle = 'rgba(244,242,234,0.6)';
         x.fillText('AARAV  ORGANIZER', 80, sy + sh + 40);
         x.fillText('YOU  GOING', 420, sy + sh + 40);
         x.fillStyle = '#ffed29';
-        x.font = '700 120px Brier, Georgia, serif';
+        x.font = '700 120px "Playfair Display", Georgia, serif';
         x.fillText('×', 372, sy + sh / 2 + 40);
         x.font = '500 22px "IBM Plex Mono", monospace';
         x.fillStyle = 'rgba(244,242,234,0.6)';
@@ -313,7 +417,7 @@ const CONTACT = {
     }
 
     book.addEventListener('click', () => {
-        if (state === 'booked') { location.href = mail.href; return; }
+        if (state === 'booked') { location.href = rsvpHref; return; }
         if (state === 'live' || state === 'count') { cancel(false); return; }
         start();
     });
@@ -321,7 +425,12 @@ const CONTACT = {
     save.addEventListener('click', saveInvite);
     document.addEventListener('visibilitychange', () => { if (document.hidden && (state === 'live' || state === 'count' || state === 'waking')) cancel(true); });
     window.addEventListener('pagehide', () => cancel(true));
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (state === 'live' || state === 'count')) cancel(false); });
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (state === 'live' || state === 'count') cancel(false);
+        else if (card.classList.contains('is-open')) { setOpen(false); fold.focus(); }
+    });
+    setOpen(false);
     window.addEventListener('resize', () => { if (state !== 'idle') sizeBooth(); });
     mobile.addEventListener?.('change', () => { if (state !== 'idle') sizeBooth(); });
 

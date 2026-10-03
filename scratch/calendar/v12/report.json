@@ -1,0 +1,203 @@
+{
+ "390": {
+  "boxes": {
+   "band": [
+    0,
+    555,
+    390,
+    289
+   ],
+   "fringe": [
+    0,
+    491,
+    390,
+    64
+   ],
+   "head": [
+    16,
+    577,
+    358,
+    51
+   ],
+   "pill": [
+    16,
+    639,
+    358,
+    46
+   ],
+   "label": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "lines": [
+    16,
+    703,
+    358,
+    25
+   ],
+   "ctas": [
+    16,
+    740,
+    358,
+    44
+   ],
+   "strip": [
+    16,
+    802,
+    358,
+    42
+   ],
+   "headFont": "\"Playfair Display\", Georgia, \"Times New Roman\", serif",
+   "playfair": true,
+   "playfairI": true,
+   "clock": "13 : 18 : 59"
+  },
+  "perf": {
+   "draws": 3062,
+   "drawP50": 0.3,
+   "drawP95": 0.7,
+   "drawMax": 3.4,
+   "frames": 4112,
+   "rafP50": 6.9,
+   "rafP95": 7.1,
+   "rafMax": 8.4,
+   "over33": 0
+  }
+ },
+ "1366": {
+  "boxes": {
+   "band": [
+    0,
+    528,
+    1366,
+    240
+   ],
+   "fringe": [
+    0,
+    456,
+    1366,
+    72
+   ],
+   "head": [
+    32,
+    568,
+    529,
+    70
+   ],
+   "pill": [
+    32,
+    652,
+    344,
+    48
+   ],
+   "label": [
+    585,
+    558,
+    529,
+    13
+   ],
+   "lines": [
+    585,
+    589,
+    529,
+    49
+   ],
+   "ctas": [
+    585,
+    654,
+    529,
+    46
+   ],
+   "strip": [
+    32,
+    726,
+    1302,
+    42
+   ],
+   "headFont": "\"Playfair Display\", Georgia, \"Times New Roman\", serif",
+   "playfair": true,
+   "playfairI": true,
+   "clock": "13 : 18 : 16"
+  },
+  "perf": {
+   "draws": 3062,
+   "drawP50": 0.4,
+   "drawP95": 1.2,
+   "drawMax": 4,
+   "frames": 4112,
+   "rafP50": 6.9,
+   "rafP95": 7.1,
+   "rafMax": 8.6,
+   "over33": 0
+  }
+ },
+ "1920": {
+  "boxes": {
+   "band": [
+    0,
+    794,
+    1920,
+    286
+   ],
+   "fringe": [
+    0,
+    698,
+    1920,
+    96
+   ],
+   "head": [
+    32,
+    837,
+    759,
+    99
+   ],
+   "pill": [
+    32,
+    952,
+    344,
+    48
+   ],
+   "label": [
+    815,
+    834,
+    759,
+    13
+   ],
+   "lines": [
+    815,
+    865,
+    759,
+    67
+   ],
+   "ctas": [
+    815,
+    954,
+    759,
+    46
+   ],
+   "strip": [
+    32,
+    1036,
+    1856,
+    44
+   ],
+   "headFont": "\"Playfair Display\", Georgia, \"Times New Roman\", serif",
+   "playfair": true,
+   "playfairI": true,
+   "clock": "13 : 17 : 32"
+  },
+  "perf": {
+   "draws": 3063,
+   "drawP50": 0.4,
+   "drawP95": 1,
+   "drawMax": 3.5,
+   "frames": 4113,
+   "rafP50": 6.9,
+   "rafP95": 7.1,
+   "rafMax": 8.5,
+   "over33": 0
+  }
+ }
+}
