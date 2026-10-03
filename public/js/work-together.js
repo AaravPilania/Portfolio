@@ -20,7 +20,7 @@
     const INK = '#f4f2ea', VOID = '#121316', SUN = '#FFED29';
     const MONO = '"IBM Plex Mono", "Sometype Mono", monospace';
     const SANS = '"Mona Sans Variable", "PP-Mori", sans-serif';
-    const DISPLAY = 'Brier, Georgia, serif';
+    const DISPLAY = '"Playfair Display", Georgia, serif';
 
     // Marks on a 24-unit grid with their tight bounds [d, x0, y0, x1, y1]. Every subpath starts with an absolute M so a
     // mark can be split into separately coloured parts.
@@ -402,11 +402,13 @@
     const floorEl = foot && foot.querySelector('.sig-bar');
 
     let W = 0, H = 0, dpr = 1, vTop = 0, unitA = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
-    let raf = 0, last = 0, time = STATIC ? 31 : 0, active = STATIC ? 1 : 0, inState = false;
+    let raf = 0, last = 0, svcVis = false, time = STATIC ? 31 : 0, active = STATIC ? 1 : 0, inState = false;
     let xHalf = 0, yHalf = 0, wtTop = 1e5, wtH = 0, footTop = 1e5, lastWt = NaN, lastFoot = NaN;
-    const stageTopNow = () => (wtTop > 0 ? wtTop : Math.min(0, wtTop + wtH - stage.clientHeight));
-    let mode = 'float', fallT = 0, liftT = 0, pileK = 1, floorY = 0, acc = 0, engine = null, walls = [], pileReady = false;
-    let dirty = true, resting = false;
+    // The stage sits below the section's top edge and sticks from there, so it is read rather than derived
+    let stTop = 1e5;
+    const stageTopNow = () => stTop;
+    let mode = 'float', fallT = 0, liftT = 0, floorY = 0, acc = 0, engine = null, walls = [], pileReady = false, pitH = 0;
+    let dirty = true, resting = false, footVel = 0, drag = null;
     const look = { x: 0, y: 0 };
     const ptr = { cx: 0, cy: 0, on: false, block: false };
     let hovered = null, labelled = false;
@@ -420,8 +422,8 @@
             def, i, img: null, ppu: 0, side: 0,
             rx: r(), ry: r(), rz: r(), rw: r(), cyc: NaN, cr: [0, 0, 0, 0],
             fx: 0, fy: 0, fa: 0, fs: 0, fo: 0, vy: 0, va: 0,
-            x: 0, y: 0, a: 0, ks: 0, o: 0, k0: 0, l: null, body: null, ghost: 0,
-            px: 0, py: 0, pa: 0, hv: 0,
+            x: 0, y: 0, a: 0, ks: 0, o: 0, k0: 0, o0: 0, l: null, body: null, proto: null, ghost: 0,
+            px: 0, py: 0, pa: 0, qx: 0, qy: 0, qa: 0, hv: 0,
         };
     });
     const pool = items.concat(items).map(() => ({ s: null, x: 0, y: 0, a: 0, k: 0 }));
@@ -448,6 +450,7 @@
         dpr = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.round(W * dpr);
         canvas.height = Math.round(H * dpr);
+        if (dctx || dgl) { dotsCv.width = canvas.width; dotsCv.height = canvas.height; dotsShown = false; }
         vTop = scroller === document.scrollingElement || scroller === document.documentElement ? 0 : scroller.getBoundingClientRect().top;
         const aspect = W / H;
         yHalf = H * Math.min(1, Math.max(0.62, 1.32 / aspect));
@@ -459,7 +462,18 @@
         const rebuild = !unitA || Math.abs(next - unitA) / unitA > 0.12;
         unitA = next;
         items.forEach((s) => { s.side = (unitA * s.def.k) / Math.sqrt(s.def.w * s.def.h); });
+        // The pit grows to hold the whole stack at conveyor size: summed die-cut areas over a loose packing of the width
+        let area = 0;
+        for (const s of items) {
+            const cut = 0.15 * Math.min(s.def.w, s.def.h);
+            area += (s.def.w + cut) * (s.def.h + cut) * s.side * s.side;
+        }
+        pitH = Math.round(Math.min(H * 1.2, Math.max(H * 0.3, area / (W * 0.5))));
+        if (foot) foot.style.setProperty('--sig-pit', pitH + 'px');
         if (foot && floorEl) floorY = floorEl.getBoundingClientRect().top - foot.getBoundingClientRect().top;
+        if ((dctx || dgl) && (!document.fonts || document.fonts.status === 'loaded')) buildDots();
+        items.forEach((s) => { s.proto = null; });
+        if (!rebuild && built >= items.length) bodies();
         if (rebuild) {
             items.forEach((s) => { s.img = null; });
             built = 0;
@@ -481,17 +495,17 @@
             }
             buildMs += performance.now() - t0;
             if (built < items.length) setTimeout(step, 16);
-            else { queued = false; if (STATIC) staticPile(); dirty = true; kick(); }
+            else { queued = false; bodies(); if (STATIC) staticPile(); dirty = true; kick(); }
         };
         const go = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(step);
         if (document.fonts && document.fonts.load) {
-            Promise.all(['700 40px Brier', '500 16px "IBM Plex Mono"', '800 40px "Mona Sans Variable"'].map((f) => document.fonts.load(f).catch(() => null)))
+            Promise.all(['700 40px "Playfair Display"', 'italic 700 40px "Playfair Display"', '500 16px "IBM Plex Mono"', '800 40px "Mona Sans Variable"'].map((f) => document.fonts.load(f).catch(() => null)))
                 .then(go, go);
         } else go();
     }
 
-    // Physics lives in footer coordinates: the floor is the top of the footer's bottom bar, the walls its edges. The
-    // pile is scaled to stand about 0.3 of a viewport tall whatever the width.
+    // Physics lives in footer coordinates: the floor is the top of the footer's bottom bar, the walls its edges.
+    // Stickers keep their conveyor size; the footer's pit is sized to them instead (measure).
     function world() {
         if (!Mt || !foot) return false;
         if (!engine) engine = Mt.Engine.create({ enableSleeping: true, positionIterations: 8, velocityIterations: 6 });
@@ -505,13 +519,28 @@
             Mt.Bodies.rectangle(W + T / 2, floorY - H * 2, T, H * 6, { isStatic: true, friction: 0.2, collisionFilter: f }),
         ];
         Mt.Composite.add(engine.world, walls);
-        let area = 0;
-        for (const s of items) if (s.img) area += ((s.img.bw * s.side) / s.ppu) * ((s.img.bh * s.side) / s.ppu);
-        pileK = Math.min(1, Math.sqrt((0.27 * H * W * 0.62) / Math.max(1, area)));
+        bodies();
         return true;
     }
 
+    // Bodies are built once per raster and reused, so the drop frame only repositions them
+    function bodies() {
+        if (!Mt) return;
+        for (const s of items) {
+            if (s.proto || !s.img) continue;
+            const w = (s.img.bw * s.side) / s.ppu, h = (s.img.bh * s.side) / s.ppu;
+            s.proto = Mt.Bodies.rectangle(0, 0, w, h, {
+                chamfer: { radius: Math.min(w, h) * 0.22 },
+                restitution: 0.3, friction: 0.55, frictionStatic: 0.9, frictionAir: 0.012, density: 0.0016,
+                sleepThreshold: 40,
+                collisionFilter: { category: C_GHOST, mask: C_WALL },
+            });
+            s.proto.__w = w;
+        }
+    }
+
     function clearBodies() {
+        endDrag();
         for (const s of items) {
             if (s.body && engine) Mt.Composite.remove(engine.world, s.body);
             s.body = null;
@@ -519,16 +548,15 @@
     }
 
     function spawn(s, x, y, a, vx, vy, va) {
-        const w = (s.img.bw * s.side * pileK) / s.ppu, h = (s.img.bh * s.side * pileK) / s.ppu;
-        const b = Mt.Bodies.rectangle(Math.min(W - w / 2 - 2, Math.max(w / 2 + 2, x)), y, w, h, {
-            angle: a,
-            chamfer: { radius: Math.min(w, h) * 0.22 },
-            restitution: 0.3, friction: 0.55, frictionStatic: 0.9, frictionAir: 0.012, density: 0.0016,
-            sleepThreshold: 40,
-            collisionFilter: { category: C_GHOST, mask: C_WALL },
-        });
+        const b = s.proto;
+        const w = b.__w;
+        Mt.Sleeping.set(b, false);
+        b.collisionFilter = { category: C_GHOST, mask: C_WALL, group: 0 };
+        Mt.Body.setAngle(b, a);
+        Mt.Body.setPosition(b, { x: Math.min(W - w / 2 - 2, Math.max(w / 2 + 2, x)), y });
         Mt.Body.setVelocity(b, { x: vx, y: vy });
         Mt.Body.setAngularVelocity(b, va);
+        s.qx = b.position.x; s.qy = b.position.y; s.qa = b.angle;
         s.body = b;
         s.ghost = 0;
         Mt.Composite.add(engine.world, b);
@@ -556,23 +584,67 @@
         }
     }
 
+    // The bodies inherit each sticker's on-screen velocity. Footer space scrolls with the page, so the page's own
+    // velocity is taken out; without that every sticker lurched by the scroll speed on the drop frame.
     function fall() {
         if (built < items.length || !world()) return;
         clearBodies();
         mode = 'fall'; fallT = 0; acc = 0; resting = false;
+        const cap = H * 0.022;
         for (const s of items) {
-            s.k0 = s.ks;
-            spawn(s, s.x, s.y - footTop, s.a, (s.cr[3] - 0.5) * 1.6, s.vy / 60, s.va / 60);
+            s.k0 = s.ks; s.o0 = s.o;
+            const vy = Math.max(-cap, Math.min(cap, (s.vy - footVel) / 60));
+            spawn(s, s.x, s.y - footTop, s.a, (s.cr[3] - 0.5) * 1.6, vy, s.va / 60);
         }
     }
 
+    // The lift starts from the pile as it stands in the footer, which keeps scrolling while the stickers rise
     function lift() {
+        endDrag();
         mode = 'lift'; liftT = 0;
         for (const s of items) {
-            s.l = { x: s.x, y: s.y, a: s.a, k: s.ks, o: s.o };
+            s.l = { x: s.x, y: s.y - footTop, a: s.a, k: s.ks, o: s.o };
             if (s.body) Mt.Composite.remove(engine.world, s.body);
             s.body = null;
         }
+    }
+
+    function endDrag() {
+        if (!drag) return;
+        if (engine) Mt.Composite.remove(engine.world, drag.c);
+        const b = drag.s.body;
+        if (b) {
+            const v = b.velocity, sp = Math.hypot(v.x, v.y), max = H * 0.04;
+            if (sp > max) Mt.Body.setVelocity(b, { x: (v.x / sp) * max, y: (v.y / sp) * max });
+            if (Math.abs(b.angularVelocity) > 0.35) Mt.Body.setAngularVelocity(b, Math.sign(b.angularVelocity) * 0.35);
+        }
+        drag = null;
+        dirty = true;
+    }
+
+    function startDrag(e) {
+        if (mode !== 'fall' || !engine || drag || (e.button != null && e.button > 0)) return false;
+        const t = e.target;
+        if (t && t.closest && t.closest('a, button, input, textarea, select, label')) return false;
+        ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.on = true; ptr.block = false;
+        const s = pick();
+        if (!s || !s.body) return false;
+        const b = s.body, py = e.clientY - footTop;
+        Mt.Sleeping.set(b, false);
+        b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 };
+        for (const o of items) if (o.body && o.body.isSleeping) Mt.Sleeping.set(o.body, false);
+        const c = Mt.Constraint.create({
+            pointA: { x: e.clientX, y: py },
+            bodyB: b,
+            pointB: { x: e.clientX - b.position.x, y: py - b.position.y },
+            stiffness: 0.18, damping: 0.08, length: 0,
+        });
+        Mt.Composite.add(engine.world, c);
+        drag = { s, c, id: e.pointerId };
+        resting = false;
+        hovered = s; setLabel(s);
+        kick();
+        return true;
     }
 
     // Reduced motion: the same drop, settled synchronously, then painted as a still pile in the footer
@@ -581,7 +653,7 @@
         clearBodies();
         for (const s of items) {
             floatPose(s, 0);
-            spawn(s, s.fx, floorY - H * 0.25 - (1 - s.fy / H) * H * 0.9, s.fa, 0, 0, 0);
+            spawn(s, s.fx, floorY - pitH * 0.8 - (1 - s.fy / H) * H * 0.9, s.fa, 0, 0, 0);
         }
         for (let n = 0; n < 900; n++) {
             solidify(STEP / 1000);
@@ -643,7 +715,9 @@
             ctx.rect(0, Math.floor(top * dpr), canvas.width, Math.ceil(h * dpr));
             ctx.clip();
         }
-        for (const s of items) if (s.img && s.o > 0.004 && s.ks > 0.002) put(s, s.x, s.y, s.a, s.ks, s.o);
+        const top = drag && drag.s;
+        for (const s of items) if (s !== top && s.img && s.o > 0.004 && s.ks > 0.002) put(s, s.x, s.y, s.a, s.ks, s.o);
+        if (top && top.img) put(top, top.x, top.y, top.a, top.ks, top.o);
         ctx.restore();
         // Feathered like slide 04's dither band rather than cut flat at the section's top edge
         const f0 = wtTop - H * 0.14, f1 = wtTop + H * 0.06;
@@ -665,16 +739,294 @@
                 i--;
             }
         }
-        if (STATIC && pileReady) for (const s of items) if (s.img) put(s, s.px, s.py + footTop, s.pa, pileK, 1);
+        if (STATIC && pileReady) for (const s of items) if (s.img) put(s, s.px, s.py + footTop, s.pa, 1, 1);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1;
+    }
+
+    // Slide 04's own dots set the headline. The services backdrop (backdrop_theme's section shader) dissolves bottom-up
+    // through a 4x4 ordered dither in every 8px cell, offset by a value-noise field; the same maths gives the exact scroll
+    // position at which each 2px dot of the lower half winks out, and at that instant a dot of its colour and size leaves
+    // that spot and falls to a point of the title's glyphs. The lit dots are read off the backdrop canvas once, just before
+    // the wipe begins. Dots beyond the glyph count pour in with the rest and dissolve as they land; the real text takes
+    // over at the end so the words finish crisp.
+    const dotsCv = sec.querySelector('.wt-dots');
+    const svc = document.querySelector('.ll-section--services');
+    const D_GAP = 0.2, D_DROP = 0.12, D_LAND = 0.86, D_TYPE = 0.88, D_MAX = 30000;
+    // Dither rank of each sub-dot, indexed by its (x, y) slot in the cell as drawLLLogo numbers them
+    const BAYER = [0, 13, 6, 10, 5, 14, 2, 15, 1, 8, 12, 9, 7, 4, 11, 3];
+    const INK3 = [0.957, 0.949, 0.918], SUN3 = [1, 0.929, 0.161];
+    // The flight is evaluated per vertex from static attributes, so a frame is a handful of uniforms and one draw
+    const dgl = dotsCv && !STATIC ? dotsCv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false }) : null;
+    const dctx = dotsCv && !STATIC && !dgl ? dotsCv.getContext('2d') : null;
+    let tg = null, src = null, dots = null, dotsP = NaN, dotsShown = false, gp = null, snapArmed = true, bp = -1, svcB = 1e5;
+
+    const VS = `attribute vec4 a0; attribute vec4 a1; attribute vec4 a2;
+uniform float uP, uTop, uFade, uGrow, uDpr; uniform vec2 uRes; uniform vec3 uInk, uSun;
+varying vec4 vC;
+void main() {
+    float t = clamp((uP - a1.x) / (a1.y - a1.x), 0.0, 1.0);
+    float e = t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(2.0 - 2.0 * t, 3.0) / 2.0;
+    float w = sin(3.14159265 * t);
+    vec2 d = vec2(a0.z, uTop + a0.w) - a0.xy;
+    vec2 p = a0.xy + d * e + vec2(-d.y, d.x) / max(length(d), 1.0) * a1.z * w + vec2(0.0, a1.w * w);
+    float keep = step(1.5, a2.w);
+    vec3 ink = mix(uInk, uSun, a2.w - 2.0 * keep);
+    gl_PointSize = (2.0 + uGrow * keep) * uDpr;
+    gl_Position = uP < a1.x ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
+    float a = uFade * mix(1.0 - smoothstep(0.55, 1.0, t), 1.0, keep);
+    vC = vec4(mix(a2.rgb, ink, smoothstep(0.45, 1.0, t) * keep) * a, a);
+}`;
+    const FS = 'precision mediump float; varying vec4 vC; void main() { gl_FragColor = vC; }';
+
+    function glInit() {
+        const g = dgl, sh = (type, s) => { const o = g.createShader(type); g.shaderSource(o, s); g.compileShader(o); return o; };
+        const pr = g.createProgram();
+        g.attachShader(pr, sh(g.VERTEX_SHADER, VS));
+        g.attachShader(pr, sh(g.FRAGMENT_SHADER, FS));
+        g.linkProgram(pr);
+        if (!g.getProgramParameter(pr, g.LINK_STATUS)) return null;
+        const u = {};
+        ['uP', 'uTop', 'uFade', 'uGrow', 'uDpr', 'uRes', 'uInk', 'uSun'].forEach((k) => { u[k] = g.getUniformLocation(pr, k); });
+        return { pr, u, buf: g.createBuffer(), a0: g.getAttribLocation(pr, 'a0'), a1: g.getAttribLocation(pr, 'a1'), a2: g.getAttribLocation(pr, 'a2'), n: 0 };
+    }
+
+    function glUpload() {
+        if (!dgl || !dots) return;
+        if (!gp) gp = glInit();
+        if (!gp) return;
+        const g = dgl;
+        g.bindBuffer(g.ARRAY_BUFFER, gp.buf);
+        g.bufferData(g.ARRAY_BUFFER, dots.a, g.STATIC_DRAW);
+        gp.n = dots.n;
+    }
+
+    function glyphTargets() {
+        const sr = stage.getBoundingClientRect();
+        const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
+        const range = document.createRange();
+        const gl = [];
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, fs = 0;
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+            const el = n.parentElement, cs = getComputedStyle(el);
+            const font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+            const sun = !!el.closest('em');
+            fs = Math.max(fs, parseFloat(cs.fontSize) || 0);
+            const t = n.textContent;
+            for (let i = 0; i < t.length; i++) {
+                if (/\s/.test(t[i])) continue;
+                range.setStart(n, i); range.setEnd(n, i + 1);
+                const r = range.getBoundingClientRect();
+                if (!r.width) continue;
+                gl.push({ c: t[i], x: r.left - sr.left, y: r.top - sr.top, font, sun });
+                x0 = Math.min(x0, r.left - sr.left); y0 = Math.min(y0, r.top - sr.top);
+                x1 = Math.max(x1, r.right - sr.left); y1 = Math.max(y1, r.bottom - sr.top);
+            }
+        }
+        if (!gl.length || !fs) return null;
+        const pad = Math.ceil(fs * 0.2);
+        const cw = Math.ceil(x1 - x0) + pad * 2, ch = Math.ceil(y1 - y0) + pad * 2;
+        const off = mk(cw, ch), o = off.getContext('2d', { willReadFrequently: true });
+        o.textBaseline = 'alphabetic';
+        o.textAlign = 'left';
+        for (const g of gl) {
+            o.font = g.font;
+            o.fillStyle = g.sun ? '#0f0' : '#f00';
+            o.fillText(g.c, g.x - x0 + pad, g.y - y0 + pad + o.measureText(g.c).fontBoundingBoxAscent);
+        }
+        const px = o.getImageData(0, 0, cw, ch).data;
+        // Even lattice steps keep the glyph dots on the backdrop's 2px quantisation
+        let step = Math.min(6, Math.max(2, 2 * Math.round(fs / 76)));
+        let out;
+        for (;;) {
+            out = [];
+            for (let y = step >> 1; y < ch; y += step) {
+                for (let x = step >> 1; x < cw; x += step) {
+                    const i = (y * cw + x) * 4;
+                    if (px[i + 3] < 140) continue;
+                    out.push(x + x0 - pad, y + y0 - pad, px[i + 1] > px[i] ? 1 : 0);
+                }
+            }
+            if (out.length / 3 <= 9000 || step >= 10) break;
+            step += 2;
+        }
+        return { t: out, n: out.length / 3, step };
+    }
+
+    const fract = (v) => v - Math.floor(v);
+    const hashN = (x, y) => fract(Math.sin(x * 12.98923445328 + y * 4.137643425614414) * 43758.54432453);
+    function vnoise(x, y) {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        let ux = x - ix, uy = y - iy;
+        ux = ux * ux * (3 - 2 * ux); uy = uy * uy * (3 - 2 * uy);
+        const a = hashN(ix, iy) + (hashN(ix + 1, iy) - hashN(ix, iy)) * ux;
+        const b = hashN(ix, iy + 1) + (hashN(ix + 1, iy + 1) - hashN(ix, iy + 1)) * ux;
+        const r = a + (b - a) * uy;
+        return r * r;
+    }
+    // Exit progress at which sub-dot (i, j) (2px units, j counted up from the viewport's bottom) is switched off
+    function releaseAt(i, j) {
+        const xs = (i + 0.5) / (W / 2), ys = (j + 0.5) / (H / 2);
+        const R = ys * 0.7 + 0.15 + 0.15 * 0.5 * vnoise(xs * 8, ys * 8);
+        const rank = BAYER[(((j & 3) + 1) & 3) * 4 + (((i & 3) + 2) & 3)];
+        return R * (1 - D_GAP) + D_GAP * (0.5 - Math.sin(Math.asin(1 - (2 * rank) / 16) / 3));
+    }
+
+    // Lit 2px dots of the lower half of the backdrop as it stands before the wipe
+    function snapshot() {
+        const bc = document.querySelector('canvas.js-canvas');
+        if (!bc || !bc.width || !bc.height) return false;
+        const hh = Math.ceil(H / 2) + 2, k = bc.height / H;
+        let d;
+        try {
+            const c = mk(W, hh), g = c.getContext('2d', { willReadFrequently: true });
+            g.drawImage(bc, 0, (H - hh) * k, W * k, hh * k, 0, 0, W, hh);
+            d = g.getImageData(0, 0, W, hh).data;
+        } catch (e) { return false; }
+        const cols = Math.floor(W / 2), rows = Math.floor(H / 4);
+        const xs = [], ys = [], cs = [], rs = [];
+        for (let j = 0; j < rows; j++) {
+            const py = H - 2 * j - 1 - (H - hh);
+            if (py < 0 || py >= hh) continue;
+            for (let i = 0; i < cols; i++) {
+                const o = (py * W + 2 * i) * 4;
+                if (d[o] + d[o + 1] + d[o + 2] < 36) continue;
+                xs.push(2 * i + 1); ys.push(H - 2 * j - 1); cs.push(d[o], d[o + 1], d[o + 2]); rs.push(releaseAt(i, j));
+            }
+        }
+        if (xs.length < 64) return false;
+        src = { n: xs.length, x: xs, y: ys, c: cs, r: rs };
+        assemble();
+        return true;
+    }
+
+    function assemble() {
+        dots = null;
+        if (!tg || !src) { title.style.opacity = ''; return; }
+        const r = rng(7331), nS = src.n, n = Math.min(tg.n, nS), total = Math.min(nS, D_MAX);
+        const idx = new Uint32Array(nS);
+        for (let i = 0; i < nS; i++) idx[i] = i;
+        for (let i = 0; i < total; i++) { const j = i + Math.floor(r() * (nS - i)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+        // Every dot heads for the glyph point of its rank in x, one per point landing, so the field pours down as one
+        // sheet instead of criss-crossing; drift and drop come from a smooth field over the source position
+        const ord = Array.from(idx.subarray(0, total)).sort((p, q) => src.x[p] - src.x[q]);
+        const tix = [];
+        for (let k = 0; k < n; k++) tix.push(Math.floor((k * tg.n) / n));
+        tix.sort((p, q) => tg.t[p * 3] - tg.t[q * 3]);
+        const kOff = stTop - svcB, a = new Float32Array(total * 12), keepAt = new Int32Array(n).fill(-1);
+        for (let k = 0; k < total; k++) { const g = Math.floor((k * n) / total); if (keepAt[g] < 0 || r() < 1 / (k - keepAt[g] + 1)) keepAt[g] = k; }
+        let w = 0, r0 = 1;
+        const put = (k) => {
+            const s = ord[k], g = Math.floor((k * n) / total), ti = tix[g], keep = keepAt[g] === k;
+            const sx = src.x[s], sy = src.y[s], tx = tg.t[ti * 3], ty = tg.t[ti * 3 + 1], rel = src.r[s];
+            const f = vnoise(sx * 0.006 + 3.1, sy * 0.006 + 7.7), f2 = vnoise(sx * 0.011 + 11.3, sy * 0.009 + 1.9);
+            const drop = H * D_DROP * (0.6 + 0.9 * f);
+            const meet = 1 - (sy + drop - kOff - ty) / H;
+            const o = w * 12;
+            a[o] = sx; a[o + 1] = sy; a[o + 2] = tx; a[o + 3] = ty;
+            a[o + 4] = rel; a[o + 5] = Math.max(rel + 0.1, Math.min(D_LAND, meet));
+            a[o + 6] = (f2 - 0.3) * 0.12 * Math.hypot(tx - sx, drop);
+            a[o + 7] = H * 0.035 * (0.5 + f);
+            a[o + 8] = src.c[s * 3] / 255; a[o + 9] = src.c[s * 3 + 1] / 255; a[o + 10] = src.c[s * 3 + 2] / 255;
+            a[o + 11] = tg.t[ti * 3 + 2] + (keep ? 2 : 0);
+            r0 = Math.min(r0, rel);
+            w++;
+        };
+        // Landing dots last, so they draw over the ones that dissolve
+        for (let k = 0; k < total; k++) if (keepAt[Math.floor((k * n) / total)] !== k) put(k);
+        for (let k = 0; k < total; k++) if (keepAt[Math.floor((k * n) / total)] === k) put(k);
+        dots = { n: total, land: n, a, step: tg.step, r0 };
+        glUpload();
+        dotsP = NaN;
+        dirty = true;
+    }
+
+    function buildDots() {
+        if (!dctx && !dgl) return;
+        tg = glyphTargets();
+        src = null; dots = null; snapArmed = true;
+        if (!tg || !tg.n) { tg = null; sec.classList.remove('wt--dots'); title.style.opacity = ''; return; }
+        sec.classList.add('wt--dots');
+    }
+
+    function drawDots() {
+        if (bp < -0.45) snapArmed = true;
+        if (snapArmed && bp > -0.3 && bp < 0.6 && snapshot()) snapArmed = false;
+        if (!dots) {
+            if (title.style.opacity !== '') title.style.opacity = '';
+            return;
+        }
+        if (bp === dotsP && !dirty) return;
+        dotsP = bp;
+        const typeK = easeIO(lstep(D_TYPE, 1, bp));
+        const op = typeK <= 0 ? '0' : typeK >= 1 ? '1' : typeK.toFixed(3);
+        if (title.style.opacity !== op) title.style.opacity = op;
+        const show = bp >= dots.r0 && typeK < 1;
+        if (dgl) {
+            if (!gp || !gp.n) return;
+            const g = dgl;
+            if (!show) {
+                if (dotsShown) { g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); dotsShown = false; }
+                return;
+            }
+            dotsShown = true;
+            g.viewport(0, 0, dotsCv.width, dotsCv.height);
+            g.clearColor(0, 0, 0, 0);
+            g.clear(g.COLOR_BUFFER_BIT);
+            g.useProgram(gp.pr);
+            g.bindBuffer(g.ARRAY_BUFFER, gp.buf);
+            g.enableVertexAttribArray(gp.a0);
+            g.enableVertexAttribArray(gp.a1);
+            g.enableVertexAttribArray(gp.a2);
+            g.vertexAttribPointer(gp.a0, 4, g.FLOAT, false, 48, 0);
+            g.vertexAttribPointer(gp.a1, 4, g.FLOAT, false, 48, 16);
+            g.vertexAttribPointer(gp.a2, 4, g.FLOAT, false, 48, 32);
+            g.enable(g.BLEND);
+            g.blendFunc(g.ONE, g.ONE_MINUS_SRC_ALPHA);
+            const u = gp.u;
+            g.uniform1f(u.uP, bp);
+            g.uniform1f(u.uTop, stageTopNow());
+            g.uniform1f(u.uFade, 1 - typeK);
+            g.uniform1f(u.uGrow, (dots.step * 0.92 - 2) * typeK);
+            g.uniform1f(u.uDpr, dpr);
+            g.uniform2f(u.uRes, W, H);
+            g.uniform3fv(u.uInk, INK3);
+            g.uniform3fv(u.uSun, SUN3);
+            g.drawArrays(g.POINTS, 0, gp.n);
+            return;
+        }
+        if (!show) {
+            if (dotsShown) { dctx.setTransform(1, 0, 0, 1, 0, 0); dctx.clearRect(0, 0, dotsCv.width, dotsCv.height); dotsShown = false; }
+            return;
+        }
+        dotsShown = true;
+        dctx.setTransform(1, 0, 0, 1, 0, 0);
+        dctx.clearRect(0, 0, dotsCv.width, dotsCv.height);
+        dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const a = dots.a, top = stageTopNow(), sz = 2 + (dots.step * 0.92 - 2) * typeK;
+        const ink = new Path2D(), sun = new Path2D();
+        for (let i = dots.n - dots.land; i < dots.n; i++) {
+            const o = i * 12;
+            if (bp < a[o + 4]) continue;
+            const t = clamp01((bp - a[o + 4]) / (a[o + 5] - a[o + 4])), e = easeIO(t), w = Math.sin(Math.PI * t);
+            const x = a[o] + (a[o + 2] - a[o]) * e, y = a[o + 1] + (top + a[o + 3] - a[o + 1]) * e + a[o + 7] * w;
+            (a[o + 11] > 2.5 ? sun : ink).rect(x - sz / 2, y - sz / 2, sz, sz);
+        }
+        dctx.globalAlpha = 1 - typeK;
+        dctx.fillStyle = INK; dctx.fill(ink);
+        dctx.fillStyle = SUN; dctx.fill(sun);
+        dctx.globalAlpha = 1;
     }
 
     function tick(dt, clock = dt) {
         const sr = sec.getBoundingClientRect();
         wtTop = sr.top - vTop;
+        stTop = stage.getBoundingClientRect().top - vTop;
         footTop = foot ? foot.getBoundingClientRect().top - vTop : 1e5;
+        svcB = svc ? svc.getBoundingClientRect().bottom - vTop : wtTop;
+        bp = 1 - svcB / H;
         const moved = !(Math.abs(wtTop - lastWt) < 0.25 && Math.abs(footTop - lastFoot) < 0.25);
+        if (dt > 0 && lastFoot === lastFoot) footVel += ((footTop - lastFoot) / dt - footVel) * Math.min(1, dt * 30);
         lastWt = wtTop; lastFoot = footTop;
 
         if (!STATIC) {
@@ -695,17 +1047,30 @@
         if (mode === 'fall') {
             fallT += dt;
             acc += dt * 1000;
+            if (drag) {
+                drag.c.pointA.x = ptr.cx;
+                drag.c.pointA.y = ptr.cy - footTop;
+            }
             let n = 0;
-            while (acc >= STEP && n < 4) { solidify(STEP / 1000); Mt.Engine.update(engine, STEP); acc -= STEP; n++; }
+            while (acc >= STEP && n < 4) {
+                for (const s of items) if (s.body) { s.qx = s.body.position.x; s.qy = s.body.position.y; s.qa = s.body.angle; }
+                solidify(STEP / 1000);
+                Mt.Engine.update(engine, STEP);
+                acc -= STEP; n++;
+            }
             if (n === 4) acc = 0;
-            const kS = ease(Math.min(1, fallT / 0.5));
-            let asleep = fallT > 0.6;
+            // Fixed 60 Hz physics, drawn between its last two states so 120/144 Hz displays don't judder
+            const al = acc / STEP;
+            const kO = ease(Math.min(1, fallT / 0.3));
+            let asleep = fallT > 0.6 && !drag;
             for (const s of items) {
                 const b = s.body;
                 if (!b) continue;
-                s.x = b.position.x; s.y = b.position.y + footTop; s.a = b.angle;
-                s.ks = s.k0 + (pileK - s.k0) * kS;
-                s.o = 1;
+                s.x = s.qx + (b.position.x - s.qx) * al;
+                s.y = s.qy + (b.position.y - s.qy) * al + footTop;
+                s.a = s.qa + (b.angle - s.qa) * al;
+                s.ks = s.k0 + (1 - s.k0) * kO;
+                s.o = s.o0 + (1 - s.o0) * kO;
                 if (!b.isSleeping) asleep = false;
             }
             resting = asleep;
@@ -714,9 +1079,9 @@
             const t = visible ? easeIO(Math.min(1, liftT / 1.1)) : 1;
             for (const s of items) {
                 floatPose(s, offY);
-                const l = s.l;
+                const l = s.l, ly = l.y + footTop;
                 s.x = l.x + (s.fx - l.x) * t;
-                s.y = l.y + (s.fy - l.y) * t;
+                s.y = ly + (s.fy - ly) * t;
                 s.a = l.a + wrapPI(s.fa - l.a) * t;
                 s.ks = l.k + (s.fs - l.k) * t;
                 s.o = l.o + (s.fo - l.o) * t;
@@ -729,7 +1094,7 @@
             }
         }
 
-        const hit = pick();
+        const hit = drag ? drag.s : pick();
         if (hit !== hovered) { hovered = hit; setLabel(hit); dirty = true; }
         let hvMoving = false;
         const kH = dt ? 1 - Math.exp(-dt * 10) : 1;
@@ -738,18 +1103,31 @@
             if (Math.abs(goal - s.hv) > 0.002) { s.hv += (goal - s.hv) * kH; hvMoving = true; } else s.hv = goal;
         }
 
+        if (tg) drawDots();
         const animating = !STATIC && (mode !== 'fall' || !resting);
         if (animating || moved || hvMoving || dirty) { render(); dirty = false; }
+    }
+
+    // While only slide 04 is on screen: watch for the moment just before its wipe to read the backdrop's dots
+    function prime() {
+        svcB = svc.getBoundingClientRect().bottom - vTop;
+        bp = 1 - svcB / H;
+        if (bp < -0.45) snapArmed = true;
+        if (tg && snapArmed && bp > -0.3 && bp < 0.6) {
+            stTop = stage.getBoundingClientRect().top - vTop;
+            if (snapshot()) snapArmed = false;
+        }
     }
 
     function frame(now) {
         raf = 0;
         const raw = last ? (now - last) / 1000 : 1 / 60;
         last = now;
-        tick(Math.min(0.05, raw), Math.min(0.25, raw));
-        if (visible) raf = requestAnimationFrame(frame);
+        if (visible) tick(Math.min(0.05, raw), Math.min(0.25, raw));
+        else if (svcVis) prime();
+        if (visible || svcVis) raf = requestAnimationFrame(frame);
     }
-    function kick() { if (!raf && visible) { last = 0; raf = requestAnimationFrame(frame); } }
+    function kick() { if (!raf && (visible || svcVis)) { last = 0; raf = requestAnimationFrame(frame); } }
 
     let resizeT = 0, lastW = 0, lastH = 0;
     function onResize() {
@@ -768,6 +1146,10 @@
     function init() {
         lastW = window.innerWidth; lastH = window.innerHeight;
         if (!STATIC) sec.classList.add('is-armed');
+        if (dgl) {
+            dotsCv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); gp = null; }, false);
+            dotsCv.addEventListener('webglcontextrestored', () => { glUpload(); dotsP = -1; dirty = true; kick(); }, false);
+        }
         measure();
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); kick(); });
         window.addEventListener('resize', onResize, { passive: true });
@@ -775,7 +1157,22 @@
             ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.on = true;
             ptr.block = !!(e.target && e.target.closest && e.target.closest('a, button, input, canvas.sig-canvas'));
         }, { passive: true });
-        document.documentElement.addEventListener('pointerleave', () => { ptr.on = false; }, { passive: true });
+        document.documentElement.addEventListener('pointerleave', () => { if (!drag) ptr.on = false; }, { passive: true });
+        // Grab and throw the piled stickers: a soft pin constraint at the grab point, so they swing, collide and spin
+        window.addEventListener('pointerdown', (e) => {
+            if (STATIC || !startDrag(e)) return;
+            e.preventDefault();
+            document.documentElement.classList.add('is-sticker-drag');
+        });
+        const drop = (e) => {
+            if (!drag || (e.pointerId != null && drag.id != null && e.pointerId !== drag.id)) return;
+            endDrag();
+            document.documentElement.classList.remove('is-sticker-drag');
+        };
+        window.addEventListener('pointerup', drop, { passive: true });
+        window.addEventListener('pointercancel', drop, { passive: true });
+        window.addEventListener('blur', () => drop({}), { passive: true });
+        window.addEventListener('touchmove', (e) => { if (drag) e.preventDefault(); }, { passive: false });
         const seen = new Map();
         const watch = (es) => {
             es.forEach((e) => seen.set(e.target, e.isIntersecting));
@@ -792,6 +1189,7 @@
             const early = () => idle(() => { near = true; queue(); }, { timeout: 5000 });
             if (document.readyState === 'complete') early(); else window.addEventListener('load', early, { once: true });
             const io = new IntersectionObserver(watch);
+            if (svc && (dgl || dctx)) new IntersectionObserver((es) => { svcVis = es[es.length - 1].isIntersecting; if (svcVis) kick(); }).observe(svc);
             io.observe(sec);
             if (foot) io.observe(foot);
         } else {
@@ -802,8 +1200,8 @@
 
     window.__workTogether = {
         items, measure, draw: () => { dirty = true; tick(0); },
-        state: () => ({ W, H, unitA, built, buildMs: Math.round(buildMs), mode, pileK, floorY, wtTop, footTop, resting, active,
-            awake: items.filter((s) => s.body && !s.body.isSleeping).length }),
+        state: () => ({ W, H, unitA, built, buildMs: Math.round(buildMs), mode, pitH, floorY, wtTop, footTop, footVel, resting, active,
+            drag: drag ? drag.s.def.n : null, bp, dots: tg ? { glyphs: tg.n, step: tg.step, lit: src ? src.n : 0, n: dots ? dots.n : 0, land: dots ? dots.land : 0, r0: dots ? dots.r0 : null, gl: !!gp } : null, awake: items.filter((s) => s.body && !s.body.isSleeping).length }),
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();

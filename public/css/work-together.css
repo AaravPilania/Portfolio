@@ -8,7 +8,7 @@ section.ll-section--together.wt {
     --wt-sun: #FFED29;
     --wt-void: #000;
     --wt-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
-    --wt-display: 'Brier', Georgia, serif;
+    --wt-display: 'Playfair Display', Georgia, serif;
     --wt-ease: cubic-bezier(0.19, 1, 0.22, 1);
     position: relative;
     z-index: 2;
@@ -41,6 +41,24 @@ section.ll-section--together.wt {
     display: block;
     z-index: 0;
     pointer-events: none;
+}
+
+/* The headline's particles: above the stickers, under the real type they hand over to */
+.wt-dots {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    z-index: 1;
+    pointer-events: none;
+}
+
+html.is-sticker-drag,
+html.is-sticker-drag * {
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .wt-marks {
@@ -178,6 +196,12 @@ section.ll-section--together.wt {
 }
 .wt.is-armed.is-in .wt-cta { transition-delay: 0.22s, 0.22s, 0s, 0s; pointer-events: auto; }
 .wt.is-armed.is-in .wt-li { transform: none; }
+/* With the particle headline the words don't rise: JS scrubs the title's opacity as the dots land */
+.wt.wt--dots .wt-li,
+.wt.is-armed.wt--dots .wt-li {
+    transform: none;
+    transition: none;
+}
 
 @media (max-width: 700px) {
     section.ll-section--together.wt { height: 150vh; height: 150dvh; }

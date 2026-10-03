@@ -512,8 +512,23 @@
         return cells;
     }
 
+    // Counters and the rail count within a cycle: the expertise categories, then experience as a cycle of its own.
+    // `list` holds each detent's cycle name (null for the intro, which takes the first cycle's zero).
+    function cycleInfo(list, k) {
+        const first = list.find((c) => c != null);
+        const c = k >= 0 && k < list.length && list[k] != null ? list[k] : first;
+        let n = 0, total = 0;
+        list.forEach((x, i) => {
+            if (x !== c) return;
+            total++;
+            if (i <= k) n++;
+        });
+        return { n: list[k] == null ? 0 : n, total, cycle: c == null ? null : c };
+    }
+    const counter = (n, total) => '[ ' + String(n).padStart(2, '0') + ' / ' + String(total).padStart(2, '0') + ' ]';
+
     if (typeof window === 'undefined' && typeof module === 'object' && module && module.exports) {
-        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, navSpan, navHide, PORTRAIT };
+        module.exports = { createIntent, createZone, createRoute, planRoute, ribbonCells, eyeSpots, legS, navSpan, navHide, cycleInfo, counter, PORTRAIT };
         return;
     }
 
@@ -546,6 +561,9 @@
     ]);
     // Categories are numbered after the intro: the wheel and the rail stay at rest on it and count from the first one
     const nth = (k) => Math.max(0, k + 1 - INTRO);
+    const cycles = cats.map((c, i) => (i < INTRO ? null : c.getAttribute('data-cycle') || 'expertise'));
+    const railAt = (k) => { const c = cycleInfo(cycles, k); return c.total ? c.n / c.total : 0; };
+    const markCycle = (k) => track.classList.toggle('sk--exp', cycleInfo(cycles, k).cycle === 'experience');
 
     const ARM = Math.PI / 3;          // one detent: the asterisk's six arms repeat every 60°
     const LOCK = 0.86;                // s a detent owns the input; the swap below settles inside it
@@ -617,7 +635,8 @@
             kick.className = 'sk-kicker';
             kick.setAttribute('aria-hidden', 'true');
             title.appendChild(kick);
-            kickChars = splitInto(kick, '[ 0' + (i - INTRO + 1) + ' / 0' + (N - INTRO) + ' ]', true);
+            const c = cycleInfo(cycles, i);
+            kickChars = splitInto(kick, counter(c.n, c.total), true);
         }
         const titleChars = kickChars.concat(splitInto(title, label, false));
         const items = [];
@@ -708,7 +727,18 @@
         spin = gsap.to(st, full && !rev ? { wheel: nth(k), duration: 1.25, ease: 'back.out(2.4)' } : { wheel: nth(k), duration: 0.9, ease: 'back.out(1.2)' });
         if (fill) fill.kill();
         const g = geo[Math.max(k, 0)];
-        fill = gsap.to(rail, Object.assign({ p: nth(k) / (N - INTRO), duration: 0.9, ease: 'power3.out', onUpdate: () => { railDirty = true; } }, g || {}));
+        const dirtyRail = () => { railDirty = true; };
+        const crossing = from >= 0 && k >= 0 && cycleInfo(cycles, from).cycle !== cycleInfo(cycles, k).cycle;
+        if (crossing) {
+            // A new cycle drains the rail and refills it in its own colour
+            fill = gsap.timeline()
+                .to(rail, { p: 0, duration: 0.32, ease: 'power2.in', onUpdate: dirtyRail })
+                .add(() => markCycle(k))
+                .to(rail, Object.assign({ p: railAt(k), duration: 0.8, ease: 'power3.out', onUpdate: dirtyRail }, g || {}));
+        } else {
+            markCycle(k);
+            fill = gsap.to(rail, Object.assign({ p: railAt(k), duration: 0.9, ease: 'power3.out', onUpdate: dirtyRail }, g || {}));
+        }
         travelTo(Math.max(k, 0) / (N - 1));
         if (k >= 0 && leashed) say(CAT_LINES[k]);
     }
@@ -847,7 +877,8 @@
         });
         if (fill) fill.kill();
         fill = null;
-        Object.assign(rail, geo[Math.max(shown, 0)], { p: nth(shown) / (N - INTRO) });
+        Object.assign(rail, geo[Math.max(shown, 0)], { p: railAt(shown) });
+        markCycle(shown);
         railDirty = true;
 
         // What GLITCH and its trail keep out of: the furthest extents of every category's counter, title and skills,

@@ -16,6 +16,7 @@
   var FACE_CENTER_X = 825;
   var FACE_CENTER_Y = 460;
 
+  var withPaper = true;
   var animCanvas = document.createElement('canvas');
   animCanvas.width = CANVAS_W;
   animCanvas.height = CANVAS_H;
@@ -193,8 +194,8 @@
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // 1. Coded architectural graph-paper grid background (Image 2 replica)
-    ctx.drawImage(getGridPattern(CANVAS_W, CANVAS_H), 0, 0);
+    // 1. Coded architectural graph-paper grid background (Image 2 replica); off when a page lays it separately
+    if (withPaper) ctx.drawImage(getGridPattern(CANVAS_W, CANVAS_H), 0, 0);
 
     // 2. Scale to canvas
     ctx.scale(scaleX, scaleY);
@@ -244,6 +245,13 @@
     stop: stop,
     getCanvas: function () {
       return animCanvas;
+    },
+    getPaper: function () {
+      return getGridPattern(CANVAS_W, CANVAS_H);
+    },
+    setPaper: function (on) {
+      withPaper = !!on;
+      renderFrame(performance.now());
     },
     render: function () {
       renderFrame(performance.now());

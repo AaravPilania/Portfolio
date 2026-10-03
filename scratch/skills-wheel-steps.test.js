@@ -595,4 +595,22 @@ test('nav state has 40px of hysteresis at both edges, the same scrolling either 
     assert.deepStrictEqual(walk([1021, 4990, 5010, 5019, 5021, 5000, 4981, 4979]), [true, true, true, true, false, false, false, true]);
 });
 
+test('counters: five expertise detents count to 05, experience is its own 01 / 01 cycle', () => {
+    const { cycleInfo, counter } = require(path.join(__dirname, '..', 'final', 'js', 'skills-wheel.js'));
+    // intro, Frontend, Backend, AI / ML, Languages, Tools, Experience: as cycles are read off the DOM
+    const list = [null, 'expertise', 'expertise', 'expertise', 'expertise', 'expertise', 'experience'];
+    const labels = list.map((_, k) => { const c = cycleInfo(list, k); return counter(c.n, c.total); });
+    assert.deepStrictEqual(labels.slice(1), ['[ 01 / 05 ]', '[ 02 / 05 ]', '[ 03 / 05 ]', '[ 04 / 05 ]', '[ 05 / 05 ]', '[ 01 / 01 ]']);
+    assert.deepStrictEqual(cycleInfo(list, 0), { n: 0, total: 5, cycle: 'expertise' });
+    assert.deepStrictEqual(cycleInfo(list, -1), { n: 0, total: 5, cycle: 'expertise' });
+    assert.deepStrictEqual(cycleInfo(list, 5), { n: 5, total: 5, cycle: 'expertise' });
+    assert.deepStrictEqual(cycleInfo(list, 6), { n: 1, total: 1, cycle: 'experience' });
+    // the rail fills per cycle: 1/5 ... 5/5, then full again for experience after a drain
+    assert.deepStrictEqual(list.map((_, k) => { const c = cycleInfo(list, k); return c.n / c.total; }), [0, 0.2, 0.4, 0.6, 0.8, 1, 1]);
+    // without an intro the first detent counts from 01 and the same split holds
+    const bare = list.slice(1);
+    assert.strictEqual(counter(cycleInfo(bare, 0).n, cycleInfo(bare, 0).total), '[ 01 / 05 ]');
+    assert.strictEqual(counter(cycleInfo(bare, 5).n, cycleInfo(bare, 5).total), '[ 01 / 01 ]');
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));

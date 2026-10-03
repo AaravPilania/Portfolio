@@ -1,7 +1,7 @@
-// Footer: the signature written on in 3D as the footer scrolls in, after Lando Norris's (a Rive state machine whose
-// `scroll` input is ScrollTrigger progress, scrub 0.5). Here the strokes are the inline SVG's polylines in pen order,
-// swept into one tapered tube; each vertex carries its global pen time, so a single uniform both cuts the tube and
-// sharpens a growing nib at the cut. Lit like Lando's head scene: a sky/ground hemisphere plus one key light.
+// Footer: the signature written on as the footer scrolls in, after Lando Norris's (a Rive state machine whose `scroll`
+// input is ScrollTrigger progress, scrub 0.5): one flat marker colour, broad round-nibbed strokes that ease in from the
+// pen landing and taper out long as it lifts. The strokes are the inline SVG's polylines in pen order (redrawn from
+// signature.png as smoothed centrelines); each is cut by arc length on one pen clock, with a short lift between strokes.
 (() => {
     'use strict';
     const foot = document.querySelector('.sig-footer');
@@ -12,7 +12,9 @@
     const scroller = document.querySelector('.js-scroller') || document.scrollingElement || document.documentElement;
     const STATIC = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const APP_URL = '/wp-content/themes/lamalama2025/dist/assets/app-DjHRamTc.js';
+    const SUN = '#FFED29';
     const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+    const smooth = (t) => t * t * (3 - 2 * t);
 
     // Footer links ride the page's Lenis, like every other in-page jump
     let appMod = null;
@@ -39,222 +41,189 @@
         else scroller.scrollTo({ top: y, behavior: STATIC ? 'auto' : 'smooth' });
     });
 
-    if (!hero || !svg) return;
-    const polys = [...svg.querySelectorAll('polyline')];
-    const strokes = polys.map((p) => p.getAttribute('points').trim().split(/\s+/).map((q) => q.split(',').map(Number)));
-    if (!strokes.length) return;
+    if (!hero || !svg || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const vb = svg.viewBox.baseVal;
-    const VW = vb.width || 1000, VH = vb.height || 718;
-    const SW = parseFloat(svg.getAttribute('data-stroke')) || 17.75;
+    const VW = vb.width || 1000, VH = vb.height || 726;
+    const SW = parseFloat(svg.getAttribute('data-stroke')) || 20;
+    const TS = SW * 1.2, TE = SW * 2.8; // landing ease-in and lift-off taper lengths, in signature units
+    const STEP = 1.6;
 
-    // Pen time: arc length, plus a short lift between strokes
-    const lens = strokes.map((s) => s.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - s[i - 1][0], p[1] - s[i - 1][1]) : 0), 0));
-    const total = lens.reduce((a, b) => a + b, 0);
-    const LIFT = total * 0.012;
-    const span = total + LIFT * (strokes.length - 1);
-    let acc = 0;
-    const times = lens.map((l) => { const t = [acc / span, (acc + l) / span]; acc += l + LIFT; return t; });
-
-    let progress = STATIC ? 1 : 0, shown = -1, visible = false, raf = 0, last = 0;
-    const sway = { x: 0, y: 0, tx: 0, ty: 0 };
-
-    function target() {
-        const r = foot.getBoundingClientRect(), H = window.innerHeight;
-        const start = H * 0.75, end = Math.max(H - r.height, 0) + H * 0.1;
-        return clamp01((start - r.top) / (start - end));
-    }
-
-    // Fallback: the SVG itself, dash-drawn on the same pen clock
-    let svgLens = null;
-    function drawSvg(p) {
-        if (!svgLens) svgLens = polys.map((el) => { const l = el.getTotalLength(); el.style.strokeDasharray = l + ' ' + l; return l; });
-        polys.forEach((el, i) => {
-            const k = clamp01((p - times[i][0]) / Math.max(1e-6, times[i][1] - times[i][0]));
-            el.style.strokeDashoffset = String(svgLens[i] * (1 - k));
-        });
-    }
-
-    const VERT = `
-        attribute vec3 aC;
-        attribute float aT;
-        uniform float uP;
-        uniform float uTip;
-        varying vec3 vN;
-        varying vec3 vV;
-        varying float vT;
-        void main() {
-            float k = smoothstep(0.0, uTip, uP - aT);
-            vec3 p = aC + (position - aC) * k;
-            vec4 mv = modelViewMatrix * vec4(p, 1.0);
-            vV = mv.xyz;
-            vN = normalMatrix * normal;
-            vT = aT;
-            gl_Position = projectionMatrix * mv;
-        }`;
-    const FRAG = `
-        precision highp float;
-        uniform float uP;
-        uniform vec3 uCol;
-        uniform vec3 uRim;
-        uniform vec3 uKey;
-        varying vec3 vN;
-        varying vec3 vV;
-        varying float vT;
-        void main() {
-            if (vT > uP) discard;
-            vec3 n = normalize(vN);
-            if (!gl_FrontFacing) n = -n;
-            vec3 v = normalize(-vV);
-            vec3 l = normalize(uKey);
-            vec3 amb = mix(vec3(0.40, 0.37, 0.30), vec3(0.80, 0.79, 0.74), 0.5 + 0.5 * n.y);
-            float d = max(dot(n, l), 0.0);
-            float s = pow(max(dot(n, normalize(l + v)), 0.0), 64.0);
-            float f = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-            float ink = exp(-max(uP - vT, 0.0) * 70.0);
-            vec3 c = uCol * (amb + 0.42 * d) + uRim * (s * 0.7 + f * 0.2) + mix(uCol, vec3(1.0), 0.5) * ink * 0.5;
-            gl_FragColor = vec4(c, 1.0);
-        }`;
-
-    function tube(THREE) {
-        const S = 2 / VW, R = (SW / 2) * S;
-        const RAD = 10, pos = [], nor = [], cen = [], tim = [], idx = [];
-        let base = 0;
-        strokes.forEach((s, si) => {
-            const L = lens[si], dot = L < 24;
-            const pts = s.map(([x, y]) => new THREE.Vector3((x - VW / 2) * S, (VH / 2 - y) * S, 0.035 * Math.sin(x * 0.009 + y * 0.013)));
-            if (pts.length === 2) pts.splice(1, 0, pts[0].clone().lerp(pts[1], 0.5));
-            const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
-            const segs = Math.max(8, Math.round(L / 3.2));
-            const fr = curve.computeFrenetFrames(segs, false);
-            const [t0, t1] = times[si];
-            for (let i = 0; i <= segs; i++) {
-                const u = i / segs, P = curve.getPointAt(u), N = fr.normals[i], B = fr.binormals[i];
-                const r = dot
-                    ? R * 1.2 * Math.sqrt(Math.max(0.08, Math.sin(Math.PI * u)))
-                    : R * Math.pow(Math.max(0.1, Math.min(1, (u * L) / 46, ((1 - u) * L) / 30)), 0.5);
-                for (let j = 0; j < RAD; j++) {
-                    const a = (j / RAD) * Math.PI * 2, c = Math.cos(a), si2 = Math.sin(a);
-                    const nx = c * N.x + si2 * B.x, ny = c * N.y + si2 * B.y, nz = c * N.z + si2 * B.z;
-                    pos.push(P.x + nx * r, P.y + ny * r, P.z + nz * r);
-                    nor.push(nx, ny, nz);
-                    cen.push(P.x, P.y, P.z);
-                    tim.push(t0 + (t1 - t0) * u);
-                }
-                if (i) {
-                    const a0 = base + (i - 1) * RAD, a1 = base + i * RAD;
-                    for (let j = 0; j < RAD; j++) {
-                        const j1 = (j + 1) % RAD;
-                        idx.push(a0 + j, a1 + j, a0 + j1, a0 + j1, a1 + j, a1 + j1);
-                    }
-                }
+    // Each stroke resampled to even arc length: flat [x, y, ...] plus the arc length at every sample
+    const strokes = [...svg.querySelectorAll('polyline')].map((el) => {
+        const p = el.getAttribute('points').trim().split(/\s+/).map((q) => q.split(',').map(Number));
+        const xy = [p[0][0], p[0][1]], s = [0];
+        let at = 0, carry = 0;
+        for (let i = 1; i < p.length; i++) {
+            const dx = p[i][0] - p[i - 1][0], dy = p[i][1] - p[i - 1][1], l = Math.hypot(dx, dy);
+            let u = STEP - carry;
+            while (u <= l) {
+                xy.push(p[i - 1][0] + (dx * u) / l, p[i - 1][1] + (dy * u) / l);
+                s.push(at + u);
+                u += STEP;
             }
-            base += (segs + 1) * RAD;
-        });
-        const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-        g.setAttribute('aC', new THREE.Float32BufferAttribute(cen, 3));
-        g.setAttribute('aT', new THREE.Float32BufferAttribute(tim, 1));
-        g.setIndex(base > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
-        g.computeBoundingSphere();
-        return g;
-    }
+            carry = l - (u - STEP);
+            at += l;
+        }
+        const end = p[p.length - 1];
+        if (at - s[s.length - 1] > 0.05) { xy.push(end[0], end[1]); s.push(at); }
+        const e = el.getAttribute('data-e') || '11';
+        return { xy, s, L: at, dot: at < SW * 1.4, in: e[0] === '1' ? TS : 0, out: e[1] === '1' ? TE : 0 };
+    });
+    if (!strokes.length) return;
 
-    let gl = null;
-    function makeGL() {
-        const THREE = window.THREE;
-        if (!THREE || !canvas) return null;
-        let renderer;
-        try {
-            renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
-        } catch (e) { return null; }
-        if (!renderer.capabilities.isWebGL2 && !renderer.extensions.get('OES_element_index_uint')) { renderer.dispose(); return null; }
-        renderer.setClearColor(0x000000, 0);
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 40);
-        const uniforms = {
-            uP: { value: progress },
-            uTip: { value: 0.012 },
-            uCol: { value: new THREE.Color(0xffed29) },
-            uRim: { value: new THREE.Color(0xf4f2ea) },
-            uKey: { value: new THREE.Vector3(-0.75, 0.2, 0.4).add(new THREE.Vector3(0.3, 0.35, 0.55)) },
-        };
-        const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, side: THREE.DoubleSide });
-        const mesh = new THREE.Mesh(tube(THREE), mat);
-        const rig = new THREE.Group();
-        rig.add(mesh);
-        scene.add(rig);
-        canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); foot.classList.remove('is-gl'); gl = null; shown = -1; frameOnce(); }, false);
-        return { THREE, renderer, scene, camera, rig, uniforms, w: 0, h: 0 };
-    }
+    // Pen time: arc length, plus a short lift between strokes (dots cost a tap)
+    const cost = strokes.map((k) => (k.dot ? SW * 2 : k.L));
+    const LIFT = cost.reduce((a, b) => a + b, 0) * 0.012;
+    const span = cost.reduce((a, b) => a + b, 0) + LIFT * (strokes.length - 1);
+    let acc = 0;
+    strokes.forEach((k, i) => { k.t0 = acc / span; k.t1 = (acc + cost[i]) / span; acc += cost[i] + LIFT; });
+
+    // Free ends (pen landings / lifts) taper; ends that meet another stroke stay full so the joins read as one line
+    const width = (k, s) => {
+        const a = k.in ? 0.55 + 0.45 * smooth(Math.min(1, s / k.in)) : 1;
+        const b = k.out ? 0.3 + 0.7 * smooth(Math.min(1, Math.max(0, k.L - s) / k.out)) : 1;
+        return SW * a * b;
+    };
+
+    let W = 0, H = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+    const cache = document.createElement('canvas');
+    const cctx = cache.getContext('2d');
+    let cached = -1;
 
     function size() {
-        if (!gl) return;
         const w = Math.max(1, hero.clientWidth), h = Math.max(1, hero.clientHeight);
-        if (w === gl.w && h === gl.h) return;
-        gl.w = w; gl.h = h;
-        gl.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-        gl.renderer.setSize(w, h, false);
-        const cam = gl.camera, aspect = w / h;
-        cam.aspect = aspect;
-        // Fit the signature box (2 x VH/VW*2 world units, plus the nib) with a margin for the sway
-        const bw = 2.08, bh = (VH / VW) * 2 + 0.08;
-        const need = Math.max(bh, bw / aspect) * 1.06;
-        cam.position.set(0, 0, need / 2 / Math.tan((cam.fov * Math.PI) / 360));
-        cam.lookAt(0, 0, 0);
-        cam.updateProjectionMatrix();
-        shown = -1;
+        const d = Math.min(2, window.devicePixelRatio || 1);
+        if (w === W && h === H && d === dpr) return false;
+        W = w; H = h; dpr = d;
+        canvas.width = cache.width = Math.round(w * dpr);
+        canvas.height = cache.height = Math.round(h * dpr);
+        scale = Math.min(w / (VW + SW * 2), h / (VH + SW * 2));
+        ox = (w - VW * scale) / 2;
+        oy = (h - VH * scale) / 2;
+        cached = -1;
+        return true;
     }
 
+    function pen(c) {
+        c.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        c.strokeStyle = SUN;
+        c.fillStyle = SUN;
+    }
+
+    // Constant-width middle as one path; the tapered ends as short segments whose round caps hide the width steps
+    function drawStroke(c, k, f) {
+        if (f <= 0) return;
+        const { xy, s, L } = k;
+        if (k.dot) {
+            const r = SW * 0.62 * smooth(Math.min(1, f * 1.6));
+            const i = (xy.length >> 1) >> 1;
+            c.beginPath();
+            c.arc(xy[i * 2], xy[i * 2 + 1], r, 0, Math.PI * 2);
+            c.fill();
+            return;
+        }
+        const v = L * f, n = s.length;
+        let last = 0;
+        while (last < n - 1 && s[last + 1] <= v) last++;
+        let hx = xy[last * 2], hy = xy[last * 2 + 1];
+        if (last < n - 1 && v > s[last]) {
+            const u = (v - s[last]) / (s[last + 1] - s[last]);
+            hx += (xy[last * 2 + 2] - hx) * u;
+            hy += (xy[last * 2 + 3] - hy) * u;
+        }
+        const seg = (i, j, x1, y1) => {
+            c.lineWidth = width(k, (s[i] + (j < n ? s[j] : v)) / 2);
+            c.beginPath();
+            c.moveTo(xy[i * 2], xy[i * 2 + 1]);
+            c.lineTo(x1, y1);
+            c.stroke();
+        };
+        const b0 = k.in, b1 = L - k.out;
+        let i = 0;
+        for (; i < last && s[i] < b0; i++) seg(i, i + 1, xy[i * 2 + 2], xy[i * 2 + 3]);
+        if (i < last && s[i] < b1) {
+            c.lineWidth = SW;
+            c.beginPath();
+            c.moveTo(xy[i * 2], xy[i * 2 + 1]);
+            for (; i < last && s[i] < b1; i++) c.lineTo(xy[i * 2 + 2], xy[i * 2 + 3]);
+            c.stroke();
+        }
+        for (; i < last; i++) seg(i, i + 1, xy[i * 2 + 2], xy[i * 2 + 3]);
+        if (v > s[last] + 0.01) seg(last, n, hx, hy);
+        else if (last === 0) {
+            c.beginPath();
+            c.arc(hx, hy, width(k, 0) / 2, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+
+    let progress = STATIC ? 1 : 0, shown = -1, visible = false, raf = 0, last = 0;
+
+    // Written over the last stretch of the page: starts as the signature's box enters, completes at the very bottom
+    function target() {
+        const r = hero.getBoundingClientRect(), f = foot.getBoundingClientRect(), vh = window.innerHeight;
+        const start = vh - r.height * 0.15, end = vh - r.height - (f.bottom - r.bottom) + 2;
+        return clamp01((start - r.top) / Math.max(1, start - end));
+    }
+
+    // Finished strokes live on a cache canvas, redrawn only when another one completes
     function render() {
-        if (gl) {
-            gl.uniforms.uP.value = progress <= 0 ? -1 : progress >= 0.9995 ? 1.01 : progress;
-            gl.rig.rotation.y = sway.x * 0.2;
-            gl.rig.rotation.x = 0.05 - sway.y * 0.14;
-            gl.renderer.render(gl.scene, gl.camera);
-            if (!foot.classList.contains('is-gl')) foot.classList.add('is-gl');
-        } else drawSvg(progress);
+        let done = 0;
+        while (done < strokes.length && progress >= strokes[done].t1) done++;
+        if (done !== cached) {
+            cctx.setTransform(1, 0, 0, 1, 0, 0);
+            cctx.clearRect(0, 0, cache.width, cache.height);
+            pen(cctx);
+            for (let i = 0; i < done; i++) drawStroke(cctx, strokes[i], 1);
+            cached = done;
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (done) ctx.drawImage(cache, 0, 0);
+        if (done < strokes.length) {
+            const k = strokes[done];
+            pen(ctx);
+            drawStroke(ctx, k, clamp01((progress - k.t0) / (k.t1 - k.t0)));
+        }
         shown = progress;
+        if (!foot.classList.contains('is-drawn')) foot.classList.add('is-drawn');
     }
 
     function frame(now) {
         raf = 0;
         const dt = Math.min(0.05, last ? (now - last) / 1000 : 1 / 60);
         last = now;
-        const p0 = progress, sx = sway.x, sy = sway.y;
         if (!STATIC) {
-            progress += (target() - progress) * (1 - Math.exp(-dt * 6));
-            if (Math.abs(target() - progress) < 1e-4) progress = target();
-            const k = 1 - Math.exp(-dt * 4);
-            sway.x += (sway.tx - sway.x) * k;
-            sway.y += (sway.ty - sway.y) * k;
+            const t = target();
+            progress += (t - progress) * (1 - Math.exp(-dt * 7));
+            if (Math.abs(t - progress) < 2e-4) progress = t;
         }
-        if (shown < 0 || Math.abs(progress - p0) > 1e-5 || Math.abs(sway.x - sx) > 1e-5 || Math.abs(sway.y - sy) > 1e-5) render();
+        if (shown < 0 || Math.abs(progress - shown) > 1e-5) render();
         if (visible) raf = requestAnimationFrame(frame);
     }
     function frameOnce() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }
 
     function init() {
-        gl = makeGL();
         size();
-        if (!STATIC) {
-            window.addEventListener('pointermove', (e) => {
-                sway.tx = (e.clientX / window.innerWidth) * 2 - 1;
-                sway.ty = (e.clientY / window.innerHeight) * 2 - 1;
-            }, { passive: true });
-        }
-        if ('ResizeObserver' in window) new ResizeObserver(() => { size(); frameOnce(); }).observe(hero);
-        else window.addEventListener('resize', () => { size(); frameOnce(); }, { passive: true });
+        if ('ResizeObserver' in window) new ResizeObserver(() => { if (size()) { shown = -1; frameOnce(); } }).observe(hero);
+        else window.addEventListener('resize', () => { if (size()) { shown = -1; frameOnce(); } }, { passive: true });
         if ('IntersectionObserver' in window) {
             new IntersectionObserver((es) => {
                 visible = es[es.length - 1].isIntersecting;
                 if (visible) frameOnce();
-            }).observe(foot);
+            }, { rootMargin: '25% 0px' }).observe(foot);
         } else { visible = true; frameOnce(); }
-        if (!STATIC) render();
+        render();
     }
 
-    window.__sigFooter = { state: () => ({ progress, target: target(), gl: !!gl, strokes: strokes.length, span }), set: (p) => { progress = p; render(); } };
+    window.__sigFooter = {
+        state: () => ({ progress, target: target(), strokes: strokes.length, span, W, H, scale }),
+        set: (p) => { progress = p; render(); },
+    };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
     else init();
 })();
