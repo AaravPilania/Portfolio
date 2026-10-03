@@ -1,5 +1,5 @@
 /* Footer: signed. No fill of its own, so the shared backdrop and slide 05's fixed sticker canvas run straight into it;
-   the stickers land in .sig-pit, on the top edge of .sig-bar, and the signature closes the page below the bar. The inline
+   the signature opens it, centred, and the stickers land in .sig-pit, on the top edge of .sig-bar. The inline
    SVG is the signature without JS; footer-signature.js swaps it for the tapered 2D pen (.is-drawn) and writes it on over
    the final scroll. The pit grows
    (--sig-pit, set by work-together.js) until the stickers fit at conveyor size. */
@@ -9,7 +9,7 @@
     --sig-hair: rgba(244, 242, 234, 0.22);
     --sig-sun: #FFED29;
     --sig-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
-    --sig-display: 'Playfair Display', Georgia, serif;
+    --sig-display: 'Brier', Georgia, serif;
     --sig-ease: cubic-bezier(0.19, 1, 0.22, 1);
     --sig-pad: clamp(20px, 3.2vw, 56px);
     position: relative;
@@ -19,7 +19,7 @@
     min-height: 100dvh;
     padding: clamp(84px, 11vh, 128px) var(--sig-pad) 0;
     display: grid;
-    grid-template-rows: auto var(--sig-pit, 30vh) auto auto;
+    grid-template-rows: auto var(--sig-pit, 30vh) auto;
     background: transparent;
     color: var(--sig-ink);
 }
@@ -69,13 +69,11 @@
 .sig-back:focus-visible .sig-back__arrow svg { transform: translate3d(0, -2px, 0); }
 .sig-back:focus-visible { outline: 1px solid var(--sig-sun); outline-offset: 6px; }
 
-/* Last thing on the page: as wide as the viewport allows at the 1000:726 viewBox, capped so it still fits one screen */
+/* Centred under the kicker at the 1000:726 viewBox, capped so it fits one screen with the kicker above it */
 .sig-hero {
     position: relative;
-    justify-self: center;
-    width: min(100%, 118vh);
+    width: min(100%, 92vh);
     aspect-ratio: 1000 / 726;
-    margin: clamp(28px, 6vh, 72px) 0 clamp(18px, 4vh, 48px);
 }
 .sig-title {
     position: absolute !important;
@@ -112,36 +110,6 @@
     gap: clamp(10px, 1.6vh, 18px);
     text-align: center;
 }
-.sig-mail {
-    position: relative;
-    display: inline-block;
-    font-family: var(--sig-display) !important;
-    font-weight: 700;
-    font-size: clamp(26px, 4.6vw, 88px);
-    line-height: 1.02;
-    letter-spacing: -0.02em;
-    color: var(--sig-ink);
-    text-decoration: none;
-    overflow-wrap: anywhere;
-    transition: color 0.4s var(--sig-ease);
-}
-.sig-mail::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -0.04em;
-    height: 2px;
-    background: var(--sig-sun);
-    transform: scaleX(0);
-    transform-origin: 100% 50%;
-    transition: transform 0.7s var(--sig-ease);
-}
-.sig-mail:hover,
-.sig-mail:focus-visible { color: var(--sig-sun); }
-.sig-mail:hover::after,
-.sig-mail:focus-visible::after { transform: scaleX(1); transform-origin: 0 50%; }
-.sig-mail:focus-visible { outline: none; }
 
 .sig-pit { pointer-events: none; }
 

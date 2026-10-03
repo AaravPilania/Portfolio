@@ -20,7 +20,7 @@
     const INK = '#f4f2ea', VOID = '#121316', SUN = '#FFED29';
     const MONO = '"IBM Plex Mono", "Sometype Mono", monospace';
     const SANS = '"Mona Sans Variable", "PP-Mori", sans-serif';
-    const DISPLAY = '"Playfair Display", Georgia, serif';
+    const DISPLAY = 'Brier, Georgia, serif';
 
     // Marks on a 24-unit grid with their tight bounds [d, x0, y0, x1, y1]. Every subpath starts with an absolute M so a
     // mark can be split into separately coloured parts.
@@ -499,7 +499,7 @@
         };
         const go = () => (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(step);
         if (document.fonts && document.fonts.load) {
-            Promise.all(['700 40px "Playfair Display"', 'italic 700 40px "Playfair Display"', '500 16px "IBM Plex Mono"', '800 40px "Mona Sans Variable"'].map((f) => document.fonts.load(f).catch(() => null)))
+            Promise.all(['700 40px Brier', '500 16px "IBM Plex Mono"', '800 40px "Mona Sans Variable"'].map((f) => document.fonts.load(f).catch(() => null)))
                 .then(go, go);
         } else go();
     }

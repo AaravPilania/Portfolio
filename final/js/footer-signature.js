@@ -163,10 +163,11 @@
 
     let progress = STATIC ? 1 : 0, shown = -1, visible = false, raf = 0, last = 0;
 
-    // Written over the last stretch of the page: starts as the signature's box enters, completes at the very bottom
+    // Starts as the signature's box enters; completes once it sits centred, or at the very bottom if that comes first
     function target() {
         const r = hero.getBoundingClientRect(), f = foot.getBoundingClientRect(), vh = window.innerHeight;
-        const start = vh - r.height * 0.15, end = vh - r.height - (f.bottom - r.bottom) + 2;
+        const start = vh - r.height * 0.15;
+        const end = Math.min(start - 1, Math.max((vh - r.height) / 2, vh - r.height - (f.bottom - r.bottom) + 2));
         return clamp01((start - r.top) / Math.max(1, start - end));
     }
 

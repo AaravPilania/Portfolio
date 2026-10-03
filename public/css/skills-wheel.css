@@ -130,7 +130,7 @@ body.sk-nav-hidden .ll-header .js-sticky-items.is-revealed {
     width: var(--sk-tw, 40%);
     margin: 0;
     transform: translate(0, calc(-50% - var(--sk-ty, 0px)));
-    font-family: 'Playfair Display', Georgia, serif !important;
+    font-family: 'Brier', Georgia, serif !important;
     font-weight: 700;
     font-size: calc(clamp(2.6rem, 5.4vw, 6.25rem) * var(--sk-fit, 1));
     line-height: 1;

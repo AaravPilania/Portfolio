@@ -4,7 +4,7 @@
     --ss-void: #121316;
     --ss-paper: #f4f2ea;
     --ss-sig: #ffed29;
-    --ss-display: 'Playfair Display', Georgia, serif;
+    --ss-display: 'Brier', 'Playfair Display', Georgia, serif;
     --ss-mono: 'IBM Plex Mono', 'Sometype', ui-monospace, monospace;
     --ss-ease: cubic-bezier(0.2, 0.7, 0, 1);
 }
