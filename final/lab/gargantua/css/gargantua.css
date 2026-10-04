@@ -100,6 +100,8 @@ html.is-running .g-mute { opacity: 1; }
 .g-mute:focus-visible { outline: 1px solid var(--signal); outline-offset: 6px; }
 @keyframes g-eq { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
 
+html.g-clean .g-hud, html.g-clean .ap-nav { display: none; }
+
 .g-noscript { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; font: 400 12px/1 var(--mono); color: var(--dim); }
 
 /* ------------------------------------------------------------------ cursor: always white, always on top */

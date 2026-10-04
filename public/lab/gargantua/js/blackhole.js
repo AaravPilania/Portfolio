@@ -151,9 +151,12 @@ void main() {
     float alpha = 0.0;
     bool captured = false;
 
+    // a per-pixel phase on the first step turns step-count banding into fine noise the grain swallows
+    float jit = 0.35 + 0.65 * hash13(vec3(gl_FragCoord.xy, 7.0));
     for (int i = 0; i < MAX_STEPS; i++) {
         if (float(i) >= uSteps) break;
         float dt = clamp((r - 0.85) * uStepK, 0.006, 6.0);
+        if (i == 0) dt *= jit;
         vec3 prev = pos;
         float r2 = dot(pos, pos);
         vec3 acc = -1.5 * h2 * pos / (r2 * r2 * sqrt(r2));

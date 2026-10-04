@@ -10,6 +10,7 @@ const TAU = Math.PI * 2;
 
 // boxes get texture density from their real size, so a 12 m plate and a 0.5 m block share one panel scale
 function box(w, h, d, scale = 6) {
+    scale *= 2.2;
     const g = new THREE.BoxGeometry(w, h, d);
     const uv = g.attributes.uv;
     const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
@@ -20,6 +21,7 @@ function box(w, h, d, scale = 6) {
     return g;
 }
 function cyl(rt, rb, h, seg = 24, open = false, scaleU = 6) {
+    scaleU *= 2.2;
     const g = new THREE.CylinderGeometry(rt, rb, h, seg, 1, open);
     const uv = g.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (TAU * Math.max(rt, rb)) / scaleU, uv.getY(i) * h / scaleU);
@@ -168,8 +170,8 @@ export function createEndurance({ shadows = true } = {}) {
         return m;
     };
     const mats = {
-        white: hook(new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: panel.map, bumpMap: panel.bump, bumpScale: 1.2, roughness: 0.5, metalness: 0.0, clearcoat: 0.2, clearcoatRoughness: 0.5 })),
-        foil: hook(new THREE.MeshStandardMaterial({ color: 0xffffff, map: foil.map, bumpMap: foil.bump, bumpScale: 2.2, roughness: 0.3, metalness: 1.0 })),
+        white: hook(new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: panel.map, bumpMap: panel.bump, bumpScale: 0.7, roughness: 0.5, metalness: 0.0, clearcoat: 0.2, clearcoatRoughness: 0.5 })),
+        foil: hook(new THREE.MeshStandardMaterial({ color: 0xffffff, map: foil.map, bumpMap: foil.bump, bumpScale: 0.45, roughness: 0.28, metalness: 1.0 })),
         metal: hook(new THREE.MeshStandardMaterial({ color: 0x6d6f73, roughness: 0.38, metalness: 0.9 })),
         dark: hook(new THREE.MeshStandardMaterial({ color: 0x24262a, roughness: 0.5, metalness: 0.6 })),
         bell: hook(new THREE.MeshStandardMaterial({ color: 0x3a3631, roughness: 0.28, metalness: 1.0, side: THREE.DoubleSide })),
@@ -226,8 +228,8 @@ export function createEndurance({ shadows = true } = {}) {
         B.add('metal', cyl(0.14, 0.14, 2.4, 8), [sx * 4.8, -2.6, 0], [0, 0, Math.PI / 2]);
         B.add('radiator', box(7.5, 0.12, 2.6, 3), [sx * 9.6, -2.6, 0]);
     }
-    // the Ranger, docked on the forward port, dorsal side down, nose across the ring
-    B.push(T(0, 9.4, 0).multiply(new THREE.Matrix4().makeRotationZ(Math.PI)).multiply(RY(0.35)));
+    // the Ranger, docked belly-down on the forward port, nose across the ring
+    B.push(T(0, 8.35, 0).multiply(RY(0.35)));
     buildRanger(B);
     B.pop();
 

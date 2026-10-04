@@ -118,7 +118,9 @@ Object.assign(key.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, n
 key.shadow.bias = -0.0004; key.shadow.normalBias = 0.06;
 const diskGlow = new THREE.DirectionalLight(0xff9c55, 1.3);
 const starFill = new THREE.HemisphereLight(0x8a96aa, 0x3a2414, 0.22);
-shipScene.add(key, key.target, diskGlow, diskGlow.target, starFill);
+// the lensed arch of the disk wraps light round to the camera side: a soft, wide, neutral fill
+const archFill = new THREE.DirectionalLight(0xffe6c8, 0.9);
+shipScene.add(key, key.target, diskGlow, diskGlow.target, starFill, archFill, archFill.target);
 
 // environment: a black sky with the disk as one hot, flat band; rotated each frame to face the hole
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -269,6 +271,9 @@ function update(p, dt) {
     v3b.y += 0.15;
     diskGlow.position.copy(v3).addScaledVector(v3b, 160);
     diskGlow.target.position.copy(v3);
+    v3b.set(-0.6, 0.8, 0.5).applyQuaternion(bhCam.quaternion);
+    archFill.position.copy(v3).addScaledVector(v3b, 160);
+    archFill.target.position.copy(v3);
     shipScene.environmentRotation.set(0, Math.atan2(-toHole.x, -toHole.z), 0);
     key.intensity = 5.6 * (0.6 + 0.4 * smooth(0.05, 0.14, p));
     endurance.puffMat.uniforms.uScale.value = H * 0.9;
@@ -424,6 +429,7 @@ if (!SHOT) {
     document.getElementById('gate').style.display = 'none';
     scrollEl.style.height = '0';
     root.classList.add('is-running');
+    if (Q.has('clean')) root.classList.add('g-clean');
 }
 
 // ------------------------------------------------------------------ the gate
@@ -492,4 +498,4 @@ if (navMsg) {
         .observe(navMsg, { childList: true, characterData: true, subtree: true });
 }
 
-window.__garg = { get tier() { return TIERS[tier].name; }, gpu: gpuName, get dyn() { return dyn; }, renderer };
+window.__garg = { get tier() { return TIERS[tier].name; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound };
