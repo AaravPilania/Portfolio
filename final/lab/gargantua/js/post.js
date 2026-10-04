@@ -115,6 +115,10 @@ uniform float uCA;
 uniform float uAgX;
 uniform vec3 uLift;
 uniform vec3 uTint;
+uniform sampler2D tLow;   // the smallest bloom level: how much light the whole frame holds
+uniform sampler2D tMid;   // a mid bloom level, for the anamorphic streak
+uniform float uHalo;
+uniform float uAnam;
 
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 
@@ -174,6 +178,33 @@ void main() {
     }
     vec3 bloom = texture2D(tBloom, uv).rgb;
     col += bloom * uBloom * vec3(1.06, 0.96, 0.88);
+    if (uAnam > 0.001) {
+        // anamorphic: bright points smear sideways into thin blue lines
+        vec3 an = vec3(0.0);
+        for (int i = -7; i <= 7; i++) {
+            float o = float(i) / 7.0;
+            vec3 s = texture2D(tMid, vec2(uv.x + o * 0.3, uv.y)).rgb;
+            an += max(s - 0.15, 0.0) * exp(-abs(o) * 3.5);
+        }
+        col += an * vec3(0.35, 0.62, 1.0) * uAnam * 0.25;
+    }
+    if (uHalo > 0.001) {
+        // the big ring a wide lens throws round a bright frame, split into a spectrum across its width, strongest at
+        // the sides like the ghost of an anamorphic front element
+        vec3 src = texture2D(tLow, vec2(0.5)).rgb;
+        float lum = min(dot(src, vec3(0.3333)) * 4.0, 1.0);
+        vec2 hp = dc * vec2(uRes.x / uRes.y, 1.0);
+        float r = length(hp);
+        float R0 = 0.74;
+        float x = (r - R0) / 0.045;
+        float ring = exp(-x * x * 0.5);
+        vec3 spec = clamp(0.5 + 0.5 * cos(6.2831 * (x * 0.13 + vec3(0.0, 0.33, 0.67))), 0.0, 1.0);
+        spec = mix(vec3(dot(spec, vec3(0.333))), spec, 0.75);
+        float ang = atan(hp.y, hp.x);
+        float side = 0.3 + 0.7 * pow(abs(cos(ang)), 1.2);
+        side *= 0.7 + 0.3 * sin(ang * 5.0 + uTime * 0.15);
+        col += spec * ring * side * (0.07 + 0.08 * lum) * uHalo;
+    }
     col *= uExposure * uTint;
     col = mix(aces(col), agx(col * 1.15), uAgX);
     col = col + uLift * (1.0 - col);
@@ -237,6 +268,7 @@ export class Post {
                 uBloom: { value: 0.9 }, uExposure: { value: 1 }, uGrain: { value: 0.045 }, uVignette: { value: 0.55 }, uLetter: { value: 0 },
                 uStreak: { value: 0 }, uWhite: { value: 0 }, uBlack: { value: 0 }, uCA: { value: 0.012 }, uAgX: { value: 0 },
                 uLift: { value: new THREE.Vector3(0, 0, 0) }, uTint: { value: new THREE.Vector3(1, 1, 1) },
+                tLow: { value: null }, tMid: { value: null }, uHalo: { value: 0 }, uAnam: { value: 0 },
             },
         });
         this.u = this.comp.uniforms;
@@ -323,6 +355,8 @@ export class Post {
         this.u.tDof.value = this.rtDof.texture;
         this.u.tScene.value = this.rtScene.texture;
         this.u.tBloom.value = this.bloom(threshold);
+        this.u.tLow.value = this.mips[this.levels - 1].texture;
+        this.u.tMid.value = this.mips[Math.min(2, this.levels - 1)].texture;
         this.pass(this.comp, null);
     }
 }

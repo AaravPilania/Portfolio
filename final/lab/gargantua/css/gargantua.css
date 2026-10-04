@@ -57,6 +57,9 @@ body { margin: 0; background: var(--void); font-family: var(--sans); }
 .g-gate__go:hover svg { transform: translate3d(3px, -3px, 0); }
 .g-gate__go:focus-visible { outline: 1px solid var(--signal); outline-offset: 6px; }
 .g-gate__hint { margin: 26px 0 0; font: 400 10px/1.5 var(--mono); letter-spacing: .1em; color: var(--faint); }
+.g-gate__credit { margin: 10px auto 0; font: 400 9px/1.6 var(--mono); letter-spacing: .08em; color: var(--faint); opacity: .7; }
+.g-gate__credit a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; transition: color .3s; }
+.g-gate__credit a:hover { color: var(--dim); }
 
 /* ------------------------------------------------------------------ HUD: mission-clock restraint, four corners */
 .g-hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; font: 400 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }

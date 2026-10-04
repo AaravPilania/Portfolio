@@ -13,7 +13,7 @@ import { createBlackHole } from './blackhole.js';
 import { Post } from './post.js';
 import { createEndurance, createRanger } from './endurance.js';
 import { createAstronaut } from './astronaut.js';
-import { createTesseract } from './tesseract.js';
+import { createTesseract, createShards } from './tesseract.js';
 import { createWatch } from './watch.js';
 import { Sound } from './audio.js';
 
@@ -39,6 +39,9 @@ function frameQ(f, out, up = UP) {
     return out.setFromRotationMatrix(_m4);
 }
 const pad = (n, w = 2) => String(Math.floor(n)).padStart(w, '0');
+// the tesseract's lens and grade (?tune=key:value,... overrides, for frame work)
+const TUNE = { apCorr: 0.8, bloom: 0.85, exposure: 1.0, halo: 1, anam: 0.25 };
+for (const kv of (Q.get('tune') || '').split(',')) { const [k, v] = kv.split(':'); if (k in TUNE) TUNE[k] = parseFloat(v); }
 
 // ------------------------------------------------------------------ renderer + quality
 const canvas = document.getElementById('gl');
@@ -145,9 +148,12 @@ shipScene.environmentIntensity = 1.0;
 
 // ------------------------------------------------------------------ world 2: the tesseract
 const tessScene = new THREE.Scene();
-const tessCam = new THREE.PerspectiveCamera(40, 1, 0.05, 400);
-const tess = createTesseract({ N: tier <= 1 ? 3 : 4, layers: tier <= 1 ? 9 : 12 });
+const tessCam = new THREE.PerspectiveCamera(50, 1, 0.05, 400);
+const tess = createTesseract({ slots: tier <= 1 ? 10 : 12, density: tier <= 0 ? 0.55 : tier === 1 ? 0.7 : 1 });
+if (tier <= 1) tess.uniforms.uFogDensity.value = 0.032;
 tessScene.add(tess.root);
+const shards = createShards({ count: tier <= 1 ? 60 : tier === 2 ? 110 : 150 });
+tessScene.add(shards.root);
 const watch = createWatch();
 tessScene.add(watch.root);
 const tKey = new THREE.DirectionalLight(0xf6f2ea, 3.2);
@@ -157,24 +163,51 @@ Object.assign(tKey.shadow.camera, { left: -1.7, right: 1.7, top: 1.7, bottom: -1
 tKey.shadow.camera.updateProjectionMatrix();
 tKey.shadow.bias = -0.0006; tKey.shadow.normalBias = 0.03;
 const tRim = new THREE.DirectionalLight(0xffa458, 7.5);
-const tRim2 = new THREE.DirectionalLight(0xffc89a, 2.0);
-const tHemi = new THREE.HemisphereLight(0x3a3430, 0x0a0604, 0.25);
+const tRim2 = new THREE.DirectionalLight(0x8fd8ff, 2.4);
+const tHemi = new THREE.HemisphereLight(0x30343a, 0x060708, 0.2);
 tessScene.add(tKey, tKey.target, tRim, tRim.target, tRim2, tRim2.target, tHemi);
-const cubeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
-const cubeCam = new THREE.CubeCamera(0.1, 220, cubeRT);
-tessScene.add(cubeCam);
-let envTessRT = null;
-function updateTessEnv() {
-    const v1 = cooper.root.visible, v2 = watch.root.visible, v3 = dust.visible;
-    cooper.root.visible = false; watch.root.visible = false; dust.visible = false;
-    cubeCam.position.copy(cooper.root.position);
-    cubeCam.update(renderer, tessScene);
-    cooper.root.visible = v1; watch.root.visible = v2; dust.visible = v3;
-    envTessRT = pmrem.fromCubemap(cubeRT.texture, envTessRT);
-    tessScene.environment = envTessRT.texture;
+// two prefiltered environments, built once: the corridor itself seen from its axis with a softbox overhead (what the
+// visor and the suit pick up while he falls), and a black studio of softboxes for the void, where the glass lives
+function softboxes() {
+    const g = new THREE.Group();
+    const box = (w, h, col, p, look) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide }));
+        m.position.set(...p); m.lookAt(...look); g.add(m);
+    };
+    box(9, 5, new THREE.Color(6, 6, 5.7), [-4, 6, 5], [0, 0, 0]);
+    box(0.6, 7, new THREE.Color(9, 4.2, 1.6), [6, 1, -5], [0, 0, 0]);
+    box(0.4, 6, new THREE.Color(1.2, 3.6, 5), [-6, -1, -4], [0, 0, 0]);
+    box(10, 0.25, new THREE.Color(3, 3, 3), [0, -5, 2], [0, 0, 0]);
+    for (let i = 0; i < 18; i++) {
+        const a = i * 2.39996, y = ((i * 0.618) % 1) * 2 - 1, r = Math.sqrt(1 - y * y);
+        const c = i % 3 === 0 ? new THREE.Color(1.5, 4, 5) : new THREE.Color(5, 5, 5);
+        box(0.25 + (i % 4) * 0.2, 0.08 + (i % 3) * 0.1, c, [Math.cos(a) * r * 12, y * 12, Math.sin(a) * r * 12], [0, 0, 0]);
+    }
+    return g;
 }
-tessScene.environmentIntensity = 0.55;
-tessScene.background = new THREE.Color();
+const studioScene = new THREE.Scene();
+studioScene.background = new THREE.Color(0.025, 0.028, 0.034);
+studioScene.add(softboxes());
+let envCorr = null, envStudio = null;
+function buildTessEnvs() {
+    if (envCorr) return;
+    envStudio = pmrem.fromScene(studioScene, 0.0, 0.1, 100);
+    const vis = [cooper.root.visible, watch.root.visible, dust.visible, shards.root.visible];
+    cooper.root.visible = false; watch.root.visible = false; dust.visible = false; shards.root.visible = false;
+    const sb = softboxes();
+    sb.scale.setScalar(0.4);
+    tessScene.add(sb);
+    const z = tessCam.position.z;
+    tess.follow(new THREE.Vector3(0, 0, 0), 0);
+    tess.uniforms.uOpen.value = 0;
+    tess.mesh.visible = true;
+    envCorr = pmrem.fromScene(tessScene, 0.0, 0.1, 200);
+    sb.removeFromParent();
+    tess.follow(new THREE.Vector3(0, 0, z), time);
+    [cooper.root.visible, watch.root.visible, dust.visible, shards.root.visible] = vis;
+}
+tessScene.environmentIntensity = 1.0;
+tessScene.background = new THREE.Color(0.004, 0.005, 0.007);
 // dust motes drifting in front of Cooper, lit by the amber
 const dustN = 600, dustPos = new Float32Array(dustN * 3);
 for (let i = 0; i < dustN; i++) { dustPos[i * 3] = (Math.random() - 0.5) * 14; dustPos[i * 3 + 1] = (Math.random() - 0.5) * 9; dustPos[i * 3 + 2] = -Math.random() * 18; }
@@ -182,7 +215,7 @@ const dustGeo = new THREE.BufferGeometry(); dustGeo.setAttribute('position', new
 const dustMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uA: { value: 0 }, uH: { value: 1000 } },
     vertexShader: 'uniform float uH; varying float vF; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mv; vF = smoothstep(18.0, 2.0, -mv.z); gl_PointSize = uH * 0.0035 / -mv.z + 1.0; }',
-    fragmentShader: 'uniform float uA; varying float vF; void main(){ vec2 c = gl_PointCoord - 0.5; float a = exp(-dot(c,c)*16.0) * uA * vF; gl_FragColor = vec4(vec3(1.0,0.75,0.45) * a * 1.6, a); }',
+    fragmentShader: 'uniform float uA; varying float vF; void main(){ vec2 c = gl_PointCoord - 0.5; float a = exp(-dot(c,c)*16.0) * uA * vF; gl_FragColor = vec4(vec3(0.8,0.9,1.0) * a * 1.2, a); }',
 });
 const dust = new THREE.Points(dustGeo, dustMat); dust.frustumCulled = false;
 tessScene.add(dust);
@@ -194,14 +227,30 @@ function warmWorlds() {
     if (warmed || !renderer.compileAsync) return;
     warmed = true;
     post.warm();
-    updateTessEnv();
+    buildTessEnvs();
+    tessScene.environment = envCorr.texture;
     // program keys depend on the bound target (tone mapping, colour space): compile against the one we draw into
+    // compile skips hidden objects, and most of the tesseract cast is hidden until its beat; lights stay as they are,
+    // their count is part of every program key
+    const hidden = [];
+    const reveal = (scene) => scene.traverse((o) => { if (!o.visible && !o.isLight) { hidden.push(o); o.visible = true; } });
     renderer.setRenderTarget(post.rtScene);
     tessScene.add(cooper.root);
+    reveal(tessScene);
     renderer.compileAsync(tessScene, tessCam).catch(() => {});
+    tessScene.environment = envStudio.texture;
+    renderer.compileAsync(tessScene, tessCam).catch(() => {});
+    tessScene.environment = envCorr.texture;
     cooper.root.removeFromParent();
     shipScene.add(cooper.root);
+    reveal(shipScene);
     renderer.compileAsync(shipScene, shipCam).catch(() => {});
+    for (const o of hidden) o.visible = false;
+    // the dive hides the ships, and the Endurance's engine glow with them: one point light fewer in every key
+    const shipsVis = [endurance.root.visible, ranger.root.visible];
+    endurance.root.visible = false; ranger.root.visible = false;
+    renderer.compileAsync(shipScene, shipCam).catch(() => {});
+    [endurance.root.visible, ranger.root.visible] = shipsVis;
     cooper.root.removeFromParent();
     renderer.setRenderTarget(null);
 }
@@ -581,52 +630,75 @@ function updateDive(dt) {
     if (pt > DIVE_WHITE) startTess();
 }
 
-// ------------------------------------------------------------------ the tesseract: fall, float, the watch, the fold
-const T_FALL = 8, T_WATCH = 19, T_FOLD = 31, T_END = 35.5;
+// ------------------------------------------------------------------ the tesseract: the corridor, the void, the watch, the fold
+// He is far down the corridor, falling with you and coming apart into dust; the corridor brakes and blows open into a
+// dark full of glass, he pulls himself back together in front of you, the watch spells, and the walls slam back in.
+const T_OPEN = 12.5, T_FOUND = 18, T_WATCH = 22, T_FOLD = 34, T_END = 38.5;
+function tessSpeed(t) {
+    const cruise = 7.5 * (1 - 0.95 * smooth(T_OPEN - 2.5, T_FOUND, t)) * smooth(-0.6, 1.2, t);
+    const rush = smooth(T_FOLD, T_END, t);
+    return cruise + rush * rush * 70;
+}
+function tessTravel(pt) {
+    let s = 0;
+    for (let t = 0; t < pt; t += 0.05) { const h = Math.min(0.05, pt - t); s += tessSpeed(t + h * 0.5) * h; }
+    return s;
+}
 function updateTess(dt) {
     const pt = S.pt;
     const rush = smooth(T_FOLD, T_END, pt);
-    const travel = pt * 0.9 + rush * rush * 90;
+    const found = smooth(T_OPEN - 3, T_FOUND, pt);
+    const travel = tessTravel(pt);
     if (!ctl.drag) { ctl.tyaw += ctl.fyaw * dt; ctl.tpitch += ctl.fpitch * dt; ctl.fyaw *= Math.exp(-1.6 * dt); ctl.fpitch *= Math.exp(-2.4 * dt); }
     // the look springs home when let go: this is a place you are shown, not one you wander
     if (!ctl.drag) { ctl.tyaw *= Math.exp(-0.8 * dt); ctl.tpitch *= Math.exp(-0.8 * dt); }
     ctl.tyaw = clamp(ctl.tyaw, -0.8, 0.8); ctl.tpitch = clamp(ctl.tpitch, -0.5, 0.5);
     ctl.yaw = damp(ctl.yaw, ctl.tyaw, 5, dt); ctl.pitch = damp(ctl.pitch, ctl.tpitch, 5, dt);
-    tessCam.position.set(Math.sin(time * 0.13) * 0.08, Math.sin(time * 0.17) * 0.06, -travel);
-    tessCam.rotation.set(Math.sin(time * 0.11) * 0.015 + ctl.pitch, Math.sin(time * 0.09) * 0.03 + ctl.yaw, Math.sin(time * 0.07) * 0.01, 'YXZ');
-    tessCam.fov = 40 + rush * 22;
+    // the cursor sways the camera off the axis a little, and leans it
+    ctl.lx = damp(ctl.lx, pointerS.x, 2.2, dt); ctl.ly = damp(ctl.ly, pointerS.y, 2.2, dt);
+    const sway = (1 - found * 0.5) * (reduceMotion ? 0.3 : 1);
+    tessCam.position.set(Math.sin(time * 0.13) * 0.14 + ctl.lx * 0.55 * sway, Math.sin(time * 0.17) * 0.1 + ctl.ly * 0.35 * sway, -travel);
+    tessCam.rotation.set(Math.sin(time * 0.11) * 0.012 + ctl.pitch + ctl.ly * 0.035, Math.sin(time * 0.09) * 0.02 + ctl.yaw - ctl.lx * 0.05, Math.sin(time * 0.07) * 0.02 - ctl.lx * 0.03, 'YXZ');
+    tessCam.fov = lerp(52, 40, found) + rush * 24;
+    if (aspect < 1) tessCam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(tessCam.fov) / 2) / Math.max(0.55, aspect)));
     tessCam.updateProjectionMatrix();
     tessCam.updateMatrixWorld();
-    tess.follow(tessCam.position);
+    tess.follow(tessCam.position, time);
 
-    // Cooper falls in from deep in the lattice, tumbling, and the tumble bleeds away as he arrives
-    const fall = 1 - Math.pow(1 - clamp(pt / T_FALL), 3);
+    // Cooper: a small figure far down the axis, then close, then gone into the fold
     const leave = smooth(T_FOLD, T_FOLD + 3.2, pt);
-    v1.set(lerp(-2.4, 0.42, fall) - leave * 2.2, lerp(1.6, -0.05, fall) + leave * 0.5, lerp(-46, -4.6, fall) - leave * 6);
+    const dist = lerp(21, 4.4, found);
+    v1.set(lerp(0.25, 0.42, found) - leave * 2.2, lerp(0.15, -0.05, found) + leave * 0.5, -dist - leave * 6);
     v1.applyMatrix4(tessCam.matrixWorld);
     cooper.root.position.copy(v1);
     cooper.root.visible = leave < 0.999;
-    cooper.update(dt, time, pointerS, { tumbleAmt: 1, spin: (1 - fall) * 7 });
+    const dis = lerp(0.46 + Math.sin(time * 0.31) * 0.05, 0, smooth(T_OPEN - 1, T_FOUND - 0.5, pt)) + smooth(T_FOLD - 0.4, T_FOLD + 2.8, pt) * 1.1;
+    cooper.update(dt, time, pointerS, { tumbleAmt: 1, spin: (1 - found) * pt * 0.09, dissolve: dis, size: H * 1.1 });
 
-    // lights ride with the camera so he is always modelled the same way: soft key above, hard amber rim behind
+    // lights ride with the camera so he is always modelled the same way: soft key above, hard amber rim behind, a cold
+    // kicker from the other side
     v2.set(-2.6, 2.3, 4.4).applyQuaternion(tessCam.quaternion);
     tKey.position.copy(v1).add(v2); tKey.target.position.copy(v1);
     v2.set(3.4, 1.6, -4.2).applyQuaternion(tessCam.quaternion);
     tRim.position.copy(v1).add(v2); tRim.target.position.copy(v1);
     v2.set(-4, -1, -3).applyQuaternion(tessCam.quaternion);
     tRim2.position.copy(v1).add(v2); tRim2.target.position.copy(v1);
-    tess.uniforms.uKeyDir.value.set(-2.6, 2.3, 4.4).normalize();
-    tess.uniforms.uRimDir.value.set(3.4, 1.6, -4.2).normalize();
+    tKey.intensity = lerp(1.4, 2.1, found);
+    tRim.intensity = lerp(7, 2.6, found);
+    tRim2.intensity = lerp(3, 1.8, found);
+    tHemi.intensity = 0.12;
 
-    const reveal = smooth(0.4, 9, pt) * (1 - rush * 0.6);
-    tess.uniforms.uReveal.value = 2 + reveal * 110 + rush * 60;
-    tess.uniforms.uTime.value = time;
-    tess.uniforms.uFlow.value = 1 + smooth(10, 16, pt) * 1.5 + rush * 8;
-    tess.uniforms.uCollapse.value = rush;
-    tess.uniforms.uGain.value = 1 + rush * 1.4;
-    const far = tess.uniforms.uFogFar.value;
-    tessScene.background.setRGB(0.012 + far.r * 0.9 * reveal, 0.008 + far.g * 0.9 * reveal, 0.005 + far.b * 0.9 * reveal);
-    dustMat.uniforms.uA.value = smooth(0.5, 3, pt) * (1 - rush);
+    const open = smooth(T_OPEN, T_FOUND + 1, pt) * (1 - smooth(T_FOLD + 0.2, T_FOLD + 1.8, pt));
+    const U = tess.uniforms;
+    U.uOpen.value = open;
+    tess.mesh.visible = open < 0.995;
+    U.uTime.value = time;
+    U.uFlow.value = 1 + rush * 8;
+    U.uCollapse.value = rush;
+    U.uGain.value = (1 + rush * 1.4) * smooth(0, 1.2, pt);
+    shards.update(time, tessCam.position, smooth(T_OPEN + 1, T_FOUND + 1.5, pt) * (1 - smooth(T_FOLD, T_FOLD + 1.6, pt)));
+    if (envCorr) tessScene.environment = (open > 0.5 ? envStudio : envCorr).texture;
+    dustMat.uniforms.uA.value = smooth(0.5, 3, pt) * (1 - rush) * (0.4 + 0.6 * found);
     dustMat.uniforms.uH.value = H;
     dust.position.set(0, 0, tessCam.position.z);
 
@@ -656,7 +728,7 @@ function update(dt) {
     const started = introAt !== Infinity;
     const intro = SHOT ? 1 : smooth(0, 5, time - introAt);
     ctl.holdT = ctl.hold ? ctl.holdT + dt : 0;
-    if (!warmed && S.phase === 'orbit' && S.pt > 4 && shipScene.environment) warmWorlds();
+    if (!warmed && S.phase === 'orbit' && S.pt > 4 && shipScene.environment && cooper.loaded) warmWorlds();
     ctl.idle += dt;
     pointerS.x = damp(pointerS.x, pointer.x, 6, dt); pointerS.y = damp(pointerS.y, pointer.y, 6, dt);
     if (cut.t >= 0) {
@@ -721,9 +793,8 @@ function update(dt) {
             updateShipEnv(focus);
             envTick = T.envEvery;
         }
-    } else {
-        envTick--;
-        if (SHOT ? frames < 4 : envTick <= 0 || !envTessRT) { updateTessEnv(); envTick = Math.max(6, T.envEvery); }
+    } else if (!envCorr && cooper.loaded) {
+        buildTessEnvs();
     }
 
     // ---------------- post
@@ -743,20 +814,25 @@ function update(dt) {
     } else {
         white = Math.max(1 - smooth(0, 1.6, S.pt), smooth(T_END - 2.2, T_END, S.pt));
         const wIn = smooth(T_WATCH, T_WATCH + 3, S.pt) * (1 - smooth(T_FOLD + 0.5, T_FOLD + 2.5, S.pt));
+        const found = smooth(T_OPEN - 3, T_FOUND, S.pt);
         const fc = tessCam.position.distanceTo(cooper.root.position), fw = tessCam.position.distanceTo(watch.root.position);
         D.uFocus.value = lerp(fc, fw, wIn);
-        D.uAperture.value = (8 - wIn * 3) * k; D.uMaxCoc.value = 12 * k;
+        // down the corridor the focus sits on him, far away, and the near walls go soft; in the void it is a portrait lens
+        D.uAperture.value = lerp(TUNE.apCorr, 7, found) * (1 - wIn * 0.35) * k; D.uMaxCoc.value = 13 * k;
     }
     if (cut.t >= 0) black = Math.max(black, cut.t < 0.32 ? smooth(0, 0.32, cut.t) : 1 - smooth(0.32, 0.8, cut.t));
     if (!SHOT && !started) black = 1;
     else if (!SHOT) black = Math.max(black, 1 - smooth(0, 2.4, time - introAt));
     u.uWhite.value = white; u.uBlack.value = black; u.uStreak.value = streak; u.uLetter.value = letter;
-    u.uBloom.value = world === 1 ? (S.phase === 'dive' ? 0.6 : 0.5) : 0.8;
-    u.uExposure.value = world === 1 ? 1.0 : 1.05;
+    u.uBloom.value = world === 1 ? (S.phase === 'dive' ? 0.6 : 0.5) : TUNE.bloom;
+    u.uExposure.value = world === 1 ? 1.0 : TUNE.exposure;
     u.uAgX.value = world === 2 ? 1 : S.phase === 'dive' ? 0.45 : 0;
-    u.uGrain.value = 0.045;
-    u.uVignette.value = 0.6;
-    u.uCA.value = S.phase === 'orbit' ? 0.006 : 0.011;
+    u.uGrain.value = world === 2 ? 0.055 : 0.045;
+    u.uVignette.value = world === 2 ? 0.75 : 0.6;
+    u.uCA.value = S.phase === 'orbit' ? 0.006 : S.phase === 'tess' ? 0.02 : 0.011;
+    // the lens: a rainbow halo ring and an anamorphic streak, lit by how much light the frame holds
+    u.uHalo.value = world === 2 ? TUNE.halo * (1 - 0.5 * smooth(T_OPEN, T_FOUND, S.pt)) : 0;
+    u.uAnam.value = world === 2 ? TUNE.anam : 0;
     u.uTime.value = time;
 
     // ---------------- HUD
@@ -825,7 +901,7 @@ function render() {
             cam = tessCam;
         }
     }
-    post.finish(world === 1 ? 1.5 : 1.0, cam);
+    post.finish(world === 1 ? 1.5 : 1.4, cam);
 }
 
 // ------------------------------------------------------------------ adaptive quality: sample, then step down / up
@@ -992,9 +1068,9 @@ function applyShot(name) {
             startDive('free');
             S.pt = pt ?? (name === 'eject' ? 2.2 : 4.8);
             break;
-        case 'tess-fall': case 'cooper': case 'watch': case 'fold':
+        case 'tess-fall': case 'corridor': case 'open': case 'cooper': case 'watch': case 'fold':
             startTess();
-            S.pt = pt ?? { 'tess-fall': 4.5, cooper: 13, watch: 30.4, fold: 33 }[name];
+            S.pt = pt ?? { 'tess-fall': 2.6, corridor: 7, open: 14.5, cooper: 20, watch: 31, fold: 35.2 }[name];
             break;
         default: break;
     }
@@ -1002,7 +1078,7 @@ function applyShot(name) {
 }
 
 // ------------------------------------------------------------------ loop
-let raf = 0, last = performance.now(), frames = 0;
+let raf = 0, last = performance.now(), frames = 0, readyFrames = 0;
 function frame(now) {
     raf = requestAnimationFrame(frame);
     const dtMs = Math.min(100, now - last);
@@ -1022,7 +1098,8 @@ function frame(now) {
     dx += (cx - dx) * 0.35; dy += (cy - dy) * 0.35;
     dot.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
     frames++;
-    if (SHOT && frames === 8) window.__gargShot = true;
+    if (cooper.loaded) readyFrames++;
+    if (SHOT && readyFrames === 8) window.__gargShot = true;
 }
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) { cancelAnimationFrame(raf); raf = 0; sound.pause(true); ctl.hold = false; }
@@ -1044,6 +1121,6 @@ if (navMsg) {
 }
 
 window.__garg = {
-    get tier() { return TIERS[tier].name; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound, S, ctl, rgr,
+    get tier() { return TIERS[tier].name; }, get warmed() { return warmed; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound, S, ctl, rgr,
     astro: cooper.stats, setMode, startDive, endurance, ranger, shipCam, focus, endP, tessScene, tKey, cooper,
 };

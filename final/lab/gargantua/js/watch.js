@@ -2,6 +2,7 @@
 // lume hands, and a second hand that has stopped keeping time and started spelling. Morse is scheduled here; the
 // page reads the hand angle and the onsets (for the tick sound and the caption) every frame.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 
 function dialTexture() {
     const n = 1024, c = document.createElement('canvas');
@@ -44,6 +45,39 @@ function dialTexture() {
     return t;
 }
 
+// worn brown calf: pebbled grain, darker burnished edges, a saddle stitch down each side
+function leatherTextures() {
+    const w = 256, h = 1024;
+    const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    const cm = mk(), cb = mk();
+    const m = cm.getContext('2d'), b = cb.getContext('2d');
+    m.fillStyle = '#4b2d1b'; m.fillRect(0, 0, w, h);
+    b.fillStyle = '#9a9a9a'; b.fillRect(0, 0, w, h);
+    let s = 77;
+    const R = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    for (let i = 0; i < 9000; i++) {
+        const x = R() * w, y = R() * h, r = 0.6 + R() * 2.2, v = R();
+        m.fillStyle = `rgba(${v < 0.5 ? '20,10,5' : '120,80,50'},${0.05 + R() * 0.08})`;
+        m.beginPath(); m.arc(x, y, r, 0, 6.283); m.fill();
+        b.fillStyle = `rgba(${v < 0.5 ? '40,40,40' : '220,220,220'},${0.12 + R() * 0.15})`;
+        b.beginPath(); b.arc(x, y, r, 0, 6.283); b.fill();
+    }
+    // burnished edges
+    const eg = m.createLinearGradient(0, 0, w, 0);
+    eg.addColorStop(0, 'rgba(15,8,4,0.7)'); eg.addColorStop(0.08, 'rgba(15,8,4,0)'); eg.addColorStop(0.92, 'rgba(15,8,4,0)'); eg.addColorStop(1, 'rgba(15,8,4,0.7)');
+    m.fillStyle = eg; m.fillRect(0, 0, w, h);
+    // stitches: slanted dashes, pressed into the bump
+    for (const x of [w * 0.12, w * 0.88]) for (let y = 6; y < h; y += 14) {
+        m.save(); m.translate(x, y); m.rotate(0.5); m.fillStyle = '#d9c7a4'; m.fillRect(-1.6, -4, 3.2, 8); m.restore();
+        b.save(); b.translate(x, y); b.rotate(0.5); b.fillStyle = '#e8e8e8'; b.fillRect(-1.6, -4, 3.2, 8); b.restore();
+        b.fillStyle = '#303030'; b.fillRect(x - 1, y + 5, 2, 3);
+    }
+    const map = new THREE.CanvasTexture(cm), bump = new THREE.CanvasTexture(cb);
+    map.colorSpace = THREE.SRGBColorSpace;
+    for (const t of [map, bump]) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+    return { map, bump };
+}
+
 function hand(len, w0, w1, tail, depth, mat) {
     const s = new THREE.Shape();
     s.moveTo(-w0 / 2, -tail); s.lineTo(w0 / 2, -tail); s.lineTo(w1 / 2, len * 0.85); s.lineTo(0, len); s.lineTo(-w1 / 2, len * 0.85); s.closePath();
@@ -74,7 +108,8 @@ export function createWatch() {
     const dialMat = new THREE.MeshStandardMaterial({ map: dialTexture(), roughness: 0.6, metalness: 0 });
     const lume = new THREE.MeshStandardMaterial({ color: 0xefe5cc, roughness: 0.45, metalness: 0.2, emissive: 0x2a2212 });
     const handSteel = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, metalness: 1, roughness: 0.22 });
-    const leather = new THREE.MeshStandardMaterial({ color: 0x4a2e1c, roughness: 0.72, metalness: 0 });
+    const lt = leatherTextures();
+    const leather = new THREE.MeshPhysicalMaterial({ map: lt.map, bumpMap: lt.bump, bumpScale: 1.4, roughnessMap: lt.bump, roughness: 0.85, sheen: 0.4, sheenColor: 0x8a5a3a, sheenRoughness: 0.6 });
     const glass = new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: 0.02, transparent: true, opacity: 0.12, clearcoat: 1, depthWrite: false });
 
     const root = new THREE.Group();
@@ -96,10 +131,28 @@ export function createWatch() {
     }
     const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 24), brushed);
     crown.rotation.z = Math.PI / 2; crown.position.set(1.07, -0.04, 0); face.add(crown);
-    // strap running out of frame
+    // strap: rounded, tapering, curving away round a wrist that is not there, stitched along both edges
     for (const sz of [-1, 1]) {
-        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.09, 2.6), leather);
-        strap.position.set(0, -0.1, sz * 2.4); strap.rotation.x = sz * -0.18; face.add(strap);
+        const g = new RoundedBoxGeometry(0.88, 0.085, 3.0, 8, 0.035);
+        const p = g.attributes.position;
+        const RB = 1.5, Z0 = 0.15;
+        for (let i = 0; i < p.count; i++) {
+            let x = p.getX(i), y = p.getY(i), z = p.getZ(i) + 1.5;   // 0 at the lug, 3 at the far end
+            x *= 1 - 0.14 * THREE.MathUtils.clamp((z - 0.4) / 2.4, 0, 1);
+            if (z > Z0) {
+                // wrap round a centre RB behind the strap; the outer face sits on the larger radius
+                const th = (z - Z0) / RB, r = RB + y;
+                z = Z0 + Math.sin(th) * r; y = -RB + Math.cos(th) * r;
+            }
+            p.setXYZ(i, x, y, z * sz);
+        }
+        g.computeVertexNormals();
+        const strap = new THREE.Mesh(g, leather);
+        strap.position.set(0, -0.11, sz * 1.18);
+        face.add(strap);
+        // a keeper loop near the case
+        const keeper = new THREE.Mesh(new RoundedBoxGeometry(0.96, 0.15, 0.12, 3, 0.04), leather);
+        keeper.position.set(0, -0.12, sz * 1.62); face.add(keeper);
     }
     // hands, built pointing +Y in the XY plane, laid onto the dial
     const handsPlane = new THREE.Group();
