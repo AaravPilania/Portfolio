@@ -1,6 +1,7 @@
-// The header pill on both pages (css/site-nav.css): the bar or the burger opens it, Escape, the scrim or a link closes
-// it; [data-copy] buttons copy their value and confirm in place. The centre line and the pixel mark follow the section
-// on screen, and [data-scroll] links glide to their section without ever putting a fragment in the URL.
+// The header pill on every page (css/site-nav.css): the bar or the burger opens it, Escape, the scrim or a link closes
+// it. The centre line and the pixel mark follow the section on screen, [data-scroll] links glide to their section
+// without ever putting a fragment in the URL, and the form button opens the brief on /contact (from elsewhere it rides
+// the page transition there and the brief opens on arrival). body.is-nav-hidden slides the whole pill away.
 (() => {
     'use strict';
 
@@ -20,7 +21,7 @@
     }
 
     // one markup on every page: the current one is found from the URL
-    const here = /^\/contact(\/|\.html)?$/.test(location.pathname) ? 'contact' : 'home';
+    const here = document.body.dataset.page === '404' ? 'lost' : /^\/contact(\/|\.html)?$/.test(location.pathname) ? 'contact' : 'home';
     for (const a of nav.querySelectorAll('[data-nav]')) {
         if (a.dataset.nav !== here) continue;
         a.setAttribute('aria-current', 'page');
@@ -33,11 +34,14 @@
     // glyphs that resolve whenever the section changes
     const LINES = {
         hero: 'Creative developer, India',
+        screen: 'Lives inside the screen',
         projects: 'Selected work, source open',
         stack: 'What the work is made of',
+        watch: 'Every dot placed by hand',
         together: 'Bring the odd idea',
         end: 'Writes back within a day',
         contact: 'Yes, the calendar dances',
+        lost: 'This page wandered off',
     };
     const msg = nav.querySelector('.ap-nav__msg');
     const G = '#$*@(0%1>';
@@ -59,10 +63,139 @@
     }
 
     // ------------------------------------------------------------ the mark: AP on a 16 x 13 pixel grid that re-books
-    // itself cell by cell into a glyph for the moment (an envelope near contact, a speech bubble on the contact page)
+    // itself cell by cell into the glyph of the section on screen; hovering it brings the AP back
     const GW = 16, GH = 13, SIGNAL = '#FFED29';
     const bits = (rows) => Uint8Array.from(rows.join(''), (c) => (c === '#' ? 1 : 0));
     const GLYPHS = {
+        // the hero: the character's face behind its round spectacles
+        face: bits([
+            '...##########...',
+            '.##############.',
+            '################',
+            '################',
+            '##.....##.....##',
+            '##.##..##.##..##',
+            '##.....##.....##',
+            '################',
+            '################',
+            '####.######.####',
+            '#####......#####',
+            '.##############.',
+            '...##########...',
+        ]),
+        // slide 2: the shrunk screen with the bio typed into it
+        screen: bits([
+            '................',
+            '################',
+            '#..............#',
+            '#.##...........#',
+            '#.##.######....#',
+            '#..............#',
+            '#.#########....#',
+            '#.######.......#',
+            '#..............#',
+            '################',
+            '......####......',
+            '......####......',
+            '...##########...',
+        ]),
+        // the projects: source, open
+        code: bits([
+            '.........##.....',
+            '.........##.....',
+            '.........##.....',
+            '...##...##.##...',
+            '..##....##..##..',
+            '.##.....##...##.',
+            '##.....##.....##',
+            '.##....##....##.',
+            '..##...##...##..',
+            '...##.##...##...',
+            '......##........',
+            '......##........',
+            '.....##.........',
+        ]),
+        // the stack: layers
+        layers: bits([
+            '.......##.......',
+            '.....######.....',
+            '...##########...',
+            '.##############.',
+            '...##########...',
+            '#....######....#',
+            '###....##....###',
+            '..###......###..',
+            '....###..###....',
+            '#.....####.....#',
+            '###..........###',
+            '..###......###..',
+            '....########....',
+        ]),
+        // slide 4: the dithered portrait looking back
+        eye: bits([
+            '................',
+            '................',
+            '.....######.....',
+            '...###....###...',
+            '.##...####...##.',
+            '##...######...##',
+            '#...###..###...#',
+            '##...######...##',
+            '.##...####...##.',
+            '...###....###...',
+            '.....######.....',
+            '................',
+            '................',
+        ]),
+        // build together: the odd idea
+        bulb: bits([
+            '.....######.....',
+            '...##########...',
+            '..############..',
+            '.####..########.',
+            '.###..#########.',
+            '.##############.',
+            '..############..',
+            '...##########...',
+            '....########....',
+            '................',
+            '....########....',
+            '.....######.....',
+            '.......##.......',
+        ]),
+        // /contact: the week view with one slot still free
+        cal: bits([
+            '..##........##..',
+            '################',
+            '################',
+            '#..............#',
+            '#..##..##..##..#',
+            '#..##..##..##..#',
+            '#..............#',
+            '#..##..##..##..#',
+            '#..##..##..##..#',
+            '#..............#',
+            '#..##..##......#',
+            '#..##..##......#',
+            '################',
+        ]),
+        // the 404
+        ask: bits([
+            '....########....',
+            '...##########...',
+            '..####....####..',
+            '..###......###..',
+            '...........###..',
+            '.........####...',
+            '.......####.....',
+            '......###.......',
+            '......###.......',
+            '................',
+            '......###.......',
+            '......###.......',
+            '................',
+        ]),
+        // the end screen and the form: an envelope
         mail: bits([
             '################',
             '################',
@@ -77,21 +210,6 @@
             '################',
             '################',
             '################',
-        ]),
-        hi: bits([
-            '################',
-            '################',
-            '###..##..#..####',
-            '###..##..#..####',
-            '###......#..####',
-            '###......#..####',
-            '###..##..#..####',
-            '###..##..#..####',
-            '################',
-            '################',
-            '..######........',
-            '..####..........',
-            '..##............',
         ]),
     };
     const mark = nav.querySelector('.ap-nav__mark'), markSvg = mark && mark.querySelector('svg');
@@ -152,16 +270,42 @@
     }
 
     // ------------------------------------------------------------ what the bar says and shows, per section
-    let section = here === 'contact' ? 'contact' : 'hero', hold = null;
-    const GLYPH_OF = { together: 'mail', end: 'mail', contact: 'hi' };
+    let section = here === 'home' ? 'hero' : here, hold = null;
+    const GLYPH_OF = { hero: 'face', screen: 'screen', projects: 'code', stack: 'layers', watch: 'eye', together: 'bulb', end: 'mail', contact: 'cal', lost: 'ask' };
     function apply() {
         line(LINES[section] || LINES.hero);
         if (morphTo) morphTo(hold || GLYPH_OF[section] || 'ap');
     }
     window.addEventListener('ap:glyph', (e) => { hold = e.detail || null; apply(); });
+    if (mark) {
+        mark.addEventListener('pointerenter', () => { if (morphTo) morphTo('ap'); });
+        mark.addEventListener('pointerleave', apply);
+    }
     for (const a of nav.querySelectorAll('a[href="/contact"]')) {
         a.addEventListener('pointerenter', () => { if (here !== 'contact' && morphTo) morphTo('mail'); });
         a.addEventListener('pointerleave', apply);
+    }
+
+    // ------------------------------------------------------------ the form button: on /contact it opens the brief
+    // in place; elsewhere the transition carries data-intent="form" over and the contact page opens it on arrival
+    for (const a of nav.querySelectorAll('[data-intent="form"]')) {
+        a.addEventListener('click', (e) => {
+            if (here !== 'contact' || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            set(false);
+            window.dispatchEvent(new CustomEvent('ap:form'));
+        });
+    }
+
+    // ------------------------------------------------------------ hidden: slide 4 sets body.is-nav-hidden itself;
+    // the end screen borrows the same class while it lasts, without clearing one somebody else set
+    const body = document.body;
+    let endHid = false;
+    function syncHidden() {
+        const end = document.documentElement.classList.contains('is-wt-end');
+        if (end && !body.classList.contains('is-nav-hidden')) { body.classList.add('is-nav-hidden'); endHid = true; }
+        else if (!end && endHid) { endHid = false; body.classList.remove('is-nav-hidden'); }
+        if (body.classList.contains('is-nav-hidden')) set(false);
     }
 
     // ------------------------------------------------------------ clean URLs: in-page targets scroll through Lenis
@@ -210,16 +354,20 @@
             scrollToKey(key, false);
         }, true);
 
-        // the section under the middle of the screen; the last screen is the together slide's end state
+        // the section under the middle of the screen; slide 2 is the hero track once its card has shrunk into the
+        // screen, slide 4 is wherever the nav has been told to hide, the last screen is the together slide's end state
         const secs = [['hero', '#heroTrack'], ['projects', '#section-projects'], ['stack', '.ll-section--services'], ['together', '#work-together']]
             .map(([k, s]) => [k, document.querySelector(s)]).filter((x) => x[1]);
+        const card = document.querySelector('.hero-shrink-card');
         const live = new Set(), root = document.documentElement;
         const pick = () => {
+            syncHidden();
             if (root.classList.contains('is-wt-end')) section = 'end';
+            else if (body.classList.contains('is-nav-hidden')) section = 'watch';
             else {
                 let k = 'hero';
                 for (const [key, el] of secs) if (live.has(el)) k = key;
-                section = k;
+                section = k === 'hero' && card && card.classList.contains('is-shrunk') ? 'screen' : k;
             }
             apply();
         };
@@ -228,10 +376,14 @@
             pick();
         }, { rootMargin: '-48% 0px -48% 0px' });
         for (const [, el] of secs) io.observe(el);
-        new MutationObserver(pick).observe(root, { attributes: true, attributeFilter: ['class'] });
+        const mo = new MutationObserver(pick), cls = { attributes: true, attributeFilter: ['class'] };
+        mo.observe(root, cls);
+        mo.observe(body, cls);
+        if (card) mo.observe(card, cls);
     } else {
         clean();
         apply();
+        new MutationObserver(syncHidden).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
 
     menu.inert = true;
@@ -248,17 +400,4 @@
         if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
         else if (e.shiftKey && i === 0) { e.preventDefault(); f[f.length - 1].focus(); }
     });
-
-    for (const b of nav.querySelectorAll('[data-copy]')) {
-        const label = b.textContent;
-        let timer = 0;
-        b.addEventListener('click', async () => {
-            let ok = false;
-            try { await navigator.clipboard.writeText(b.dataset.copy); ok = true; } catch (e) { /* no clipboard: fall through to mail */ }
-            if (!ok) { location.href = 'mailto:' + b.dataset.copy; return; }
-            b.textContent = 'Copied';
-            clearTimeout(timer);
-            timer = setTimeout(() => { b.textContent = label; }, 1600);
-        });
-    }
 })();

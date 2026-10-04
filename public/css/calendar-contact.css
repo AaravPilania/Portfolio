@@ -1067,52 +1067,6 @@ body.gc {
     transform: scale(1.12);
 }
 
-.gc-mail {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: calc(8 * var(--u));
-    width: 100%;
-    height: calc(36 * var(--u));
-    margin-top: calc(4 * var(--u));
-    padding: 0 calc(10 * var(--u));
-    border: 1px solid rgb(249 244 235 / 0.2);
-    border-radius: calc(4 * var(--u));
-    background: none;
-    color: var(--off);
-    cursor: pointer;
-    text-transform: none;
-    transition: background-color 0.3s var(--p4), color 0.3s var(--p4);
-}
-
-.gc-mail > span:first-child {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.gc-mail {
-    text-transform: uppercase;
-}
-
-.gc-mail__a {
-    flex: none;
-    width: calc(7 * var(--u));
-    height: calc(8 * var(--u));
-    transition: transform 0.45s var(--expo);
-}
-
-.gc-mail:hover,
-.gc-mail:focus-visible {
-    background: var(--off);
-    color: #000;
-}
-
-.gc-mail:hover .gc-mail__a {
-    transform: translate3d(calc(2 * var(--u)), calc(-2 * var(--u)), 0);
-}
-
-
 /* ---------- the sound switch in their language-switch slot: SOUND OFF (o) ON ---------- */
 .gc-sound-slot .ss-toggle {
     gap: calc(4 * var(--u));

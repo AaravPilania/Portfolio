@@ -61,6 +61,26 @@ body:has(.ll-header .js-menu.is-revealed) .ap-nav--site .ap-nav__pill {
     transition: clip-path 0.55s var(--nav-ease), opacity 0.6s var(--nav-ease), visibility 0s;
 }
 
+/* slide 4 and the end screen: the pill lifts out of frame and stays out of the way; specific enough to beat both the
+   reveal rule above and the end screen's own copy in work-together.css */
+html body.is-nav-hidden .ap-nav .ap-nav__pill {
+    animation: none;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none;
+    transform: translate3d(-50%, calc(-100% - 24 * var(--u)), 0);
+    transition: clip-path 0.55s var(--nav-ease), opacity 0.45s ease, transform 0.7s var(--nav-ease), visibility 0s linear 0.7s;
+}
+
+html body:not(.is-nav-hidden) .ap-nav .ap-nav__pill {
+    transition: clip-path 0.55s var(--nav-ease), opacity 0.6s var(--nav-ease), transform 0.8s var(--nav-ease), visibility 0s;
+}
+
+html body.is-nav-hidden .ap-nav__scrim {
+    opacity: 0;
+    visibility: hidden;
+}
+
 .ap-nav__scrim {
     position: fixed;
     inset: 0;
@@ -377,6 +397,18 @@ body:has(.ll-header .js-menu.is-revealed) .ap-nav--site .ap-nav__pill {
 .ap-nav__btn--ghost:focus-visible {
     background: var(--nav-ink);
     color: #000;
+}
+
+.ap-nav__btn-a {
+    width: calc(7 * var(--u));
+    height: calc(8 * var(--u));
+    margin-left: calc(8 * var(--u));
+    transition: transform 0.45s var(--nav-ease);
+}
+
+.ap-nav__btn:hover .ap-nav__btn-a,
+.ap-nav__btn:focus-visible .ap-nav__btn-a {
+    transform: translate3d(calc(2 * var(--u)), calc(-2 * var(--u)), 0);
 }
 
 .ap-nav__btn--paper {

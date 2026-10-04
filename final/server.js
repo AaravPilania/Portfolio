@@ -202,6 +202,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const notFound = path.join(PUBLIC_DIR, '404.html');
+  if (!/\.(?!html?$)[a-z0-9]+$/i.test(reqUrl) && fs.existsSync(notFound)) {
+    const buf = Buffer.from(fs.readFileSync(notFound, 'utf8').replace('</body>', LIVE_RELOAD_SNIPPET + '</body>'), 'utf8');
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': buf.length });
+    res.end(buf);
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found: ' + reqUrl);
 });

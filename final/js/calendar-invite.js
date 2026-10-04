@@ -234,7 +234,8 @@ const CONTACT = {
         }
     }
     openBtn.addEventListener('click', () => brief(true));
-    $('gcFormOpen').addEventListener('click', () => brief(true));
+    window.addEventListener('ap:form', () => brief(true));
+    if (window.__ptIntent === 'form') setTimeout(() => brief(true), window.__ptIncoming ? 1250 : 0);
     $('gcBriefClose').addEventListener('click', () => brief(false));
     // a tap anywhere off the form closes it; the side column (camera, grid, links) stays usable underneath
     document.addEventListener('pointerdown', (e) => {
