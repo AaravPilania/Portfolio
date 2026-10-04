@@ -8,6 +8,42 @@
 
     const PROJECTS = [
     {
+        "label": "//26",
+        "client": "LAB",
+        "title": "Gargantua",
+        "key": "gargantua",
+        "images": [
+            {
+                "key": "gargantua-1",
+                "type": "texture",
+                "path": "/lab/gargantua/og.jpg",
+                "width": 1,
+                "position": { "desktop": [0, 0], "mobile": [0, 0] },
+                "url": "/lab/gargantua/og.jpg"
+            }
+        ],
+        "awards": [],
+        "link": "/lab/gargantua/"
+    },
+    {
+        "label": "//26",
+        "client": "LAB",
+        "title": "Marauder's Map",
+        "key": "marauders-map",
+        "images": [
+            {
+                "key": "marauders-map-1",
+                "type": "texture",
+                "path": "/lab/marauders-map/assets/og.jpg",
+                "width": 1,
+                "position": { "desktop": [0, 0], "mobile": [0, 0] },
+                "url": "/lab/marauders-map/assets/og.jpg"
+            }
+        ],
+        "awards": [],
+        "link": "/lab/marauders-map/"
+    },
+    {
         "label": "//25",
         "client": "LAB",
         "title": "ASTRODITHER",
@@ -1688,7 +1724,8 @@ void main() {
                     if (e.target.closest('a')) return;
                     const ctaLink = row.querySelector('.projects__entry-cta:not(.projects__entry-cta--github) a');
                     if (ctaLink && ctaLink.href) {
-                        window.open(ctaLink.href, '_blank');
+                        if (!ctaLink.target) ctaLink.click();
+                        else window.open(ctaLink.href, '_blank');
                     }
                 });
             });
