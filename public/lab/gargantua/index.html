@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en-US" class="g-boot">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script>if (!/\/$|\.html$/.test(location.pathname)) location.replace(location.pathname + '/' + location.search + location.hash);</script>
+    <title>Gargantua: a lab piece by Aarav Pilania</title>
+    <meta name="description" content="A scroll-driven WebGL study of Gargantua: Schwarzschild ray bending, a Doppler-beamed accretion disk, the Endurance built in code, and a fall through the horizon into the tesseract. A lab piece by Aarav Pilania.">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Gargantua / Lab: Aarav Pilania">
+    <meta property="og:description" content="Ray-bent light, a 12-module ring station built in code, and a fall through the horizon into the tesseract.">
+    <meta property="og:image" content="og.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Gargantua / Lab: Aarav Pilania">
+    <meta name="twitter:image" content="og.jpg">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+    <link rel="preload" href="/fonts/SuisseBPIntl-Light.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/Sometype-Mono.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/css/site-nav.css">
+    <link rel="stylesheet" href="css/gargantua.css">
+    <script src="/js/page-transition.js"></script>
+    <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+
+<body data-page="lab">
+    <header class="ap-nav">
+        <div class="ap-nav__scrim"></div>
+        <nav class="ap-nav__pill" aria-label="Main">
+            <div class="ap-nav__bar">
+                <button class="ap-nav__hit" type="button" tabindex="-1" aria-hidden="true"></button>
+                <a class="ap-nav__mark" href="/" aria-label="Aarav Pilania, home">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 803 644" aria-hidden="true">
+                        <path fill="currentColor" fill-rule="evenodd" d="M 0 644 L 98 644 L 99 359 L 352 359 L 353 644 L 468 644 L 469 440 L 706 440 L 706 341 L 803 339 L 803 95 L 711 94 L 711 0 L 411 0 L 410 95 L 352 94 L 352 0 L 100 0 L 99 95 L 0 95 Z M 468 95 L 662 94 L 663 141 L 712 143 L 712 292 L 663 293 L 662 341 L 469 341 Z M 99 95 L 352 94 L 353 253 L 100 254 Z" />
+                    </svg>
+                </a>
+                <span class="ap-nav__msg" aria-hidden="true">Lab / Gargantua</span>
+                <button class="ap-nav__burger" type="button" aria-expanded="false" aria-controls="apNavMenu" aria-label="Open menu"><i></i><i></i><i></i></button>
+            </div>
+            <div class="ap-nav__menu" id="apNavMenu">
+                <ul class="ap-nav__list">
+                    <li><a class="ap-nav__item" href="/" data-scroll="projects" style="--i:0">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="2" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="2" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Back to portfolio</span></a></li>
+                    <li><a class="ap-nav__item" href="/" data-scroll="projects" style="--i:1">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Work</span></a></li>
+                    <li><a class="ap-nav__item" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer" style="--i:2">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">GitHub</span>
+                        <svg class="ap-nav__ext" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="2" y="0" width="8" height="2" /><rect x="8" y="2" width="2" height="4" /><rect x="5" y="3" width="2" height="2" /><rect x="3" y="5" width="2" height="2" /><rect x="0" y="8" width="2" height="2" /><rect x="1" y="7" width="2" height="2" /></g></svg>
+                    </a></li>
+                    <li><a class="ap-nav__item" href="/contact" data-nav="contact" data-no-swup style="--i:3">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Contact</span></a></li>
+                </ul>
+                <div class="ap-nav__actions" style="--i:4">
+                    <a class="ap-nav__btn ap-nav__btn--ghost" href="/contact" data-intent="form" data-no-swup style="--i:4">Fill up the form<svg class="ap-nav__btn-a" viewBox="0 0 7 8" aria-hidden="true"><path fill="currentColor" d="M7.002.499v7h-1V2.206L.707 7.501 0 6.794l5.295-5.295H.002v-1h7Z" /></svg></a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <canvas class="g-gl" id="gl" aria-hidden="true"></canvas>
+
+    <!-- the overture: sound is chosen here, and this click is the gesture that lets the organ speak -->
+    <div class="g-gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <div class="g-gate__inner">
+            <p class="g-meta"><span>[ Lab 07 ]</span><span>[ WebGL / GLSL / Web Audio ]</span></p>
+            <h1 class="g-gate__title" id="gateTitle">Gargantua</h1>
+            <p class="g-gate__line">A study of light that cannot leave. Scroll to fall.</p>
+            <fieldset class="g-sound" id="soundSet">
+                <legend class="g-sound__legend">Sound</legend>
+                <label class="g-sound__opt"><input type="radio" name="snd" value="organ" checked><span>Pipe organ, composed live</span></label>
+                <label class="g-sound__opt" id="scoreOpt" hidden><input type="radio" name="snd" value="score"><span>Original score</span></label>
+                <label class="g-sound__opt"><input type="radio" name="snd" value="off"><span>Silence</span></label>
+            </fieldset>
+            <button class="g-gate__go" id="gateGo" type="button"><span>Begin</span><svg viewBox="0 0 7 8" aria-hidden="true"><path fill="currentColor" d="M7.002.499v7h-1V2.206L.707 7.501 0 6.794l5.295-5.295H.002v-1h7Z" /></svg></button>
+            <p class="g-gate__hint">Headphones. Dark room. Best on a laptop or larger.</p>
+        </div>
+    </div>
+
+    <!-- captions ride the scroll; the canvas below them does the work -->
+    <div class="g-hud" aria-live="polite">
+        <div class="g-title" data-cap="title">
+            <p class="g-title__kicker">A lab piece by Aarav Pilania</p>
+            <h2 class="g-title__word">Gargantua</h2>
+            <p class="g-title__sub">100 million solar masses. Spin 0.999. Ten billion light years from home.</p>
+        </div>
+        <div class="g-cap" data-cap="endurance"><span class="g-cap__n">01</span><p><b>Endurance.</b> Twelve modules, one hub, a Ranger on the spine. Built here from boxes and maths, lit only by the disk.</p></div>
+        <div class="g-cap" data-cap="approach"><span class="g-cap__n">02</span><p><b>Approach.</b> Every pixel is a photon traced backwards through curved spacetime. The disk's far side is bent over the shadow and under it.</p></div>
+        <div class="g-cap" data-cap="doppler"><span class="g-cap__n">03</span><p><b>Beaming.</b> The side of the disk turning toward us burns brighter. Close to the horizon, light climbs out redder and dimmer.</p></div>
+        <div class="g-cap" data-cap="horizon"><span class="g-cap__n">04</span><p><b>Horizon.</b> No signal from here on.</p></div>
+        <div class="g-cap" data-cap="cooper"><span class="g-cap__n">05</span><p><b>Cooper.</b> Move the cursor. He drifts with it.</p></div>
+        <div class="g-cap" data-cap="tesseract"><span class="g-cap__n">06</span><p><b>Tesseract.</b> Time laid out as a place. Every thread is a moment of one room.</p></div>
+        <div class="g-murph" data-cap="watch">
+            <p class="g-murph__morse" id="morse" aria-hidden="true"></p>
+            <p class="g-murph__word" id="stay" aria-label="Stay"></p>
+            <p class="g-murph__foot">The second hand, in Morse.</p>
+        </div>
+        <div class="g-tc" aria-hidden="true"><span id="tcLabel">T+00:00:00</span><span id="tcRs">r = 41.0 r<sub>s</sub></span></div>
+        <button class="g-mute" id="mute" type="button" aria-pressed="false" aria-label="Mute sound"><i></i><i></i><i></i><i></i><span>Sound</span></button>
+    </div>
+
+    <div class="g-scroll" id="scroll" aria-hidden="true"></div>
+
+    <noscript><p class="g-noscript">This piece is drawn live in WebGL and needs JavaScript.</p></noscript>
+
+    <div class="site-cursor-dot" aria-hidden="true"></div>
+
+    <script type="module" src="js/main.js"></script>
+    <script src="/js/site-nav.js"></script>
+</body>
+
+</html>
