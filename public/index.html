@@ -650,79 +650,27 @@
         /* Slide 04's backdrop dither reads the raw video luminance, so its dark scenes crush to empty cells and the
            contrast swings with whatever frame is up. The theme bundle is vendored, so its grid shader is remapped as it
            compiles: a low floor keeps the blacks soft (~3 of 16 dots) and an S-curve restores mid-tone contrast so the
-           face reads. The same shader also takes a screen-space mask of cells whose dots have flown off to slide 05
-           (window.__svcHoles, written by work-together.js): those cells stop dithering and show the image itself. */
+           face reads. */
         (function () {
             const MARK = 'float imageRGB = (tex.r + tex.g + tex.b) / 3.0;';
             const LIFT = MARK + '\n    imageRGB = u_render_content * u_reveal_progress > 0.5 ? 0.2 + 0.8 * smoothstep(0.03, 0.82, pow(clamp(imageRGB, 0.0, 1.0), 0.85)) : imageRGB;';
-            const NOGRID = 'nogrid_opacity = drawLLLogo(uv_resolution, nogrid_opacity, 1.0);';
-            const PUNCH = NOGRID + `
-    vec2 apP = vec2(gl_FragCoord.x - u_apGrid.x, u_apGrid.z - (gl_FragCoord.y - u_apGrid.y)) / u_apGrid.w;
-    float apH = u_apOn * u_render_content * texture(u_apHoles, (floor(apP + 0.5) + 0.5) / u_apSize).r;
-    nogrid_opacity = max(nogrid_opacity, apH);
-    nogrid_content = mix(nogrid_content, texture(u_content, st).rgb, apH);`;
-            const DECL = 'uniform sampler2D u_apHoles;\nuniform float u_apOn;\nuniform vec4 u_apGrid;\nuniform vec2 u_apSize;\nvoid main()';
-            const UNIT = 15, CELL = 8;
-            const holes = window.__svcHoles = { on: 0, w: 0, h: 0, data: null, dirty: false, cell: CELL };
-            const progs = new WeakMap(), cur = new WeakMap(), texs = new WeakMap();
-            const info = (gl, p) => {
-                if (!p) return null;
-                let i = progs.get(p);
-                if (i === undefined) {
-                    const loc = gl.getUniformLocation(p, 'u_apHoles');
-                    i = loc ? { loc, on: gl.getUniformLocation(p, 'u_apOn'), grid: gl.getUniformLocation(p, 'u_apGrid'), size: gl.getUniformLocation(p, 'u_apSize') } : null;
-                    progs.set(p, i);
-                }
-                return i;
-            };
-            const bind = (gl) => {
-                const i = info(gl, cur.get(gl));
-                if (!i) return;
-                if (!holes.on || !holes.data) { gl.uniform1f(i.on, 0); return; }
-                let t = texs.get(gl);
-                const prev = gl.getParameter(gl.ACTIVE_TEXTURE);
-                gl.activeTexture(gl.TEXTURE0 + UNIT);
-                if (!t) {
-                    t = { tex: gl.createTexture(), gen: -1 };
-                    texs.set(gl, t);
-                    gl.bindTexture(gl.TEXTURE_2D, t.tex);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                } else gl.bindTexture(gl.TEXTURE_2D, t.tex);
-                if (holes.dirty || t.gen !== holes.gen) {
-                    const flip = gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
-                    const pre = gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
-                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-                    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, holes.w, holes.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, holes.data);
-                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip);
-                    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, pre);
-                    holes.dirty = false;
-                    t.gen = holes.gen;
-                }
-                gl.activeTexture(prev);
-                const vp = gl.getParameter(gl.VIEWPORT);
-                gl.uniform1i(i.loc, UNIT);
-                gl.uniform1f(i.on, 1);
-                gl.uniform4f(i.grid, vp[0], vp[1], vp[3], CELL * vp[2] / Math.max(1, window.innerWidth));
-                gl.uniform2f(i.size, holes.w, holes.h);
-            };
             [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach((C) => {
                 if (!C) return;
-                const P = C.prototype, src = P.shaderSource, use = P.useProgram, da = P.drawArrays, de = P.drawElements;
-                P.shaderSource = function (s, code) {
-                    if (typeof code === 'string' && code.indexOf(MARK) > -1) {
-                        code = code.replace(MARK, LIFT);
-                        if (code.indexOf(NOGRID) > -1) code = code.replace(NOGRID, PUNCH).replace('void main()', DECL);
-                    }
+                const src = C.prototype.shaderSource;
+                C.prototype.shaderSource = function (s, code) {
+                    if (typeof code === 'string' && code.indexOf(MARK) > -1) code = code.replace(MARK, LIFT);
                     return src.call(this, s, code);
                 };
-                P.useProgram = function (p) { cur.set(this, p); return use.call(this, p); };
-                P.drawArrays = function (a, b, c) { bind(this); return da.call(this, a, b, c); };
-                P.drawElements = function (a, b, c, d) { bind(this); return de.call(this, a, b, c, d); };
             });
+            /* The theme's backdrops open on a 2x zoom that settles over ~3s after the intro. Slide 04's backdrop is
+               far down the page, so that zoom only ever showed when the page opened on it (reload mid-page, "Stack"
+               from the nav, arrivals from /contact) and then sat at 2x until the tween caught up. They start settled. */
+            const list = window.__allBackdrops || (window.__allBackdrops = []);
+            const push = list.push;
+            list.push = function (...items) {
+                items.forEach((b) => { if (b && typeof b === 'object') { b.scale = 1; b.nogrid_progress = 1; } });
+                return push.apply(this, items);
+            };
         })();
     </script>
     <script src="/js/hero-avatar-engine.js"></script>
@@ -909,7 +857,7 @@
         }
 
         .marquee-track.track-line-1 span {
-            color: var(--m1, #000) !important;
+            color: #FFED29 !important;
         }
 
         .marquee-track.track-line-2 span {
@@ -926,7 +874,7 @@
 
         .hero-marquee-outline-clip .marquee-track.track-line-1 span {
             color: transparent !important;
-            -webkit-text-stroke: 1.4px var(--m1, #FFED29);
+            -webkit-text-stroke: 1.4px #FFED29;
         }
 
         .hero-marquee-outline-clip .marquee-track.track-line-2 span {
@@ -1788,11 +1736,9 @@
     <script src="intros/plotter-bleed.js"></script>
     <script>
         (function () {
-            // The full loader plays once per session; later visits, and arrivals through the page transition, open on
-            // the finished hero exactly as the loader would leave it
-            let seen = !!window.__ptIncoming;
-            try { seen = seen || !!sessionStorage.getItem('ap-intro-seen'); sessionStorage.setItem('ap-intro-seen', '1'); } catch (e) { /* no storage: play it */ }
-            if (!seen) { APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED)); return; }
+            // The loader plays on every fresh load and refresh; arrivals through the page transition have their own
+            // reveal and open on the finished hero exactly as the loader would leave it
+            if (!window.__ptIncoming && typeof window.APIntro === 'function') { APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED)); return; }
             if (typeof window.__setIntroManual === 'function') window.__setIntroManual();
             const pre = document.getElementById('preloader'), ov = document.getElementById('transition-overlay');
             if (pre) pre.style.display = 'none';
@@ -3463,7 +3409,7 @@
      ======================================================= -->
 <section class="ll-section ll-section--together wt" id="work-together" aria-labelledby="wtTitle">
     <div class="wt-stage">
-        <canvas class="wt-dots" aria-hidden="true"></canvas><canvas class="wt-canvas" aria-hidden="true"></canvas>
+        <canvas class="wt-canvas" aria-hidden="true"></canvas><canvas class="wt-glasses" aria-hidden="true"></canvas>
         <div class="wt-marks" aria-hidden="true"><i class="wt-mark" style="left:8%;top:18%"></i><i class="wt-mark" style="left:30%;top:18%"></i><i class="wt-mark" style="left:70%;top:18%"></i><i class="wt-mark" style="left:92%;top:18%"></i><i class="wt-mark" style="left:8%;top:82%"></i><i class="wt-mark" style="left:30%;top:82%"></i><i class="wt-mark" style="left:70%;top:82%"></i><i class="wt-mark" style="left:92%;top:82%"></i></div>
         <div class="wt-copy">
             <p class="wt-kicker">[ Your idea, my stack ]</p>
@@ -3471,9 +3417,6 @@
             <a class="wt-cta" href="/contact" data-no-swup>Say hello<span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
         </div>
         <a class="wt-contact" href="/contact" data-no-swup tabindex="-1"><span class="wt-contact__t">Get in contact</span><span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
-        <div class="wt-signature-wrap" id="wtSigWrap" aria-hidden="true">
-            <canvas class="wt-signature-gl" id="wtSigCanvas"></canvas>
-        </div>
         <ul class="wt-sr" aria-label="The stack"><li>Python</li><li>Java</li><li>JavaScript</li><li>TypeScript</li><li>C</li><li>C++</li><li>SQL</li><li>React 19</li><li>Vite</li><li>Tailwind CSS v4</li><li>Framer Motion</li><li>GSAP</li><li>Three.js</li><li>React Three Fiber</li><li>PWA</li><li>FastAPI</li><li>Node.js</li><li>REST APIs</li><li>asyncio</li><li>PostgreSQL</li><li>SQLite</li><li>ChromaDB</li><li>PyTorch</li><li>scikit-learn</li><li>SHAP</li><li>Sentence Transformers</li><li>RAG</li><li>LLM Orchestration</li><li>Multi-Agent Pipelines</li><li>Git</li><li>GitHub</li><li>Docker</li><li>Whisper STT</li><li>Ollama</li><li>Chrome DevTools Protocol</li><li>Tesseract OCR</li></ul>
     </div>
 </section>
@@ -3694,8 +3637,6 @@
             const line2Tracks = [marqueeBg, marqueeOutline].filter(Boolean)
                 .map((root) => root.querySelector('.track-line-2')).filter(Boolean);
             line2Tracks.forEach((t) => { t.style.transition = 'none'; });
-            const marqueeRoots = [marqueeBg, marqueeOutline, marqueeInCard].filter(Boolean);
-            let line1Colour = '';
             let line2State = '';
             // Unscaled layout of both lines inside the marquee frame, read from real rects (transforms divided out)
             const lineGeo = { c1: 0, h1: 0, c2: 0, h2: 0, gap: 0 };
@@ -3907,12 +3848,6 @@
                     line1Tracks.forEach((t) => { t.style.scale = s1; t.style.translate = '0 ' + ty + 'px'; });
                 }
 
-                const col = 'rgb(' + Math.round(255 * growK) + ',' + Math.round(237 * growK) + ',' + Math.round(41 * growK) + ')';
-                if (col !== line1Colour) {
-                    line1Colour = col;
-                    marqueeRoots.forEach((r) => r.style.setProperty('--m1', col));
-                }
-
                 // Line 2 only fades in once the real gap below line 1's scaled, shifted box clears a minimum
                 if (line2Tracks.length && lineGeo.h1) {
                     const bottom1 = lineGeo.c1 + (+ty) + (+s1) * lineGeo.h1 / 2;
@@ -3946,7 +3881,7 @@
             if (scrollerEl) {
                 scrollerEl.addEventListener('scroll', () => updateSlideMotion(false), { passive: true });
             }
-            window.addEventListener('scroll', () => updateSlideMotion(false), { passive: true });
+            window.addEventListener('ap:scroll', () => updateSlideMotion(false));
             window.addEventListener('resize', () => {
                 updateViewportCache();
                 measureLine1EarShift();
@@ -4250,9 +4185,7 @@
             }
 
             // =======================================================
-            // 6. UNIFIED CONTRAST-ADAPTIVE CURSOR & CONTEXTUAL BADGE
-            // - White on dark backgrounds, Black on light backgrounds
-            // - Consistent throughout entire site (Hero, Signature, Projects, What We Do)
+            // 6. CURSOR DOT & CONTEXTUAL BADGE (the dot stays white everywhere)
             // =======================================================
             let cursorDot = document.getElementById('siteCursorDot') || document.querySelector('.site-cursor-dot');
             if (!cursorDot) {
@@ -4270,52 +4203,6 @@
             let labelX = mouseX;
             let labelY = mouseY;
             let isMouseMoving = false;
-            let currentTone = 'dark';
-
-            // Fast background tone detector: Black cursor on Light bg (Hero Slide 1), White cursor on Dark bg (Slide 2, 3, 4)
-            function detectTone(x, y) {
-                const scroller = document.querySelector('.js-scroller');
-                const st = scroller ? scroller.scrollTop : (window.scrollY || 0);
-                // Slide 1 (Hero light grid & natural skin avatar) is strictly light tone
-                if (st < 360) return 'light';
-
-                const el = document.elementFromPoint(x, y);
-                if (!el) return 'dark';
-                let curr = el;
-                while (curr && curr !== document.documentElement && curr !== document.body) {
-                    if (curr.getAttribute('data-theme') === 'light' || curr.classList.contains('ll-theme-light') || curr.classList.contains('is-theme-light')) return 'light';
-                    if (curr.getAttribute('data-theme') === 'dark' || curr.classList.contains('ll-theme-dark') || curr.classList.contains('is-theme-dark')) return 'dark';
-                    const bg = window.getComputedStyle(curr).backgroundColor;
-                    if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
-                        const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-                        if (m && (!m[4] || parseFloat(m[4]) > 0.35)) {
-                            const r = parseInt(m[1]), g = parseInt(m[2]), b = parseInt(m[3]);
-                            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-                            return lum > 0.55 ? 'light' : 'dark';
-                        }
-                    }
-                    curr = curr.parentElement;
-                }
-                return 'dark';
-            }
-
-            function applyTone(tone) {
-                currentTone = tone;
-                if (tone === 'light') {
-                    cursorDot?.classList.remove('is-dark');
-                    cursorDot?.classList.add('is-light');
-                    cursorLabel?.classList.remove('is-dark');
-                    cursorLabel?.classList.add('is-light');
-                } else {
-                    cursorDot?.classList.remove('is-light');
-                    cursorDot?.classList.add('is-dark');
-                    cursorLabel?.classList.remove('is-light');
-                    cursorLabel?.classList.add('is-dark');
-                }
-            }
-
-            // Set initial tone right away
-            applyTone(detectTone(mouseX, mouseY));
 
             window.addEventListener('mousemove', (e) => {
                 mouseX = e.clientX;
@@ -4325,22 +4212,11 @@
                     labelX = mouseX;
                     labelY = mouseY;
                 }
-
                 if (cursorDot) {
-                    cursorDot.style.left = mouseX + 'px';
-                    cursorDot.style.top = mouseY + 'px';
-                    if (cursorDot.classList.contains('is-hidden')) {
-                        cursorDot.classList.remove('is-hidden');
-                    }
-                }
-
-                // Detect tone and apply classes
-                const tone = detectTone(mouseX, mouseY);
-                if (tone !== currentTone) {
-                    applyTone(tone);
+                    cursorDot.style.transform = 'translate3d(' + mouseX + 'px, ' + mouseY + 'px, 0) translate(-50%, -50%)';
+                    if (cursorDot.classList.contains('is-hidden')) cursorDot.classList.remove('is-hidden');
                 }
             }, { passive: true });
-
             document.addEventListener('mouseleave', () => {
                 if (cursorLabel) cursorLabel.style.opacity = '0';
                 if (cursorDot) cursorDot.classList.add('is-hidden');
@@ -4399,6 +4275,40 @@
     </script>
 
 <script type="module" src="/wp-content/themes/lamalama2025/dist/assets/main-cs47UqvV.js" id="main-js-module"></script>
+    <script>
+        /* One clock for the scroll. The theme's Lenis is driven from the page's gsap ticker, ahead of every other
+           callback, so ScrollTrigger and each hand-rolled loop that reads scrollTop or a rect sees this frame's scroll,
+           never the last one. Wheel input eases by lerp (frame-rate independent damping) instead of restarting a
+           fixed-duration tween on every wheel event; explicit scrollTo calls keep their duration and easing. */
+        (function () {
+            if (typeof gsap === 'undefined') return;
+            let app = null, cur = null, raf = null;
+            import('/wp-content/themes/lamalama2025/dist/assets/app-DjHRamTc.js').then((m) => { app = m.n; }).catch(() => {});
+            const adopt = (lenis) => {
+                lenis.options.lerp = 0.1;
+                lenis.options.duration = undefined;
+                lenis.options.smoothWheel = true;
+                lenis.options.syncTouch = false;
+                raf = lenis.raf.bind(lenis);
+                lenis.raf = () => {};
+                lenis.on('scroll', () => {
+                    if (window.ScrollTrigger) ScrollTrigger.update();
+                    window.dispatchEvent(new Event('ap:scroll'));
+                });
+                window.__lenis = lenis;
+            };
+            gsap.ticker.lagSmoothing(0);
+            gsap.ticker.add(() => {
+                const s = app && app.instances && app.instances.get('scroller');
+                const lenis = (s && s.lenis) || null;
+                if (lenis !== cur) { cur = lenis; raf = null; if (lenis) adopt(lenis); }
+                if (raf) raf(performance.now());
+            }, false, true);
+            const refresh = () => { if (window.ScrollTrigger) ScrollTrigger.refresh(); };
+            window.addEventListener('load', () => requestAnimationFrame(refresh), { once: true });
+            window.addEventListener('intro-complete', () => setTimeout(refresh, 60), { once: true });
+        })();
+    </script>
     <script type="text/javascript">
         (function (C, A, L) { let p = function (a, ar) { a.q.push(ar); }; let d = C.document; C.Cal = C.Cal || function () { let cal = C.Cal; let ar = arguments; if (!cal.loaded) { cal.ns = {}; cal.q = cal.q || []; d.head.appendChild(d.createElement("script")).src = A; cal.loaded = true; } if (ar[0] === L) { const api = function () { p(api, arguments); }; const namespace = ar[1]; api.q = api.q || []; if (typeof namespace === "string") { cal.ns[namespace] = cal.ns[namespace] || api; p(cal.ns[namespace], ar); p(cal, ["initNamespace", namespace]); } else p(cal, ar); return; } p(cal, ar); }; })(window, "https://app.cal.com/embed/embed.js", "init");
 
@@ -4415,7 +4325,7 @@
     <script src="/js/skills-wheel.js"></script>
     <script src="/js/signature-data.js"></script>
     <script src="/js/work-together.js"></script>
-    <script src="/js/footer-signature.js"></script>
+    <script src="/js/glasses-centrepiece.js"></script>
     <script src="/js/site-nav.js"></script>
     
 

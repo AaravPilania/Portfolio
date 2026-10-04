@@ -149,7 +149,7 @@
   window.addEventListener('resize', function () { fitArt(); if (!isRunning) renderFrame(performance.now()); }, { passive: true });
 
   // Everything below the shoulder line and the collar curve is the tee's hatching; it is refilled in the shirt tone
-  var SHIRT_COLOR = '#b23a30';
+  var SHIRT_COLOR = '#0d0d0f';
   var shirtClip = new Path2D("M 380 900 L 380 648 L 736 648 L 736 688 C 760 712, 800 728, 840 731 C 885 731, 930 718, 968 686 L 968 648 L 1300 648 L 1300 900 Z");
 
   // Viewport y of the character's ear line, for the slide-1 marquee

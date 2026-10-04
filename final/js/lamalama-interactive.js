@@ -375,24 +375,6 @@
   }
 
   /* ===================================================
-     9. BOUTIQUE WHITE CURSOR SYSTEM
-     =================================================== */
-  function initCursor() {
-    let cursorDot = document.getElementById('siteCursorDot') || document.querySelector('.site-cursor-dot');
-    if (!cursorDot) {
-      cursorDot = document.createElement('div');
-      cursorDot.className = 'site-cursor-dot';
-      cursorDot.id = 'siteCursorDot';
-      document.body.appendChild(cursorDot);
-    }
-
-    window.addEventListener('mousemove', (e) => {
-      cursorDot.style.left = e.clientX + 'px';
-      cursorDot.style.top = e.clientY + 'px';
-    });
-  }
-
-  /* ===================================================
      10. ROUTE CHANGE & RESTORATION SYSTEM
      =================================================== */
   function onRouteChanged() {
@@ -474,7 +456,6 @@
     initClock();
     initVideoModal();
     initPitchdeck();
-    initCursor();
     initRouteListeners();
   }
 

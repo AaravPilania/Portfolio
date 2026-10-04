@@ -43,8 +43,8 @@ section.ll-section--together.wt {
     pointer-events: none;
 }
 
-/* The headline's particles: above the stickers, under the real type they hand over to */
-.wt-dots {
+/* The reunited glasses (glasses-centrepiece.js): above the stickers, under the headline; viewport-fixed like them */
+.wt-glasses {
     position: fixed;
     left: 0;
     top: 0;
@@ -53,7 +53,10 @@ section.ll-section--together.wt {
     display: block;
     z-index: 1;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s var(--wt-ease);
 }
+.wt-glasses.is-on { opacity: 1; }
 
 html.is-sticker-drag,
 html.is-sticker-drag * {
@@ -257,34 +260,6 @@ html.is-wt-end .ap-nav__pill {
 }
 .wt.is-armed.is-in .wt-cta { transition-delay: 0.22s, 0.22s, 0s, 0s; pointer-events: auto; }
 .wt.is-armed.is-in .wt-li { transform: none; }
-/* With the particle headline the words don't rise: JS scrubs the title's opacity as the dots land */
-.wt.wt--dots .wt-li,
-.wt.is-armed.wt--dots .wt-li {
-    transform: none;
-    transition: none;
-}
-
-/* The signature, written on where the headline stood; the box keeps the trace's own proportions */
-.wt-signature-wrap {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate3d(-50%, -50%, 0);
-    width: clamp(320px, 50vw, 820px);
-    aspect-ratio: 1.6;
-    pointer-events: none;
-    z-index: 4;
-    opacity: 0;
-    will-change: transform, opacity;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.wt-signature-gl {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
 
 /* Footer links: no rule, no bar; they fade up over the floor the stickers land on */
 .wt-stage .sig-bar {
@@ -336,7 +311,6 @@ footer.sig-footer {
     .wt-title { font-size: clamp(44px, 12.8vw, 70px); line-height: 0.96; }
     .wt-title em { display: block; }
     .wt-kicker { font-size: 10px; }
-    .wt-signature-wrap { width: 88vw; }
     .wt-stage .sig-bar { display: grid; grid-template-columns: 1fr auto; font-size: 10px; }
     .wt-stage .sig-nav { grid-column: 1 / -1; order: -1; justify-content: space-between; }
 }

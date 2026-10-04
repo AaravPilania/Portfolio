@@ -1301,11 +1301,9 @@
     function tick(time, dt) {
         const s = Math.max(1, Math.min(dt, 50)) / 1000;
         const y = scroller.scrollTop;
-        run(zone.frame(y, A, B, dragging || now() < passUntil, now() < animUntil));
-        if (zone.pinned) {
-            const lenis = lenisOf();
-            if (lenis && !lenis.isStopped) lenis.stop();
-        }
+        // Free scroll: the wheel follows the page through its arm windows and never holds the scroll on a detent
+        zone.A = A;
+        zone.B = B;
         const want = zone.desired(y);
         if (want !== shown) show(want, want > shown ? 1 : -1);
         const held = zone.pinned || (y > A && y < B);
@@ -1315,6 +1313,7 @@
         if (hide !== navHidden) {
             navHidden = hide;
             document.body.classList.toggle('sk-nav-hidden', hide);
+            document.body.classList.toggle('is-nav-hidden', hide);
         }
 
         st.travel += (st.travelT - st.travel) * (1 - Math.exp(-s * 14));
