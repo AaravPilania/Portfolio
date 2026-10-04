@@ -51,13 +51,13 @@ export function createAstronaut() {
     body.add(M(new RoundedBoxGeometry(0.66, 0.46, 0.44, 5, 0.14), hard, [0, 0.2, -0.01]));
     body.add(M(new RoundedBoxGeometry(0.5, 0.22, 0.38, 4, 0.1), layer, [0, -0.4, 0]));
     // waist bearing, sitting on the body
-    body.add(M(new THREE.TorusGeometry(0.29, 0.03, 10, 40), ring, [0, -0.13, 0], [Math.PI / 2, 0, 0], [1.14, 0.9, 1]));
+    body.add(M(new THREE.TorusGeometry(0.29, 0.03, 10, 40), ring, [0, -0.13, 0], [Math.PI / 2, 0, 0], [1.05, 0.88, 1]));
     // chest display & control module, with its strap and hoses into the pack
     body.add(M(new RoundedBoxGeometry(0.32, 0.15, 0.09, 3, 0.03), hard, [0, 0.08, 0.27], [-0.2, 0, 0]));
     body.add(M(new THREE.BoxGeometry(0.22, 0.05, 0.005), dark, [0, 0.105, 0.322], [-0.2, 0, 0]));
     for (const [x, c] of [[-0.11, accent], [0.11, dark]]) body.add(M(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 16), c, [x, 0.06, 0.325], [Math.PI / 2 - 0.2, 0, 0]));
     for (const sx of [-1, 1]) {
-        const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(sx * 0.12, 0.05, 0.3), new THREE.Vector3(sx * 0.27, 0.1, 0.27), new THREE.Vector3(sx * 0.36, 0.2, 0.05), new THREE.Vector3(sx * 0.3, 0.26, -0.22)]);
+        const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(sx * 0.12, 0.1, 0.3), new THREE.Vector3(sx * 0.2, 0.3, 0.26), new THREE.Vector3(sx * 0.22, 0.45, 0.06), new THREE.Vector3(sx * 0.2, 0.42, -0.24)]);
         body.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.016, 8), dark));
     }
     // flag-less mission patch and an arm stripe: the only colour
@@ -113,14 +113,14 @@ export function createAstronaut() {
     for (const sx of [-1, 1]) {
         const hip = new THREE.Group();
         hip.position.set(sx * 0.15, -0.46, 0);
-        hip.rotation.set(sx < 0 ? -0.5 : 0.12, 0, sx * 0.1);
+        hip.rotation.set(sx < 0 ? -0.55 : 0.2, 0, sx * 0.2);
         body.add(hip);
         hip.add(M(new THREE.SphereGeometry(0.135, 28, 18), suit));
         hip.add(M(sleeve(0.38, 0.135, 0.11), suit, [0, -0.04, 0]));
         hip.add(M(new RoundedBoxGeometry(0.1, 0.16, 0.06, 3, 0.02), layer, [sx * 0.12, -0.24, 0.04], [0, sx * 0.5, 0]));
         const knee = new THREE.Group();
         knee.position.y = -0.52; hip.add(knee);
-        knee.rotation.x = sx < 0 ? 0.95 : 0.4;
+        knee.rotation.x = sx < 0 ? 1.05 : 0.6;
         bellows(knee, 0.112, 3, 0.04, layer, 0.05);
         knee.add(M(sleeve(0.34, 0.108, 0.092), suit, [0, -0.03, 0]));
         const ankle = new THREE.Group();
@@ -155,7 +155,7 @@ export function createAstronaut() {
             a.shoulder.rotation.z = a.sx * (0.62 + Math.sin(time * 0.5 + a.sx) * 0.06);
             a.elbow.rotation.x = -0.75 + Math.sin(time * 0.43 + a.sx * 2) * 0.08;
         }
-        for (const l of legs) l.knee.rotation.x = (l.sx < 0 ? 0.95 : 0.4) + Math.sin(time * 0.31 + l.sx) * 0.06;
+        for (const l of legs) l.knee.rotation.x = (l.sx < 0 ? 1.05 : 0.6) + Math.sin(time * 0.31 + l.sx) * 0.06;
     }
 
     return { root, update, visor };

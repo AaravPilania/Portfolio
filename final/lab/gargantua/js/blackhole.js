@@ -114,8 +114,10 @@ vec4 disk(vec3 hp, float rh, vec3 rayDir) {
 
     float edgeIn = smoothstep(-0.005, 0.025, x);
     float edgeOut = 1.0 - smoothstep(0.1, 1.0, x);
-    float dens = edgeIn * edgeOut * edgeOut * smoothstep(0.2, 0.66, n + 0.22 * (1.0 - x));
-    float alpha = clamp(dens * 2.4, 0.0, 0.97);
+    float clump = smoothstep(0.2, 0.66, n + 0.22 * (1.0 - x));
+    // opacity and glow fall off differently: the outer disk is dim dust that still hides what is behind it
+    float alpha = clamp(edgeIn * sqrt(edgeOut) * (0.35 + 0.65 * clump) * 3.2, 0.0, 0.995);
+    float glow = edgeIn * edgeOut * edgeOut * (0.25 + 0.75 * clump);
 
     // relativistic beaming: circular orbit speed seen by a static observer, Doppler factor, gravitational redshift
     vec3 tang = uSpin * normalize(vec3(hp.z, 0.0, -hp.x));
@@ -129,7 +131,7 @@ vec4 disk(vec3 hp, float rh, vec3 rayDir) {
     float t = temp * mix(1.0, g, 0.5);
     // beaming kept to roughly 2.5:1 across the disk: legible, never a blown-out half
     float I = pow(temp, 2.4) * pow(g, 2.1) * (0.4 + 1.15 * n);
-    vec3 col = diskColor(t * 1.2) * I * uDiskGain;
+    vec3 col = diskColor(t * 1.2) * I * uDiskGain * glow;
     return vec4(col, alpha);
 }
 
@@ -168,7 +170,7 @@ void main() {
             float rh = length(hp.xz);
             if (rh > uRin * 0.97 && rh < uRout) {
                 vec4 d = disk(hp, rh, normalize(vel));
-                col += (1.0 - alpha) * d.rgb * d.a;
+                col += (1.0 - alpha) * d.rgb;
                 alpha += (1.0 - alpha) * d.a;
                 if (alpha > 0.985) break;
             }

@@ -80,11 +80,13 @@ void main() {
     if (uStreak > 0.002) {
         // light dragged toward the vanishing point: radial smear, weighted to the outer samples
         vec3 acc = vec3(0.0); float wsum = 0.0;
-        for (int i = 0; i < 24; i++) {
-            float t = float(i) / 23.0;
-            float s = 1.0 - uStreak * 0.55 * t;
-            float w = 1.0 - t * 0.6;
-            acc += texture2D(tScene, 0.5 + dc * s).rgb * w;
+        for (int i = 0; i < 32; i++) {
+            float t = float(i) / 31.0;
+            float s = 1.0 - uStreak * 0.85 * t;
+            float w = 1.0 - t * 0.5;
+            vec3 c = texture2D(tScene, 0.5 + dc * s).rgb;
+            // only the hottest light survives the stretch: streaks, not fog
+            acc += c * w * (1.0 + 2.0 * smoothstep(0.8, 3.0, max(c.r, max(c.g, c.b))) * uStreak);
             wsum += w;
         }
         col = acc / wsum;

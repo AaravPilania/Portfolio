@@ -53,6 +53,7 @@ renderer.toneMapping = THREE.NoToneMapping;
 const gl = renderer.getContext();
 
 const TIERS = [
+    { name: 'floor', steps: 64, stepK: 0.14, bh: 0.34, dpr: 0.6, samples: 0, levels: 4, shadow: 512 },
     { name: 'low', steps: 96, stepK: 0.11, bh: 0.42, dpr: 1.0, samples: 0, levels: 5, shadow: 1024 },
     { name: 'mid', steps: 160, stepK: 0.085, bh: 0.55, dpr: 1.25, samples: 2, levels: 6, shadow: 1024 },
     { name: 'high', steps: 260, stepK: 0.062, bh: 0.75, dpr: 1.75, samples: 4, levels: 6, shadow: 2048 },
@@ -61,17 +62,17 @@ const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|M
 let gpuName = '';
 try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpuName = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; } catch (e) { /* hidden */ }
 function guessTier() {
-    if (Q.has('q')) return clamp(parseInt(Q.get('q'), 10) || 0, 0, 2);
+    if (Q.has('q')) return clamp(parseInt(Q.get('q'), 10) || 0, 0, 3);
     if (/SwiftShader|llvmpipe|Software|Basic Render/i.test(gpuName)) return 0;
-    if (mobile) return /Apple GPU|Adreno \(TM\) (7[3-9]|8)\d\d/i.test(gpuName) ? 1 : 0;
-    if (/Apple M\d|RTX|Radeon RX|Radeon Pro|GeForce GTX 1[06-9]|Arc/i.test(gpuName)) return 2;
-    if (/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega|Mali|Adreno/i.test(gpuName)) return 1;
-    return 2;
+    if (mobile) return /Apple GPU|Adreno \(TM\) (7[3-9]|8)\d\d/i.test(gpuName) ? 2 : 1;
+    if (/Apple M\d|RTX|Radeon RX|Radeon Pro|GeForce GTX 1[06-9]|Arc/i.test(gpuName)) return 3;
+    if (/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega|Mali|Adreno/i.test(gpuName)) return 2;
+    return 3;
 }
 let tier = guessTier();
 const maxTier = tier;
 let dyn = 1;   // fine resolution trim for the raymarch, inside a tier
-renderer.shadowMap.enabled = !mobile;
+renderer.shadowMap.enabled = !mobile && tier > 0;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const post = new Post(renderer);
@@ -140,7 +141,7 @@ shipScene.environmentIntensity = 1.15;
 // ------------------------------------------------------------------ world 2: Cooper, the tesseract, the watch
 const tessScene = new THREE.Scene();
 const tessCam = new THREE.PerspectiveCamera(40, 1, 0.05, 400);
-const tess = createTesseract({ N: tier === 0 ? 3 : 4, layers: tier === 0 ? 9 : 12 });
+const tess = createTesseract({ N: tier <= 1 ? 3 : 4, layers: tier <= 1 ? 9 : 12 });
 tessScene.add(tess.root);
 const cooper = createAstronaut();
 tessScene.add(cooper.root);
@@ -327,10 +328,10 @@ function update(p, dt) {
     const imax = smooth(0.3, 0.44, p);
     const bar239 = Math.max(0, (1 - aspect / 2.39) / 2);
     u.uLetter.value = world === 1 ? bar239 * (1 - imax) : 0;
-    u.uStreak.value = win(p, 0.528, 0.556, 0.566, 0.574) * 1.0;
-    u.uBlack.value = Math.max(1 - intro * (SHOT ? 1 : 1), win(p, 0.556, 0.568, 0.578, 0.592));
+    u.uStreak.value = win(p, 0.524, 0.545, 0.553, 0.564);
+    u.uBlack.value = Math.max(1 - intro * (SHOT ? 1 : 1), win(p, 0.553, 0.566, 0.577, 0.59));
     if (!SHOT && introAt === Infinity) u.uBlack.value = 1;
-    u.uWhite.value = win(p, 0.574, 0.596, 0.612, 0.655);
+    u.uWhite.value = win(p, 0.577, 0.598, 0.612, 0.655);
     u.uBloom.value = world === 1 ? 0.5 : 0.8;
     u.uExposure.value = world === 1 ? 1.0 : 1.05;
     u.uGrain.value = 0.045;
@@ -396,7 +397,7 @@ function sample(dtMs) {
     if (perf.bad > 1200) {
         perf.bad = 0; perf.cool = 2500;
         if (dyn > 0.76) { dyn -= 0.12; resize(); }
-        else if (tier > 0) { tier--; dyn = 1; resize(); }
+        else if (tier > 0) { tier--; dyn = 1; if (tier === 0) key.castShadow = false; resize(); }
     } else if (perf.good > 6000 && !perf.raised) {
         perf.good = 0; perf.cool = 3000;
         if (dyn < 1) { dyn = Math.min(1, dyn + 0.12); resize(); }

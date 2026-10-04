@@ -11,7 +11,9 @@ varying vec3 vColor;
 varying vec4 vInfo;
 varying vec3 vWorld;
 varying vec3 vN;
+varying vec3 vLocal;
 void main() {
+    vLocal = position;
     vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
     vWorld = wp.xyz;
     vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
@@ -27,6 +29,7 @@ varying vec3 vColor;
 varying vec4 vInfo;
 varying vec3 vWorld;
 varying vec3 vN;
+varying vec3 vLocal;
 uniform float uTime;
 uniform vec3 uFog;
 uniform vec3 uFogFar;
@@ -50,6 +53,10 @@ void main() {
     // book spines: worn bands along each strand, so each reads as a moment, not a pipe
     float band = 0.82 + 0.18 * sin(along * (0.6 + seed * 1.7) + seed * 40.0);
     vec3 col = vColor * (diff + back) * band;
+    // dark arrises between neighbouring spines: each book reads as its own volume
+    vec2 cr = axis == 2 ? vLocal.xy : axis == 0 ? vLocal.yz : vLocal.xz;
+    float edge = min(abs(cr.x), abs(cr.y)) * 2.0;
+    col *= 0.5 + 0.5 * (1.0 - smoothstep(0.72, 1.0, edge));
 
     // light running along time
     float s = along * 0.08 + uTime * vInfo.w * uFlow + seed * 17.0;
