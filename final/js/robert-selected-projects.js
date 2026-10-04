@@ -28,20 +28,20 @@
     {
         "label": "//26",
         "client": "LAB",
-        "title": "Marauder's Map",
-        "key": "marauders-map",
+        "title": "Quidditch",
+        "key": "quidditch",
         "images": [
             {
-                "key": "marauders-map-1",
+                "key": "quidditch-1",
                 "type": "texture",
-                "path": "/lab/marauders-map/assets/og.jpg",
+                "path": "/lab/quidditch/assets/og.jpg",
                 "width": 1,
                 "position": { "desktop": [0, 0], "mobile": [0, 0] },
-                "url": "/lab/marauders-map/assets/og.jpg"
+                "url": "/lab/quidditch/assets/og.jpg"
             }
         ],
         "awards": [],
-        "link": "/lab/marauders-map/"
+        "link": "/lab/quidditch/"
     },
     {
         "label": "//25",
