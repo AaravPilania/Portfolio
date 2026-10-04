@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <script>if (!/\/$|\.html$/.test(location.pathname)) location.replace(location.pathname + '/' + location.search + location.hash);</script>
     <title>Gargantua: a lab piece by Aarav Pilania</title>
-    <meta name="description" content="A scroll-driven WebGL study of Gargantua: Schwarzschild ray bending, a Doppler-beamed accretion disk, the Endurance built in code, and a fall through the horizon into the tesseract. A lab piece by Aarav Pilania.">
+    <meta name="description" content="An endless, interactive WebGL study of Gargantua: orbit with the Endurance, fly the Ranger, bend starlight with the cursor, and fall through the horizon into the tesseract until you are put back. A lab piece by Aarav Pilania.">
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="dark">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Gargantua / Lab: Aarav Pilania">
-    <meta property="og:description" content="Ray-bent light, a 12-module ring station built in code, and a fall through the horizon into the tesseract.">
+    <meta property="og:description" content="Ray-bent light, a ring station and a Ranger you can fly, and a fall through the horizon that loops you back into orbit.">
     <meta property="og:image" content="og.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Gargantua / Lab: Aarav Pilania">
@@ -71,7 +71,7 @@
         <div class="g-gate__inner">
             <p class="g-meta"><span>[ Lab 07 ]</span><span>[ WebGL / GLSL / Web Audio ]</span></p>
             <h1 class="g-gate__title" id="gateTitle">Gargantua</h1>
-            <p class="g-gate__line">A study of light that cannot leave. Scroll to fall.</p>
+            <p class="g-gate__line">A place that does not end. Orbit it, fly it, fall into it. You will be put back.</p>
             <fieldset class="g-sound" id="soundSet">
                 <legend class="g-sound__legend">Sound</legend>
                 <label class="g-sound__opt"><input type="radio" name="snd" value="organ" checked><span>Pipe organ, composed live</span></label>
@@ -79,33 +79,47 @@
                 <label class="g-sound__opt"><input type="radio" name="snd" value="off"><span>Silence</span></label>
             </fieldset>
             <button class="g-gate__go" id="gateGo" type="button"><span>Begin</span><svg viewBox="0 0 7 8" aria-hidden="true"><path fill="currentColor" d="M7.002.499v7h-1V2.206L.707 7.501 0 6.794l5.295-5.295H.002v-1h7Z" /></svg></button>
-            <p class="g-gate__hint">Headphones. Dark room. Best on a laptop or larger.</p>
+            <p class="g-gate__hint">Drag to orbit. Scroll to zoom. Hold to burn. Keys 1 2 3 switch the view.</p>
         </div>
     </div>
 
-    <!-- captions ride the scroll; the canvas below them does the work -->
-    <div class="g-hud" aria-live="polite">
-        <div class="g-title" data-cap="title">
+    <!-- mission clock and telemetry in the corners; the canvas does the rest -->
+    <div class="g-hud">
+        <div class="g-title" id="title">
             <p class="g-title__kicker">A lab piece by Aarav Pilania</p>
             <h2 class="g-title__word">Gargantua</h2>
             <p class="g-title__sub">100 million solar masses. Spin 0.999. Ten billion light years from home.</p>
         </div>
-        <div class="g-cap" data-cap="endurance"><span class="g-cap__n">01</span><p><b>Endurance.</b> Twelve modules, one hub, a Ranger on the spine. Built here from boxes and maths, lit only by the disk.</p></div>
-        <div class="g-cap" data-cap="approach"><span class="g-cap__n">02</span><p><b>Approach.</b> Every pixel is a photon traced backwards through curved spacetime. The disk's far side is bent over the shadow and under it.</p></div>
-        <div class="g-cap" data-cap="doppler"><span class="g-cap__n">03</span><p><b>Beaming.</b> The side of the disk turning toward us burns brighter. Close to the horizon, light climbs out redder and dimmer.</p></div>
-        <div class="g-cap" data-cap="horizon"><span class="g-cap__n">04</span><p><b>Horizon.</b> No signal from here on.</p></div>
-        <div class="g-cap" data-cap="cooper"><span class="g-cap__n">05</span><p><b>Cooper.</b> Move the cursor. He drifts with it.</p></div>
-        <div class="g-cap" data-cap="tesseract"><span class="g-cap__n">06</span><p><b>Tesseract.</b> Time laid out as a place. Every thread is a moment of one room.</p></div>
-        <div class="g-murph" data-cap="watch">
+
+        <p class="g-corner g-corner--tl" aria-hidden="true"><span>[ Lab 07 ]</span><span>Gargantua</span></p>
+        <div class="g-tele" aria-hidden="true"><span id="teleR">r 26.00 r&#8347;</span><span id="teleD">d&tau;/dt 0.981</span><span id="teleL">Loop 01</span></div>
+
+        <div class="g-clock" aria-hidden="true">
+            <span class="g-clock__k">Mission &tau;</span>
+            <span class="g-clock__tau" id="tau">00:00:00.00</span>
+            <span class="g-clock__earth" id="earth">Earth +0y 000d</span>
+        </div>
+
+        <div class="g-ctl">
+            <div class="g-modes" role="group" aria-label="View">
+                <button type="button" data-mode="endurance" aria-pressed="true"><span>1</span>Endurance</button>
+                <button type="button" data-mode="ranger" aria-pressed="false"><span>2</span>Ranger</button>
+                <button type="button" data-mode="free" aria-pressed="false"><span>3</span>Free</button>
+            </div>
+            <p class="g-act" aria-live="polite"><span id="actLabel">Hold to launch the Ranger</span><i></i><span id="actRate">1.00&times;</span></p>
+        </div>
+
+        <p class="g-cap" id="cap" aria-live="polite"></p>
+        <div class="g-mark" id="markE" aria-hidden="true"><i></i><span>Endurance</span></div>
+        <div class="g-mark" id="markR" aria-hidden="true"><i></i><span>Ranger</span></div>
+
+        <div class="g-murph" id="murph">
             <p class="g-murph__morse" id="morse" aria-hidden="true"></p>
             <p class="g-murph__word" id="stay" aria-label="Stay"></p>
             <p class="g-murph__foot">The second hand, in Morse.</p>
         </div>
-        <div class="g-tc" aria-hidden="true"><span id="tcLabel">T+00:00:00</span><span id="tcRs">r = 41.0 r<sub>s</sub></span></div>
         <button class="g-mute" id="mute" type="button" aria-pressed="false" aria-label="Mute sound"><i></i><i></i><i></i><i></i><span>Sound</span></button>
     </div>
-
-    <div class="g-scroll" id="scroll" aria-hidden="true"></div>
 
     <noscript><p class="g-noscript">This piece is drawn live in WebGL and needs JavaScript.</p></noscript>
 

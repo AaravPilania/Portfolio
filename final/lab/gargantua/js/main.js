@@ -1,19 +1,24 @@
-// Gargantua: the director. One scroll position (0..1) drives everything: the lens's path in black-hole units, the
-// Endurance framed against the hole in its own metre-scale world (same camera rotation, decoupled position), the
-// fall through the horizon, Cooper, the tesseract and the watch. Two worlds, one post chain, one RAF.
+// Gargantua: a place you stay in. Nothing here ends. You orbit the hole with the Endurance, take the Ranger out and
+// fly it, or drift free with the cursor as a second, invisible mass bending the starlight behind it. Fall far enough
+// and the horizon takes you: Cooper tumbles toward the shadow with the disk in his visor, the light streaks, goes
+// black, goes white, and he is in the tesseract. Murph's watch spells STAY, the place folds shut, and "they" put you
+// back in orbit, one loop later, the Earth clock having run on without you.
+//
+// Two worlds share one post chain. World 1 is the hole (units of r_s, raymarched) and the ships (metres, rasterised),
+// sharing camera rotation; ship-to-ship offsets convert at K metres per r_s. World 2 is the tesseract. The hole also
+// lights the ships and the falling astronaut: every few frames it is raymarched into a small equirect around the lens
+// and prefiltered (PMREM) as their environment, so the gold visor reflects the actual disk.
 import * as THREE from 'three';
-import Lenis from '../vendor/lenis.mjs';
 import { createBlackHole } from './blackhole.js';
 import { Post } from './post.js';
-import { createEndurance } from './endurance.js';
+import { createEndurance, createRanger } from './endurance.js';
 import { createAstronaut } from './astronaut.js';
 import { createTesseract } from './tesseract.js';
 import { createWatch } from './watch.js';
 import { Sound } from './audio.js';
 
 const Q = new URLSearchParams(location.search);
-const SHOT = Q.has('p');
-const FIXED_P = SHOT ? parseFloat(Q.get('p')) : null;
+const SHOT = Q.get('shot');
 const FIXED_T = Q.has('t') ? parseFloat(Q.get('t')) : null;
 const root = document.documentElement;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -22,41 +27,31 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
-const D2R = Math.PI / 180;
-// Catmull-Rom through keyed values at uneven p: [[p, v0, v1, ...], ...]
-function track(keys) {
-    const n = keys[0].length - 1;
-    const out = new Array(n).fill(0);
-    return (p) => {
-        if (p <= keys[0][0]) { for (let i = 0; i < n; i++) out[i] = keys[0][i + 1]; return out; }
-        const L = keys.length - 1;
-        if (p >= keys[L][0]) { for (let i = 0; i < n; i++) out[i] = keys[L][i + 1]; return out; }
-        let k = 0;
-        while (p > keys[k + 1][0]) k++;
-        const k0 = keys[Math.max(0, k - 1)], k1 = keys[k], k2 = keys[k + 1], k3 = keys[Math.min(L, k + 2)];
-        const h = k2[0] - k1[0], t = (p - k1[0]) / h, t2 = t * t, t3 = t2 * t;
-        for (let i = 1; i <= n; i++) {
-            const m1 = k1 === k0 ? 0 : ((k2[i] - k0[i]) / (k2[0] - k0[0])) * h * 0.5;
-            const m2 = k3 === k2 ? 0 : ((k3[i] - k1[i]) / (k3[0] - k1[0])) * h * 0.5;
-            out[i - 1] = (2 * t3 - 3 * t2 + 1) * k1[i] + (t3 - 2 * t2 + t) * m1 * 2 + (-2 * t3 + 3 * t2) * k2[i] + (t3 - t2) * m2 * 2;
-        }
-        return out;
-    };
-}
+const damp = (a, b, l, dt) => (SHOT ? b : a + (b - a) * (1 - Math.exp(-l * dt)));
 const win = (p, a, b, c, d) => smooth(a, b, p) * (1 - smooth(c, d, p));
+const D2R = Math.PI / 180;
+const V3 = () => new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0), ZERO = new THREE.Vector3();
+const _m4 = new THREE.Matrix4();
+// a camera-style orientation looking along f (its -Z on f), world up kept
+function frameQ(f, out, up = UP) {
+    _m4.lookAt(ZERO, f, Math.abs(f.dot(up)) > 0.995 ? new THREE.Vector3(1, 0, 0) : up);
+    return out.setFromRotationMatrix(_m4);
+}
+const pad = (n, w = 2) => String(Math.floor(n)).padStart(w, '0');
 
 // ------------------------------------------------------------------ renderer + quality
 const canvas = document.getElementById('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: SHOT, stencil: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: !!SHOT, stencil: false });
 renderer.setClearColor(0x000000, 1);
 renderer.toneMapping = THREE.NoToneMapping;
 const gl = renderer.getContext();
 
 const TIERS = [
-    { name: 'floor', steps: 64, stepK: 0.14, bh: 0.34, dpr: 0.6, samples: 0, levels: 4, shadow: 512 },
-    { name: 'low', steps: 96, stepK: 0.11, bh: 0.42, dpr: 1.0, samples: 0, levels: 5, shadow: 1024 },
-    { name: 'mid', steps: 160, stepK: 0.085, bh: 0.55, dpr: 1.25, samples: 2, levels: 6, shadow: 1024 },
-    { name: 'high', steps: 260, stepK: 0.062, bh: 0.75, dpr: 1.75, samples: 4, levels: 6, shadow: 2048 },
+    { name: 'floor', steps: 56, stepK: 0.15, bh: 0.5, dpr: 0.6, samples: 0, levels: 4, shadow: 512, dof: 0, envEvery: 120, envSteps: 48 },
+    { name: 'low', steps: 90, stepK: 0.115, bh: 0.5, dpr: 1.0, samples: 0, levels: 5, shadow: 1024, dof: 0, envEvery: 40, envSteps: 64 },
+    { name: 'mid', steps: 160, stepK: 0.085, bh: 0.55, dpr: 1.25, samples: 2, levels: 6, shadow: 1024, dof: 20, envEvery: 18, envSteps: 96 },
+    { name: 'high', steps: 260, stepK: 0.062, bh: 0.75, dpr: 1.75, samples: 4, levels: 6, shadow: 2048, dof: 36, envEvery: 8, envSteps: 140 },
 ];
 const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 let gpuName = '';
@@ -71,7 +66,7 @@ function guessTier() {
 }
 let tier = guessTier();
 const maxTier = tier;
-let dyn = 1;   // fine resolution trim for the raymarch, inside a tier
+let dyn = 1;
 renderer.shadowMap.enabled = !mobile && tier > 0;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -86,15 +81,14 @@ function resize() {
     renderer.setPixelRatio(1);
     renderer.setSize(W, H, false);
     canvas.style.width = '100vw'; canvas.style.height = '100vh';
-    post.setSize(W, H, T.bh * dyn, T.levels, T.samples);
-    bhCam.aspect = shipCam.aspect = tessCam.aspect = aspect;
-    bhCam.updateProjectionMatrix(); shipCam.updateProjectionMatrix(); tessCam.updateProjectionMatrix();
+    post.setSize(W, H, T.bh * dyn, T.levels, T.samples, T.dof);
+    for (const c of [bhCam, shipCam, tessCam]) { c.aspect = aspect; c.updateProjectionMatrix(); }
 }
 
-// ------------------------------------------------------------------ world 1: the hole (units of r_s) and the ship (metres)
+// ------------------------------------------------------------------ world 1: the hole (units of r_s) and the ships (metres)
 const bh = createBlackHole();
-const bhCam = new THREE.PerspectiveCamera(30, 1, 0.01, 10);
-const shipCam = new THREE.PerspectiveCamera(30, 1, 1, 8000);
+const bhCam = new THREE.PerspectiveCamera(32, 1, 0.01, 10);
+const shipCam = new THREE.PerspectiveCamera(32, 1, 1, 30000);
 const shipScene = new THREE.Scene();
 
 const bgMat = new THREE.ShaderMaterial({
@@ -107,63 +101,80 @@ const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
 bg.frustumCulled = false; bg.renderOrder = -10;
 shipScene.add(bg);
 
-const endurance = createEndurance({ shadows: renderer.shadowMap.enabled });
+const shadows = renderer.shadowMap.enabled;
+const endurance = createEndurance({ shadows });
 shipScene.add(endurance.root);
+const ranger = createRanger({ shadows });
+endurance.dock.add(ranger.root);
+const cooper = createAstronaut({ detail: tier >= 2 ? 1 : 0 });
 
-// lit only by the disk: a warm key from the hole, a broader glow off the disk's edge, a breath of starlight
+// lit by the disk: a warm key from the hole, a broader glow off the disk's edge, a breath of starlight
 const key = new THREE.DirectionalLight(0xffd2a0, 4.2);
-key.castShadow = renderer.shadowMap.enabled;
+key.castShadow = shadows;
 key.shadow.mapSize.set(TIERS[tier].shadow, TIERS[tier].shadow);
-Object.assign(key.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 400 });
 key.shadow.bias = -0.0004; key.shadow.normalBias = 0.06;
 const diskGlow = new THREE.DirectionalLight(0xff9c55, 1.3);
 const starFill = new THREE.HemisphereLight(0x8a96aa, 0x3a2414, 0.22);
-// the lensed arch of the disk wraps light round to the camera side: a soft, wide, neutral fill
 const archFill = new THREE.DirectionalLight(0xffe6c8, 0.9);
 shipScene.add(key, key.target, diskGlow, diskGlow.target, starFill, archFill, archFill.target);
-
-// environment: a black sky with the disk as one hot, flat band; rotated each frame to face the hole
-const pmrem = new THREE.PMREMGenerator(renderer);
-function envFrom(fragment) {
-    const s = new THREE.Scene();
-    const m = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: 'varying vec3 vD;\n' + fragment });
-    s.add(new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), m));
-    const t = pmrem.fromScene(s, 0, 0.1, 100).texture;
-    return t;
+function shadowBox(s) {
+    const c = key.shadow.camera;
+    if (c.right === s) return;
+    Object.assign(c, { left: -s, right: s, top: s, bottom: -s, near: 0.5, far: s * 8 + 40 });
+    c.updateProjectionMatrix();
+    key.shadow.normalBias = s < 5 ? 0.012 : 0.06;
+    key.shadow.bias = s < 5 ? -0.0002 : -0.0004;
 }
-shipScene.environment = envFrom(`void main(){
-    vec3 d = normalize(vD);
-    float band = exp(-pow(d.y * 9.0, 2.0)) * pow(max(0.0, -d.z * 0.5 + 0.5), 3.0);
-    float core = exp(-pow(d.y * 3.0, 2.0)) * pow(max(0.0, -d.z), 24.0);
-    vec3 c = vec3(1.0, 0.62, 0.3) * band * 2.2 + vec3(1.0, 0.85, 0.65) * core * 3.0 + vec3(0.015, 0.017, 0.02);
-    gl_FragColor = vec4(c, 1.0);
-}`);
-shipScene.environmentIntensity = 1.15;
+shadowBox(48);
 
-// ------------------------------------------------------------------ world 2: Cooper, the tesseract, the watch
+// image-based light from the hole itself: an equirect raymarched around the lens, prefiltered
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envRT = new THREE.WebGLRenderTarget(256, 128, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+let envShipRT = null;
+function updateShipEnv(P) {
+    const U = bh.uniforms;
+    const steps = U.uSteps.value, k = U.uStepK.value;
+    U.uEquirect.value = 1; U.uCamPos.value.copy(P); U.uSteps.value = TIERS[tier].envSteps; U.uStepK.value = 0.1;
+    renderer.setRenderTarget(envRT);
+    renderer.render(bh.scene, bh.camera);
+    U.uEquirect.value = 0; U.uSteps.value = steps; U.uStepK.value = k;
+    envShipRT = pmrem.fromEquirectangular(envRT.texture, envShipRT);
+    shipScene.environment = envShipRT.texture;
+}
+shipScene.environmentIntensity = 1.0;
+
+// ------------------------------------------------------------------ world 2: the tesseract
 const tessScene = new THREE.Scene();
 const tessCam = new THREE.PerspectiveCamera(40, 1, 0.05, 400);
 const tess = createTesseract({ N: tier <= 1 ? 3 : 4, layers: tier <= 1 ? 9 : 12 });
 tessScene.add(tess.root);
-const cooper = createAstronaut();
-tessScene.add(cooper.root);
 const watch = createWatch();
 tessScene.add(watch.root);
-tessScene.environment = envFrom(`void main(){
-    vec3 d = normalize(vD);
-    vec3 c = vec3(0.012, 0.009, 0.007);
-    c += vec3(1.0, 0.58, 0.24) * pow(max(0.0, -d.z), 3.0) * 1.6;
-    c += vec3(0.9, 0.92, 1.0) * smoothstep(0.55, 0.9, d.y) * 1.1;
-    c += vec3(1.0, 0.7, 0.4) * smoothstep(0.7, 0.95, d.x) * 0.8;
-    gl_FragColor = vec4(c, 1.0);
-}`);
-const tKey = new THREE.DirectionalLight(0xf3f1ec, 1.5); tKey.position.set(-3, 4, 3);
-const tRim = new THREE.DirectionalLight(0xffa458, 5.5); tRim.position.set(3, 1.5, -4);
-const tRim2 = new THREE.DirectionalLight(0xffc89a, 1.6); tRim2.position.set(-4, -1, -3);
-const tHemi = new THREE.HemisphereLight(0x3a3430, 0x0a0604, 0.5);
-const tGroup = new THREE.Group();
-tGroup.add(tKey, tRim, tRim2, tHemi, tKey.target, tRim.target, tRim2.target);
-tessScene.add(tGroup);
+const tKey = new THREE.DirectionalLight(0xf6f2ea, 3.2);
+tKey.castShadow = shadows;
+tKey.shadow.mapSize.set(TIERS[tier].shadow, TIERS[tier].shadow);
+Object.assign(tKey.shadow.camera, { left: -1.7, right: 1.7, top: 1.7, bottom: -1.7, near: 0.5, far: 14 });
+tKey.shadow.camera.updateProjectionMatrix();
+tKey.shadow.bias = -0.0006; tKey.shadow.normalBias = 0.03;
+const tRim = new THREE.DirectionalLight(0xffa458, 7.5);
+const tRim2 = new THREE.DirectionalLight(0xffc89a, 2.0);
+const tHemi = new THREE.HemisphereLight(0x3a3430, 0x0a0604, 0.25);
+tessScene.add(tKey, tKey.target, tRim, tRim.target, tRim2, tRim2.target, tHemi);
+const cubeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
+const cubeCam = new THREE.CubeCamera(0.1, 220, cubeRT);
+tessScene.add(cubeCam);
+let envTessRT = null;
+function updateTessEnv() {
+    const v1 = cooper.root.visible, v2 = watch.root.visible, v3 = dust.visible;
+    cooper.root.visible = false; watch.root.visible = false; dust.visible = false;
+    cubeCam.position.copy(cooper.root.position);
+    cubeCam.update(renderer, tessScene);
+    cooper.root.visible = v1; watch.root.visible = v2; dust.visible = v3;
+    envTessRT = pmrem.fromCubemap(cubeRT.texture, envTessRT);
+    tessScene.environment = envTessRT.texture;
+}
+tessScene.environmentIntensity = 0.55;
+tessScene.background = new THREE.Color();
 // dust motes drifting in front of Cooper, lit by the amber
 const dustN = 600, dustPos = new Float32Array(dustN * 3);
 for (let i = 0; i < dustN; i++) { dustPos[i * 3] = (Math.random() - 0.5) * 14; dustPos[i * 3 + 1] = (Math.random() - 0.5) * 9; dustPos[i * 3 + 2] = -Math.random() * 18; }
@@ -176,204 +187,629 @@ const dustMat = new THREE.ShaderMaterial({
 const dust = new THREE.Points(dustGeo, dustMat); dust.frustumCulled = false;
 tessScene.add(dust);
 
-// ------------------------------------------------------------------ choreography
-// lens path, black-hole units: p, r, elevation, azimuth, yaw, pitch, roll (deg), vertical fov
-const camTrack = track([
-    [0.00, 54, 2.0, -24, 0, 0, 0, 30],
-    [0.08, 49, 2.4, -16, 0, 0, -2, 30],
-    [0.16, 43, 3.2, -8, 7, -1.2, -3, 31],
-    [0.26, 35, 4.2, 0, 5, -0.6, -4, 33],
-    [0.36, 21, 5.6, 7, 0.5, 0, -6, 37],
-    [0.46, 10.5, 6.4, 11, 0, 0, -8, 42],
-    [0.52, 5.0, 4.2, 14, 0, 0, -10, 47],
-    [0.575, 1.04, 1.0, 16, 0, 0, -14, 54],
-]);
-// ship framed against the hole, camera space, metres: p, distance along the hole's line of sight, x / y offsets,
-// then the ship's own attitude (euler, relative to the camera)
-const shipTrack = track([
-    [0.04, 760, 300, -46, 0.18, 0.2, 0.12],
-    [0.12, 520, 46, -18, 0.22, 0.35, 0.14],
-    [0.17, 210, 4, -12, 0.42, 0.62, 0.2],
-    [0.22, 112, -30, -7, 0.62, 0.9, 0.26],
-    [0.27, 130, -16, 0, 0.46, 1.15, 0.16],
-    [0.34, 270, -4, 2.5, 0.3, 1.35, 0.08],
-    [0.42, 720, -0.5, 0.8, 0.2, 1.45, 0.02],
-    [0.48, 1500, 0, 0, 0.16, 1.5, 0],
-    [0.535, 2700, 0, 0, 0.14, 1.52, 0],
-]);
-const CAPS = {
-    title: [0.006, 0.018, 0.048, 0.064],
-    endurance: [0.15, 0.165, 0.235, 0.252],
-    approach: [0.285, 0.3, 0.35, 0.366],
-    doppler: [0.385, 0.4, 0.45, 0.466],
-    horizon: [0.505, 0.515, 0.54, 0.552],
-    cooper: [0.635, 0.65, 0.705, 0.72],
-    tesseract: [0.755, 0.77, 0.845, 0.86],
-    watch: [0.905, 0.92, 1.5, 2],
-};
-const capEls = {};
-for (const el of document.querySelectorAll('[data-cap]')) capEls[el.dataset.cap] = el;
-const tcLabel = document.getElementById('tcLabel'), tcRs = document.getElementById('tcRs');
-const morseEl = document.getElementById('morse'), stayEl = document.getElementById('stay');
+// the dive and the tesseract use programs orbit never touches: build them while you are still in orbit, not on the
+// frame the horizon closes
+let warmed = false;
+function warmWorlds() {
+    if (warmed || !renderer.compileAsync) return;
+    warmed = true;
+    post.warm();
+    updateTessEnv();
+    // program keys depend on the bound target (tone mapping, colour space): compile against the one we draw into
+    renderer.setRenderTarget(post.rtScene);
+    tessScene.add(cooper.root);
+    renderer.compileAsync(tessScene, tessCam).catch(() => {});
+    cooper.root.removeFromParent();
+    shipScene.add(cooper.root);
+    renderer.compileAsync(shipScene, shipCam).catch(() => {});
+    cooper.root.removeFromParent();
+    renderer.setRenderTarget(null);
+}
 
-const sound = new Sound();
-const pointer = new THREE.Vector2();
-const v3 = new THREE.Vector3(), v3b = new THREE.Vector3(), qv = new THREE.Quaternion(), qInv = new THREE.Quaternion(), eul = new THREE.Euler();
-const toHole = new THREE.Vector3(), holeCam = new THREE.Vector3(), v3c = new THREE.Vector3(), Y_AXIS = new THREE.Vector3(0, 1, 0);
+// ------------------------------------------------------------------ the sky's mechanics (r_s = 1)
+// GM in these units is 0.5 c^2 r_s; the clock is scaled (x3) so an orbit at r = 26 takes about six minutes.
+const GM = 4.5;
+const K = 4000;                 // metres of ship space per r_s, for ship-to-ship offsets only
+const END_R = 26, END_INC = 7 * D2R;
+let endAng = 0.42;
+const endP = V3(), endV = V3();
+function endState(a) {
+    const s = Math.sin(a), c = Math.cos(a), w = Math.sqrt(GM / END_R ** 3);
+    endP.set(END_R * c, END_R * s * Math.sin(END_INC), END_R * s * Math.cos(END_INC));
+    // prograde with the disk (the angle runs backwards)
+    endV.set(END_R * s, -END_R * c * Math.sin(END_INC), -END_R * c * Math.cos(END_INC)).multiplyScalar(w);
+}
+endState(endAng);
+
+const rgr = { docked: true, P: V3(), V: V3(), Q: new THREE.Quaternion(), hold: 0, bank: 0, want: 0 };
+const free = { P: V3() };
+const focus = V3();
+const shipOf = (P, out) => out.copy(P).sub(focus).multiplyScalar(K);
+
+// ------------------------------------------------------------------ state
+const S = {
+    phase: 'orbit',        // orbit | dive | tess
+    mode: 'endurance',     // endurance | ranger | free
+    pt: 0,                 // seconds in phase
+    sim: 0,                // the world's own (dilated) clock: disk flow, ship spin
+    tau: 0,                // proper time aboard
+    earth: 0,              // days elapsed at home
+    loop: 1,
+    rate: 1, dil: 1, r: END_R,
+};
+const ctl = {
+    yaw: 0, pitch: 0, tyaw: 0.0, tpitch: 0.0, fyaw: 0, fpitch: 0,
+    lx: 0, ly: 0,
+    zoom: { endurance: Math.log(170), ranger: Math.log(40), free: Math.log(30) },
+    zoomT: { endurance: Math.log(170), ranger: Math.log(40), free: Math.log(30) },
+    hold: false, holdT: 0, idle: 0,
+};
+const ZOOM = { endurance: [Math.log(60), Math.log(900)], ranger: [Math.log(18), Math.log(160)], free: [Math.log(1.6), Math.log(90)] };
+const pointer = new THREE.Vector2(), pointerS = new THREE.Vector2();
+let pointerIn = false;
+const cut = { t: -1, fn: null };
+const blend = { t: 1, anchor: null, pos: V3(), quat: new THREE.Quaternion(), dur: 1.2 };
+const dive = { dir: V3(), r0: 10, from: 'free' };
 let introAt = SHOT ? -100 : Infinity;
 let time = FIXED_T ?? 0;
 let world = 1;
 let watchT0 = -1;
+let envTick = 0;
+let capT = -1, capText = '';
 
-function update(p, dt) {
-    const T = TIERS[tier];
-    const intro = SHOT ? 1 : smooth(0, 6, time - introAt);
+// temporaries
+const v1 = V3(), v2 = V3(), v3 = V3(), v4 = V3(), fwd = V3(), right = V3(), up = V3(), toHole = V3();
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), qCam = new THREE.Quaternion(), eul = new THREE.Euler(0, 0, 0, 'YXZ');
+const rgrCamQ = new THREE.Quaternion();
+let rgrCamInit = false;
 
-    // ---------------- the lens
-    const [r, el, az, yaw, pitch, roll, fov] = camTrack(p);
-    bhCam.position.set(r * Math.cos(el * D2R) * Math.sin(az * D2R), r * Math.sin(el * D2R), r * Math.cos(el * D2R) * Math.cos(az * D2R));
-    bhCam.up.set(0, 1, 0);
-    bhCam.lookAt(0, 0, 0);
-    bhCam.rotateY(yaw * D2R); bhCam.rotateX(pitch * D2R); bhCam.rotateZ(roll * D2R);
-    bhCam.fov = fov; bhCam.updateProjectionMatrix();
-    bhCam.updateMatrixWorld();
+// ------------------------------------------------------------------ transitions
+function startBlend(anchorP) {
+    // remember where the ship camera is, relative to a moving anchor, and ease out of it
+    blend.anchor = anchorP;
+    blend.pos.copy(shipCam.position).add(v1.copy(focus).sub(anchorP).multiplyScalar(K));
+    blend.quat.copy(shipCam.quaternion);
+    blend.t = 0;
+}
+function cutTo(fn) { if (cut.t < 0) { cut.t = 0; cut.fn = fn; } }
 
-    const U = bh.uniforms;
-    U.uTime.value = time;
-    U.uSteps.value = T.steps;
-    U.uStepK.value = T.stepK;
-    U.uDiskGain.value = 1.6 * smooth(0.035, 0.11, p) * (SHOT ? 1 : smooth(1.5, 7, time - introAt));
-    U.uStarGain.value = intro * 1.0;
-    U.uDoppler.value = 0.62;
+function undock() {
+    if (!rgr.docked) return;
+    endurance.root.updateMatrixWorld(true);
+    ranger.root.getWorldPosition(v1);
+    ranger.root.getWorldQuaternion(rgr.Q);
+    rgr.P.copy(endP).addScaledVector(v1.sub(endurance.root.position), 1 / K);
+    // a push off the port, straight up out of the cradle
+    v2.set(0, 1, 0).applyQuaternion(rgr.Q);
+    rgr.V.copy(endV).addScaledVector(v2, 3 / K);
+    shipScene.add(ranger.root);
+    rgr.docked = false;
+    rgrCamInit = false;
+}
+function dockRanger() {
+    endurance.dock.add(ranger.root);
+    ranger.root.position.set(0, 0, 0); ranger.root.quaternion.identity();
+    ranger.shipU.uStretch.value = 0; ranger.shipU.uRed.value = 0; ranger.shipU.uFade.value = 1;
+    rgr.docked = true; rgr.hold = 0;
+}
+function setMode(m, { instant = false } = {}) {
+    if (S.phase !== 'orbit' || m === S.mode) return;
+    const prev = S.mode;
+    const farJump = () => {
+        const from = prev === 'free' ? free.P : prev === 'ranger' && !rgr.docked ? rgr.P : endP;
+        const to = m === 'free' ? from : m === 'ranger' && !rgr.docked ? rgr.P : endP;
+        return from.distanceTo(to) > 0.02;
+    };
+    const go = () => {
+        if (m === 'ranger' && rgr.docked) undock();
+        if (m === 'free') {
+            // drift free from wherever the lens is, looking at the hole
+            const P = prev === 'ranger' && !rgr.docked ? rgr.P : endP;
+            const R = P.length();
+            ctl.zoom.free = ctl.zoomT.free = Math.log(clamp(R, 1.7, 90));
+            ctl.tyaw = ctl.yaw = Math.atan2(P.x, P.z);
+            ctl.tpitch = ctl.pitch = Math.asin(clamp(P.y / R, -1, 1));
+        } else if (m === 'endurance') {
+            ctl.tyaw = ctl.yaw = 0; ctl.tpitch = ctl.pitch = 0;
+        }
+        ctl.fyaw = ctl.fpitch = 0;
+        S.mode = m;
+        syncModeUI();
+    };
+    if (!instant && farJump()) cutTo(go);
+    else { startBlend(prev === 'free' ? free.P : prev === 'ranger' && !rgr.docked ? rgr.P : endP); go(); }
+}
 
-    // ---------------- the ship, framed against the hole
-    shipCam.quaternion.copy(bhCam.quaternion);
-    shipCam.fov = fov; shipCam.updateProjectionMatrix();
-    shipCam.position.set(0, 0, 0);
-    shipCam.updateMatrixWorld();
-    toHole.copy(bhCam.position).multiplyScalar(-1).normalize();
-    qInv.copy(bhCam.quaternion).invert();
-    holeCam.copy(toHole).applyQuaternion(qInv);
-    const [dist, ox, oy, ex, ey, ez] = shipTrack(p);
-    v3.copy(holeCam).multiplyScalar(dist);
-    v3.x += ox; v3.y += oy;
-    v3.applyQuaternion(bhCam.quaternion);
-    endurance.root.position.copy(v3);
-    qv.setFromEuler(eul.set(ex, ey, ez));
-    endurance.root.quaternion.copy(bhCam.quaternion).multiply(qv);
-    endurance.root.visible = p > 0.03 && p < 0.545;
-    endurance.update(dt, time);
+function startDive(from) {
+    if (S.phase !== 'orbit') return;
+    S.phase = 'dive'; S.pt = 0;
+    dive.from = from;
+    const P = from === 'ranger' ? rgr.P : free.P;
+    // the eject is a cut to an outside camera a little further back, so the whole shadow sits behind him
+    dive.r0 = Math.max(4.6, P.length());
+    dive.dir.copy(P).normalize().negate();
+    ctl.tyaw = ctl.yaw = 0; ctl.tpitch = ctl.pitch = 0; ctl.fyaw = ctl.fpitch = 0;
+    shipScene.add(cooper.root);
+    cooper.root.visible = true;
+    envTick = 0;
+    syncModeUI();
+}
+function startTess() {
+    S.phase = 'tess'; S.pt = 0;
+    world = 2;
+    tessScene.add(cooper.root);
+    watchT0 = -1;
+    syncModeUI();
+}
+function putBack() {
+    // the loop closes: back aboard, the Ranger in its cradle, one more on the counter
+    S.phase = 'orbit'; S.pt = 0;
+    world = 1;
+    cooper.root.removeFromParent();
+    dockRanger();
+    envTick = 0;
+    S.mode = 'endurance';
+    // a hold carried out of the tesseract must not launch the Ranger the moment you are back
+    ctl.hold = false; ctl.holdT = 0;
+    S.loop++;
+    ctl.tyaw = ctl.yaw = -0.5; ctl.tpitch = ctl.pitch = 0.05; ctl.fyaw = 0.06; ctl.fpitch = 0;
+    ctl.zoom.endurance = Math.log(420); ctl.zoomT.endurance = Math.log(170);
+    caption(`Loop ${pad(S.loop)}. They put you back.`);
+    syncModeUI();
+}
 
-    v3c.copy(toHole).applyAxisAngle(Y_AXIS, 0.95); v3c.y += 0.45; v3c.normalize();
-    key.position.copy(v3).addScaledVector(v3c, 160);
-    key.target.position.copy(v3);
-    v3b.copy(toHole).applyAxisAngle(Y_AXIS, 1.1);
-    v3b.y += 0.15;
-    diskGlow.position.copy(v3).addScaledVector(v3b, 160);
-    diskGlow.target.position.copy(v3);
-    v3b.set(-0.6, 0.8, 0.5).applyQuaternion(bhCam.quaternion);
-    archFill.position.copy(v3).addScaledVector(v3b, 160);
-    archFill.target.position.copy(v3);
-    shipScene.environmentRotation.set(0, Math.atan2(-toHole.x, -toHole.z), 0);
-    key.intensity = 5.6 * (0.6 + 0.4 * smooth(0.05, 0.14, p));
-    endurance.puffMat.uniforms.uScale.value = H * 0.9;
+// ------------------------------------------------------------------ HUD
+const $ = (id) => document.getElementById(id);
+const el = {
+    title: $('title'), tau: $('tau'), earth: $('earth'), r: $('teleR'), d: $('teleD'), loop: $('teleL'),
+    act: $('actLabel'), rate: $('actRate'), cap: $('cap'), morse: $('morse'), stay: $('stay'), murph: $('murph'),
+    markE: $('markE'), markR: $('markR'), modes: [...document.querySelectorAll('[data-mode]')], warn: $('warn'),
+};
+const txt = (e, s) => { if (e && e.textContent !== s) e.textContent = s; };
+function caption(s) { capText = s; capT = 0; txt(el.cap, s); }
+function syncModeUI() {
+    for (const b of el.modes) b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode && S.phase === 'orbit'));
+    root.dataset.phase = S.phase;
+    root.dataset.mode = S.mode;
+}
+for (const b of el.modes) b.addEventListener('click', (e) => { e.stopPropagation(); setMode(b.dataset.mode); });
+function actionLabel() {
+    if (S.phase === 'tess') return 'Hold to hurry time';
+    if (S.phase === 'dive') return 'No signal';
+    if (S.mode === 'endurance') return 'Hold to launch the Ranger';
+    if (S.mode === 'ranger') return S.r < 2.4 ? 'Hold to cross' : 'Steer with the cursor. Hold to burn';
+    return S.r < 2.4 ? 'Hold to cross' : 'Drag to orbit. Hold to fall';
+}
+function markAt(e, P, label) {
+    if (!e) return;
+    v1.copy(P).project(bhCam);
+    const vis = v1.z < 1 && Math.abs(v1.x) < 0.95 && Math.abs(v1.y) < 0.9;
+    e.classList.toggle('is-on', vis);
+    if (!vis) return;
+    e.style.transform = `translate3d(${((v1.x * 0.5 + 0.5) * window.innerWidth).toFixed(1)}px, ${((-v1.y * 0.5 + 0.5) * window.innerHeight).toFixed(1)}px, 0)`;
+    txt(e.lastElementChild, label);
+}
 
-    // the fall: spaghettified, redshifted, gone
-    const fall = smooth(0.468, 0.532, p);
-    endurance.shipU.uStretch.value = fall;
-    endurance.shipU.uRed.value = smooth(0.45, 0.52, p);
-    endurance.shipU.uFade.value = 1 - smooth(0.505, 0.535, p);
-    v3.applyMatrix4(shipCam.matrixWorldInverse);
-    endurance.shipU.uCenter.value.copy(v3);
+// ------------------------------------------------------------------ the orbit: three viewpoints, one sky
+function physics(dt) {
+    if (dt <= 0) return;
+    endAng -= Math.sqrt(GM / END_R ** 3) * dt;
+    endState(endAng);
+    if (rgr.docked) return;
+    const n = 4, h = dt / n;
+    fwd.set(0, 0, 1).applyQuaternion(rgr.Q);
+    const thrust = rgr.want > 0 ? Math.min(0.6, 0.03 + rgr.hold * 0.09) : 0;
+    for (let i = 0; i < n; i++) {
+        const r2 = rgr.P.lengthSq(), r = Math.sqrt(r2);
+        rgr.V.addScaledVector(rgr.P, -GM / (r2 * r) * h);
+        rgr.V.addScaledVector(fwd, thrust * h);
+        // a soft fence far out, so no one drifts off into the dark for good
+        if (r > 60) rgr.V.addScaledVector(rgr.P, -(r - 60) * 0.004 * h / r);
+        const sp = rgr.V.length();
+        if (sp > 3) rgr.V.multiplyScalar(3 / sp);
+        rgr.P.addScaledVector(rgr.V, h);
+    }
+}
 
-    // ---------------- Cooper and the tesseract
-    const tp = clamp((p - 0.6) / 0.4);
-    const travel = smooth(0.64, 0.95, p);
-    tessCam.position.set(Math.sin(time * 0.13) * 0.08, Math.sin(time * 0.17) * 0.06, -travel * 120);
-    tessCam.rotation.set(Math.sin(time * 0.11) * 0.015, Math.sin(time * 0.09) * 0.03, Math.sin(time * 0.07) * 0.01);
+function updateOrbit(dt, simDt) {
+    const holdLaunch = ctl.hold && S.mode === 'endurance' && introAt !== Infinity && cut.t < 0;
+    if (holdLaunch && ctl.holdT > 0.15) setMode('ranger', { instant: true });
+    rgr.want = ctl.hold && S.mode === 'ranger' && !rgr.docked ? 1 : 0;
+    rgr.hold = rgr.want ? rgr.hold + dt : 0;
+    physics(simDt);
+
+    // free-cam fall: holding pulls you in, faster the longer you hold
+    if (S.mode === 'free' && ctl.hold) ctl.zoomT.free = Math.max(Math.log(1.12), ctl.zoomT.free - dt * (0.08 + ctl.holdT * 0.22));
+
+    // camera angles: drag target + fling inertia, then eased; idle drift keeps the frame alive
+    if (!ctl.drag) {
+        ctl.tyaw += ctl.fyaw * dt; ctl.tpitch += ctl.fpitch * dt;
+        ctl.fyaw *= Math.exp(-1.6 * dt); ctl.fpitch *= Math.exp(-2.4 * dt);
+        if (ctl.idle > 6 && S.mode !== 'ranger') ctl.tyaw += dt * 0.018 * smooth(6, 10, ctl.idle);
+    }
+    ctl.tpitch = clamp(ctl.tpitch, -1.25, 1.25);
+    ctl.yaw = damp(ctl.yaw, ctl.tyaw, 7, dt);
+    ctl.pitch = damp(ctl.pitch, ctl.tpitch, 7, dt);
+    for (const k of ['endurance', 'ranger', 'free']) {
+        const lo = k === 'free' && ctl.hold ? Math.log(1.12) : ZOOM[k][0];
+        ctl.zoomT[k] = clamp(ctl.zoomT[k], lo, ZOOM[k][1]);
+        ctl.zoom[k] = damp(ctl.zoom[k], ctl.zoomT[k], k === 'free' ? 2.2 : 3.2, dt);
+    }
+    // the cursor leans the view a little (not in the Ranger, where it steers)
+    const lean = S.mode === 'ranger' ? 0 : 1;
+    ctl.lx = damp(ctl.lx, -pointerS.x * 0.16 * lean, 3, dt);
+    ctl.ly = damp(ctl.ly, pointerS.y * 0.09 * lean, 3, dt);
+
+    let fov = 32;
+    if (S.mode === 'endurance') {
+        focus.copy(endP);
+        toHole.copy(endP).negate().normalize();
+        frameQ(toHole, q1);
+        qCam.copy(q1).multiply(q2.setFromEuler(eul.set(ctl.pitch + ctl.ly, ctl.yaw + ctl.lx, 0)));
+        const d = Math.exp(ctl.zoom.endurance);
+        fwd.set(0, 0, -1).applyQuaternion(qCam); right.set(1, 0, 0).applyQuaternion(qCam); up.set(0, 1, 0).applyQuaternion(qCam);
+        shipCam.position.copy(fwd).multiplyScalar(-d).addScaledVector(right, d * 0.24).addScaledVector(up, d * 0.075);
+        shipCam.quaternion.copy(qCam);
+        fov = 32;
+    } else if (S.mode === 'ranger') {
+        focus.copy(rgr.P);
+        // steer: the cursor's offset from centre is a turn rate, the way you lean a dragon
+        const ox = Math.sign(pointerS.x) * Math.max(0, Math.abs(pointerS.x) - 0.1) / 0.9;
+        const oy = Math.sign(pointerS.y) * Math.max(0, Math.abs(pointerS.y) - 0.1) / 0.9;
+        if (!rgrCamInit) { fwd.set(0, 0, 1).applyQuaternion(rgr.Q); frameQ(fwd, rgrCamQ); rgrCamInit = true; }
+        up.set(0, 1, 0).applyQuaternion(rgrCamQ); right.set(1, 0, 0).applyQuaternion(rgrCamQ);
+        if (pointerIn || ctl.hold) {
+            q1.setFromAxisAngle(up, -ox * 1.0 * dt);
+            q2.setFromAxisAngle(right, oy * 0.75 * dt);
+            rgr.Q.premultiply(q1).premultiply(q2).normalize();
+        }
+        rgr.bank = damp(rgr.bank, -ox * 0.55, 3, dt);
+        fwd.set(0, 0, 1).applyQuaternion(rgr.Q);
+        frameQ(fwd, q1);
+        rgrCamQ.slerp(q1, SHOT ? 1 : 1 - Math.exp(-2.6 * dt));
+        qCam.copy(rgrCamQ).multiply(q2.setFromEuler(eul.set(ctl.pitch * 0.5 + 0.04, ctl.yaw * 0.5, 0)));
+        const d = Math.exp(ctl.zoom.ranger);
+        fwd.set(0, 0, -1).applyQuaternion(qCam); up.set(0, 1, 0).applyQuaternion(qCam); right.set(1, 0, 0).applyQuaternion(qCam);
+        // the burn pushes the camera back a touch and shakes it
+        const shake = ranger.throttle * 0.12 * (reduceMotion ? 0 : 1);
+        shipCam.position.copy(fwd).multiplyScalar(-d * (1 + ranger.throttle * 0.12)).addScaledVector(up, d * 0.2)
+            .addScaledVector(right, Math.sin(time * 37) * shake).addScaledVector(up, Math.sin(time * 43 + 1) * shake);
+        shipCam.quaternion.copy(qCam);
+        fov = 40 + ranger.throttle * 4;
+        // the hull leans into the turn
+        ranger.root.quaternion.copy(rgr.Q).multiply(q2.setFromAxisAngle(v1.set(0, 0, 1), rgr.bank));
+        if (rgr.P.length() < 1.32) startDive('ranger');
+    } else {
+        const R = Math.exp(ctl.zoom.free);
+        const el2 = ctl.pitch, az = ctl.yaw;
+        free.P.set(R * Math.cos(el2) * Math.sin(az), R * Math.sin(el2), R * Math.cos(el2) * Math.cos(az));
+        focus.copy(free.P);
+        toHole.copy(free.P).negate().normalize();
+        frameQ(toHole, q1);
+        qCam.copy(q1).multiply(q2.setFromEuler(eul.set(ctl.ly, ctl.lx, 0)));
+        shipCam.position.set(0, 0, 0);
+        shipCam.quaternion.copy(qCam);
+        fov = lerp(48, 34, smooth(2, 30, R));
+        if (R < 1.3) startDive('free');
+    }
+    // ease out of the previous rig's pose
+    if (blend.t < 1) {
+        blend.t = Math.min(1, blend.t + dt / blend.dur);
+        const e = 1 - Math.pow(1 - blend.t, 3);
+        v1.copy(blend.pos).add(v2.copy(blend.anchor).sub(focus).multiplyScalar(K));
+        shipCam.position.lerpVectors(v1, shipCam.position, e);
+        shipCam.quaternion.slerpQuaternions(blend.quat, shipCam.quaternion, e);
+    }
+    // portrait screens keep roughly the horizontal framing of a square one
+    if (aspect < 1) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov) / 2) / Math.max(0.55, aspect)));
+    shipCam.fov = damp(shipCam.fov, fov, 3, dt);
+    shipCam.near = S.mode === 'ranger' ? 0.5 : 1; shipCam.far = 30000;
+
+    // place the ships in this frame of reference
+    shipOf(endP, endurance.root.position);
+    toHole.copy(endP).negate().normalize();
+    frameQ(toHole, q1);
+    endurance.root.quaternion.copy(q1).multiply(q2.setFromEuler(eul.set(0.42, 0.62, 0.2, 'XYZ')));
+    eul.order = 'YXZ';
+    const endDist = endurance.root.position.length();
+    endurance.root.visible = endDist < 25000;
+    endurance.update(simDt, S.sim, 0);
+    if (!rgr.docked) {
+        shipOf(rgr.P, ranger.root.position);
+        if (S.mode !== 'ranger') ranger.root.quaternion.copy(rgr.Q);
+        ranger.root.visible = ranger.root.position.length() < 25000;
+    }
+    ranger.update(SHOT ? 10 : dt, time, rgr.want);
+    endurance.shipU.uStretch.value = 0; endurance.shipU.uRed.value = 0; endurance.shipU.uFade.value = 1;
+    ranger.shipU.uFade.value = 1;
+    // the Ranger reddens and stretches as it nears the hole
+    const rr = rgr.docked ? 99 : rgr.P.length();
+    ranger.shipU.uRed.value = smooth(3.2, 1.4, rr) * 0.8;
+    ranger.shipU.uStretch.value = smooth(2.2, 1.3, rr) * 0.25;
+
+    // the lights come from where the hole is, wherever we are
+    if (S.mode === 'ranger') v4.copy(ranger.root.position); else if (S.mode === 'endurance') v4.copy(endurance.root.position); else v4.set(0, 0, 0);
+    lightsFromHole(v4, S.mode === 'ranger' ? 16 : 48);
+    key.intensity = 5.6;
+    if (S.mode === 'free') { markAt(el.markE, endP, `Endurance ${endP.length().toFixed(1)} r\u209b`); if (!rgr.docked) markAt(el.markR, rgr.P, 'Ranger'); else el.markR.classList.remove('is-on'); }
+    else { el.markE.classList.remove('is-on'); el.markR.classList.remove('is-on'); }
+}
+
+function lightsFromHole(center, box) {
+    toHole.copy(focus).negate().normalize();
+    v3.copy(toHole).applyAxisAngle(UP, 0.95); v3.y += 0.45; v3.normalize();
+    key.position.copy(center).addScaledVector(v3, box * 3.3);
+    key.target.position.copy(center);
+    shadowBox(box);
+    v2.copy(toHole).applyAxisAngle(UP, 1.1); v2.y += 0.15;
+    diskGlow.position.copy(center).addScaledVector(v2, 160);
+    diskGlow.target.position.copy(center);
+    v2.set(-0.6, 0.8, 0.5).applyQuaternion(shipCam.quaternion);
+    archFill.position.copy(center).addScaledVector(v2, 160);
+    archFill.target.position.copy(center);
+}
+
+// ------------------------------------------------------------------ the dive: Cooper falls with the disk in his visor
+const DIVE_FALL = 5.4, DIVE_STREAK = [4.5, 5.0, 5.4, 5.8], DIVE_BLACK = [5.5, 5.8, 6.7, 7.0], DIVE_WHITE = 7.6;
+function updateDive(dt) {
+    const pt = S.pt;
+    const e = Math.pow(clamp(pt / DIVE_FALL), 2.2);
+    const r = lerp(dive.r0, 1.0, e);
+    focus.copy(dive.dir).multiplyScalar(-r);
+    endurance.root.visible = false;
+    ranger.root.visible = false;
+    rgr.want = 0;
+    ranger.update(SHOT ? 10 : dt, time, 0);
+
+    // a slow orbit round him, with the hole behind; drag still turns the view
+    if (!ctl.drag) { ctl.tyaw += ctl.fyaw * dt; ctl.fyaw *= Math.exp(-1.6 * dt); }
+    ctl.yaw = damp(ctl.yaw, ctl.tyaw, 6, dt); ctl.pitch = damp(ctl.pitch, clamp(ctl.tpitch, -0.6, 0.6), 6, dt);
+    ctl.lx = damp(ctl.lx, -pointerS.x * 0.1, 3, dt); ctl.ly = damp(ctl.ly, pointerS.y * 0.06, 3, dt);
+    frameQ(dive.dir, q1);
+    qCam.copy(q1).multiply(q2.setFromEuler(eul.set(-0.06 + ctl.pitch + ctl.ly, -0.22 + pt * 0.035 + ctl.yaw + ctl.lx, 0)));
+    fwd.set(0, 0, -1).applyQuaternion(qCam); right.set(1, 0, 0).applyQuaternion(qCam); up.set(0, 1, 0).applyQuaternion(qCam);
+    const d = 3.6 - pt * 0.12;
+    cooper.root.position.set(0, 0, 0);
+    shipCam.position.copy(fwd).multiplyScalar(-d).addScaledVector(right, -0.62).addScaledVector(up, 0.12);
+    shipCam.quaternion.copy(qCam);
+    shipCam.fov = damp(shipCam.fov, 36 + pt * 1.5, 3, dt);
+    shipCam.near = 0.05; shipCam.far = 400;
+    cooper.update(dt, time, pointerS, { tumbleAmt: 1.2, spin: pt * 0.18 });
+    lightsFromHole(cooper.root.position, 1.8);
+    key.intensity = 6.5;
+    el.markE.classList.remove('is-on'); el.markR.classList.remove('is-on');
+    if (pt > DIVE_WHITE) startTess();
+}
+
+// ------------------------------------------------------------------ the tesseract: fall, float, the watch, the fold
+const T_FALL = 8, T_WATCH = 19, T_FOLD = 31, T_END = 35.5;
+function updateTess(dt) {
+    const pt = S.pt;
+    const rush = smooth(T_FOLD, T_END, pt);
+    const travel = pt * 0.9 + rush * rush * 90;
+    if (!ctl.drag) { ctl.tyaw += ctl.fyaw * dt; ctl.tpitch += ctl.fpitch * dt; ctl.fyaw *= Math.exp(-1.6 * dt); ctl.fpitch *= Math.exp(-2.4 * dt); }
+    // the look springs home when let go: this is a place you are shown, not one you wander
+    if (!ctl.drag) { ctl.tyaw *= Math.exp(-0.8 * dt); ctl.tpitch *= Math.exp(-0.8 * dt); }
+    ctl.tyaw = clamp(ctl.tyaw, -0.8, 0.8); ctl.tpitch = clamp(ctl.tpitch, -0.5, 0.5);
+    ctl.yaw = damp(ctl.yaw, ctl.tyaw, 5, dt); ctl.pitch = damp(ctl.pitch, ctl.tpitch, 5, dt);
+    tessCam.position.set(Math.sin(time * 0.13) * 0.08, Math.sin(time * 0.17) * 0.06, -travel);
+    tessCam.rotation.set(Math.sin(time * 0.11) * 0.015 + ctl.pitch, Math.sin(time * 0.09) * 0.03 + ctl.yaw, Math.sin(time * 0.07) * 0.01, 'YXZ');
+    tessCam.fov = 40 + rush * 22;
+    tessCam.updateProjectionMatrix();
     tessCam.updateMatrixWorld();
     tess.follow(tessCam.position);
-    tGroup.position.copy(tessCam.position);
-    const leave = smooth(0.875, 0.93, p);
-    v3.set(0.42 - leave * 2.6, -0.05 + leave * 0.4, -4.6 - leave * 2.5).applyMatrix4(tessCam.matrixWorld);
-    cooper.root.position.copy(v3);
-    cooper.root.visible = p > 0.58 && leave < 0.999;
-    cooper.update(dt, time, pointer);
-    const reveal = smooth(0.665, 0.79, p);
-    tess.uniforms.uReveal.value = 2 + reveal * 110;
+
+    // Cooper falls in from deep in the lattice, tumbling, and the tumble bleeds away as he arrives
+    const fall = 1 - Math.pow(1 - clamp(pt / T_FALL), 3);
+    const leave = smooth(T_FOLD, T_FOLD + 3.2, pt);
+    v1.set(lerp(-2.4, 0.42, fall) - leave * 2.2, lerp(1.6, -0.05, fall) + leave * 0.5, lerp(-46, -4.6, fall) - leave * 6);
+    v1.applyMatrix4(tessCam.matrixWorld);
+    cooper.root.position.copy(v1);
+    cooper.root.visible = leave < 0.999;
+    cooper.update(dt, time, pointerS, { tumbleAmt: 1, spin: (1 - fall) * 7 });
+
+    // lights ride with the camera so he is always modelled the same way: soft key above, hard amber rim behind
+    v2.set(-2.6, 2.3, 4.4).applyQuaternion(tessCam.quaternion);
+    tKey.position.copy(v1).add(v2); tKey.target.position.copy(v1);
+    v2.set(3.4, 1.6, -4.2).applyQuaternion(tessCam.quaternion);
+    tRim.position.copy(v1).add(v2); tRim.target.position.copy(v1);
+    v2.set(-4, -1, -3).applyQuaternion(tessCam.quaternion);
+    tRim2.position.copy(v1).add(v2); tRim2.target.position.copy(v1);
+    tess.uniforms.uKeyDir.value.set(-2.6, 2.3, 4.4).normalize();
+    tess.uniforms.uRimDir.value.set(3.4, 1.6, -4.2).normalize();
+
+    const reveal = smooth(0.4, 9, pt) * (1 - rush * 0.6);
+    tess.uniforms.uReveal.value = 2 + reveal * 110 + rush * 60;
     tess.uniforms.uTime.value = time;
-    tess.uniforms.uFlow.value = 1 + smooth(0.75, 0.85, p) * 1.5;
-    tessScene.background = tessScene.background || new THREE.Color();
+    tess.uniforms.uFlow.value = 1 + smooth(10, 16, pt) * 1.5 + rush * 8;
+    tess.uniforms.uCollapse.value = rush;
+    tess.uniforms.uGain.value = 1 + rush * 1.4;
     const far = tess.uniforms.uFogFar.value;
     tessScene.background.setRGB(0.012 + far.r * 0.9 * reveal, 0.008 + far.g * 0.9 * reveal, 0.005 + far.b * 0.9 * reveal);
-    dustMat.uniforms.uA.value = win(p, 0.6, 0.66, 0.86, 0.92);
+    dustMat.uniforms.uA.value = smooth(0.5, 3, pt) * (1 - rush);
     dustMat.uniforms.uH.value = H;
     dust.position.set(0, 0, tessCam.position.z);
 
-    // ---------------- the watch
-    const wIn = smooth(0.885, 0.945, p);
-    v3.set(0.0, -1.6 * (1 - wIn) + 0.14, -2.5).applyMatrix4(tessCam.matrixWorld);
-    watch.root.position.copy(v3);
+    // the watch: it rises into frame, and the second hand starts to spell
+    const wIn = smooth(T_WATCH, T_WATCH + 3, pt) * (1 - smooth(T_FOLD + 0.5, T_FOLD + 2.5, pt));
+    v1.set(0.0, -1.6 * (1 - wIn) + 0.14, -2.5).applyMatrix4(tessCam.matrixWorld);
+    watch.root.position.copy(v1);
     watch.root.quaternion.copy(tessCam.quaternion);
     watch.root.rotateX(-0.28 * (1 - wIn) + 0.12);
     watch.root.rotateY(0.35 * (1 - wIn) - 0.08);
     watch.root.rotateZ(Math.sin(time * 0.3) * 0.02);
     watch.root.scale.setScalar(0.4);
-    watch.root.visible = p > 0.87;
-    if (p > 0.915) { if (watchT0 < 0) watchT0 = time; } else watchT0 = -1;
-    const m = watch.update(watchT0 < 0 ? 0 : (FIXED_T != null ? 7.4 : time - watchT0));
+    watch.root.visible = wIn > 0.001;
+    if (pt > T_WATCH + 2.2) { if (watchT0 < 0) watchT0 = pt; } else watchT0 = -1;
+    const m = watch.update(watchT0 < 0 ? 0 : (SHOT ? 7.4 : pt - watchT0));
     if (m.onset) sound.morseTick();
-    if (morseEl.textContent !== m.morse) morseEl.textContent = m.morse;
-    if (stayEl.textContent !== m.word) stayEl.textContent = m.word;
-
-    world = p < 0.592 ? 1 : 2;
-
-    // ---------------- post
-    const u = post.u;
-    const imax = smooth(0.3, 0.44, p);
-    const bar239 = Math.max(0, (1 - aspect / 2.39) / 2);
-    u.uLetter.value = world === 1 ? bar239 * (1 - imax) : 0;
-    u.uStreak.value = win(p, 0.524, 0.545, 0.553, 0.564);
-    u.uBlack.value = Math.max(1 - intro * (SHOT ? 1 : 1), win(p, 0.553, 0.566, 0.577, 0.59));
-    if (!SHOT && introAt === Infinity) u.uBlack.value = 1;
-    u.uWhite.value = win(p, 0.577, 0.598, 0.612, 0.655);
-    u.uBloom.value = world === 1 ? 0.5 : 0.8;
-    u.uExposure.value = world === 1 ? 1.0 : 1.05;
-    u.uGrain.value = 0.045;
-    u.uVignette.value = 0.6;
-    u.uCA.value = world === 1 ? 0.006 : 0.006;
-    u.uTime.value = time;
-
-    // ---------------- captions + HUD
-    for (const [k, [a, b, c, d]] of Object.entries(CAPS)) {
-        const el = capEls[k]; if (!el) continue;
-        const o = win(p, a, b, c, d);
-        el.style.opacity = o.toFixed(3);
-        el.style.transform = k === 'title' ? `translate3d(-50%, calc(-50% + ${(1 - o) * 10}px), 0)` : k === 'watch' ? `translate3d(-50%, ${(1 - o) * 10}px, 0)` : `translate3d(0, ${(1 - o) * 12}px, 0)`;
-    }
-    if (world === 1) {
-        tcLabel.textContent = `d\u03c4/dt ${Math.sqrt(Math.max(0, 1 - 1 / r)).toFixed(3)}`;
-        tcRs.innerHTML = `r = ${r.toFixed(1)} r<sub>s</sub>`;
-    } else {
-        tcLabel.textContent = 'd\u03c4/dt \u2014';
-        tcRs.innerHTML = 'r = <sub>bulk</sub>';
-    }
-
-    // ---------------- sound
-    const lvl = 0.35 + 0.25 * smooth(0.08, 0.2, p) + 0.4 * smooth(0.3, 0.48, p);
-    const silence = 1 - smooth(0.5, 0.548, p);
-    const after = smooth(0.6, 0.66, p);
-    sound.set({
-        level: p < 0.56 ? lvl * silence : after * lerp(0.35, 0.75, smooth(0.7, 0.8, p)) * (1 - 0.6 * smooth(0.88, 0.94, p)),
-        bright: p < 0.56 ? lerp(0.1, 1, smooth(0.08, 0.48, p)) : 0.6,
-        tick: p < 0.56 ? lerp(0.25, 0.9, smooth(0.1, 0.46, p)) * (1 - smooth(0.49, 0.53, p)) : 0,
-        arp: smooth(0.7, 0.78, p) * (1 - 0.7 * smooth(0.88, 0.94, p)),
-    });
+    txt(el.morse, m.morse);
+    txt(el.stay, m.word);
+    el.murph.style.opacity = (win(pt, T_WATCH + 2, T_WATCH + 3, T_FOLD + 1, T_FOLD + 2.5)).toFixed(3);
+    if (pt > T_END) putBack();
 }
 
-function render(p) {
+// ------------------------------------------------------------------ the frame
+const sound = new Sound();
+function update(dt) {
+    const T = TIERS[tier];
+    const started = introAt !== Infinity;
+    const intro = SHOT ? 1 : smooth(0, 5, time - introAt);
+    ctl.holdT = ctl.hold ? ctl.holdT + dt : 0;
+    if (!warmed && S.phase === 'orbit' && S.pt > 4 && shipScene.environment) warmWorlds();
+    ctl.idle += dt;
+    pointerS.x = damp(pointerS.x, pointer.x, 6, dt); pointerS.y = damp(pointerS.y, pointer.y, 6, dt);
+    if (cut.t >= 0) {
+        const was = cut.t;
+        cut.t += dt;
+        if (was < 0.32 && cut.t >= 0.32 && cut.fn) { cut.fn(); cut.fn = null; }
+        if (cut.t > 0.8) cut.t = -1;
+    }
+
+    // time: how fast the world runs here, from the lens's own radius
+    const holdBoost = S.phase === 'tess' && ctl.hold ? 3.5 : 1;
+    const ptDt = dt * holdBoost;
+    if (S.phase !== 'tess') {
+        const r = Math.max(1.0001, focus.length());
+        S.r = r;
+        S.dil = Math.sqrt(1 - 1 / r);
+    }
+    const rateT = S.phase === 'tess' ? 1 : clamp(Math.pow(S.dil, 2.2), 0.06, 1);
+    S.rate = SHOT ? rateT : damp(S.rate, rateT, 2, dt);
+    const simDt = (started || SHOT ? dt : dt * 0.3) * (S.phase === 'tess' ? 1 : S.rate);
+    S.sim += simDt;
+    if (FIXED_T != null) S.sim = FIXED_T;
+    if (started) {
+        S.tau += dt * (S.phase === 'tess' ? 1 : S.rate);
+        S.earth += dt * (S.phase === 'tess' ? 400 : (1 / Math.max(S.dil, 0.004) - 1) * 40 + 1 / 86400);
+    }
+    S.pt += ptDt;
+
+    if (S.phase === 'orbit') updateOrbit(dt, SHOT ? 0 : simDt);
+    else if (S.phase === 'dive') updateDive(ptDt);
+    else updateTess(ptDt);
+    if (SHOT && S.phase === 'orbit') S.pt = SHOT_PT;
+
+    // ---------------- the lens (world 1)
+    if (world === 1) {
+        shipCam.updateProjectionMatrix();
+        shipCam.updateMatrixWorld();
+        // each ship stretches about its own centre, in view space
+        endurance.shipU.uCenter.value.copy(endurance.root.position).applyMatrix4(shipCam.matrixWorldInverse);
+        ranger.root.getWorldPosition(ranger.shipU.uCenter.value).applyMatrix4(shipCam.matrixWorldInverse);
+        bhCam.position.copy(focus);
+        bhCam.quaternion.copy(shipCam.quaternion);
+        bhCam.fov = shipCam.fov; bhCam.aspect = aspect;
+        bhCam.updateProjectionMatrix();
+        bhCam.updateMatrixWorld();
+        const U = bh.uniforms;
+        U.uTime.value = S.sim;
+        U.uSteps.value = T.steps;
+        U.uStepK.value = T.stepK;
+        U.uDiskGain.value = 1.6 * (SHOT ? 1 : smooth(0.0, 4.5, time - introAt) * 0.85 + 0.15);
+        U.uStarGain.value = SHOT ? 1 : 0.35 + 0.65 * intro;
+        U.uDoppler.value = 0.62;
+        // the cursor's own gravity: an Einstein ring that follows it across the sky
+        const lensOn = S.phase === 'orbit' && (pointerIn || SHOT === 'lens') && !mobile ? 1 : 0;
+        U.uLensK.value = damp(U.uLensK.value, lensOn * (0.0011 + (ctl.hold ? 0.0007 : 0)), 4, dt);
+        v1.set(SHOT === 'lens' ? -0.35 : pointerS.x, SHOT === 'lens' ? 0.42 : pointerS.y, 0.5).unproject(bhCam).sub(bhCam.position).normalize();
+        U.uLensDir.value.copy(v1);
+        endurance.puffMat.uniforms.uScale.value = H * 0.9;
+        // relight the scene from the hole every few frames (always in shots)
+        envTick--;
+        if (SHOT || envTick <= 0 || !envShipRT) {
+            updateShipEnv(focus);
+            envTick = T.envEvery;
+        }
+    } else {
+        envTick--;
+        if (SHOT ? frames < 4 : envTick <= 0 || !envTessRT) { updateTessEnv(); envTick = Math.max(6, T.envEvery); }
+    }
+
+    // ---------------- post
+    const u = post.u, D = post.dofU;
+    const k = H / 900;
+    let white = 0, black = 0, streak = 0, letter = 0;
+    if (S.phase === 'orbit') {
+        white = S.loop > 1 ? 1 - smooth(0, 2.6, S.pt) : 0;
+        D.uAperture.value = 0;
+    } else if (S.phase === 'dive') {
+        streak = win(S.pt, ...DIVE_STREAK);
+        black = Math.max(win(S.pt, ...DIVE_BLACK), 1 - smooth(0, 0.35, S.pt));
+        white = smooth(6.8, DIVE_WHITE, S.pt);
+        letter = Math.max(0, (1 - aspect / 2.39) / 2) * smooth(0, 1, S.pt);
+        D.uFocus.value = shipCam.position.distanceTo(cooper.root.position);
+        D.uAperture.value = 6.5 * k; D.uMaxCoc.value = 9 * k;
+    } else {
+        white = Math.max(1 - smooth(0, 1.6, S.pt), smooth(T_END - 2.2, T_END, S.pt));
+        const wIn = smooth(T_WATCH, T_WATCH + 3, S.pt) * (1 - smooth(T_FOLD + 0.5, T_FOLD + 2.5, S.pt));
+        const fc = tessCam.position.distanceTo(cooper.root.position), fw = tessCam.position.distanceTo(watch.root.position);
+        D.uFocus.value = lerp(fc, fw, wIn);
+        D.uAperture.value = (8 - wIn * 3) * k; D.uMaxCoc.value = 12 * k;
+    }
+    if (cut.t >= 0) black = Math.max(black, cut.t < 0.32 ? smooth(0, 0.32, cut.t) : 1 - smooth(0.32, 0.8, cut.t));
+    if (!SHOT && !started) black = 1;
+    else if (!SHOT) black = Math.max(black, 1 - smooth(0, 2.4, time - introAt));
+    u.uWhite.value = white; u.uBlack.value = black; u.uStreak.value = streak; u.uLetter.value = letter;
+    u.uBloom.value = world === 1 ? (S.phase === 'dive' ? 0.6 : 0.5) : 0.8;
+    u.uExposure.value = world === 1 ? 1.0 : 1.05;
+    u.uAgX.value = world === 2 ? 1 : S.phase === 'dive' ? 0.45 : 0;
+    u.uGrain.value = 0.045;
+    u.uVignette.value = 0.6;
+    u.uCA.value = S.phase === 'orbit' ? 0.006 : 0.011;
+    u.uTime.value = time;
+
+    // ---------------- HUD
+    const ti = S.tau;
+    txt(el.tau, `${pad(ti / 3600)}:${pad((ti / 60) % 60)}:${pad(ti % 60)}.${pad((ti * 100) % 100)}`);
+    const yrs = Math.floor(S.earth / 365.25), days = Math.floor(S.earth % 365.25);
+    txt(el.earth, `Earth +${yrs}y ${pad(days, 3)}d`);
+    if (S.phase === 'tess') { txt(el.r, 'r  bulk'); txt(el.d, 'd\u03c4/dt  \u2014'); }
+    else { txt(el.r, `r  ${S.r.toFixed(2)} r\u209b`); txt(el.d, `d\u03c4/dt  ${S.dil.toFixed(3)}`); }
+    txt(el.loop, `Loop ${pad(S.loop)}`);
+    txt(el.act, actionLabel());
+    txt(el.rate, `${(S.phase === 'tess' ? holdBoost : S.rate).toFixed(2)}\u00d7`);
+    root.classList.toggle('is-near', S.phase === 'orbit' && S.r < 2.4);
+    root.classList.toggle('is-hold', ctl.hold);
+    if (el.title) {
+        const o = SHOT ? 0 : win(time - introAt, 0.8, 2.2, 5.5, 7.5);
+        el.title.style.opacity = o.toFixed(3);
+        el.title.style.transform = `translate3d(-50%, calc(-50% + ${((1 - o) * 10).toFixed(1)}px), 0)`;
+    }
+    if (capT >= 0) {
+        capT += dt;
+        const o = win(capT, 0.6, 1.4, 4.4, 5.6);
+        el.cap.style.opacity = o.toFixed(3);
+        el.cap.style.transform = `translate3d(-50%, ${((1 - o) * 8).toFixed(1)}px, 0)`;
+        if (capT > 6) capT = -1;
+    }
+    if (S.phase !== 'tess') el.murph.style.opacity = '0';
+
+    // ---------------- sound
+    const close = smooth(12, 2, S.r);
+    const thr = S.mode === 'ranger' ? ranger.throttle : (S.mode === 'free' && ctl.hold ? 0.45 : 0);
+    if (S.phase === 'orbit') {
+        sound.set({ level: (0.4 + 0.35 * close) * intro, bright: 0.25 + 0.75 * close, tick: 0.55 + 0.35 * close, arp: 0, rate: S.rate, thrust: thr });
+    } else if (S.phase === 'dive') {
+        const silence = 1 - smooth(4.8, 5.5, S.pt);
+        sound.set({ level: 0.75 * silence, bright: 1, tick: 0.9 * silence, arp: 0, rate: S.rate, thrust: 0 });
+    } else {
+        const pt = S.pt;
+        const after = smooth(0.4, 3, pt);
+        sound.set({
+            level: after * lerp(0.35, 0.75, smooth(8, 14, pt)) * (1 - 0.6 * win(pt, T_WATCH, T_WATCH + 3, T_FOLD, T_FOLD + 1.5)) * (1 + smooth(T_FOLD, T_END, pt) * 0.3),
+            bright: 0.6 + smooth(T_FOLD, T_END, pt) * 0.4,
+            tick: 0,
+            arp: smooth(9, 14, pt) * (1 - 0.7 * win(pt, T_WATCH, T_WATCH + 3, T_FOLD, T_FOLD + 1.5)),
+            rate: holdBoost > 1 ? 1.25 : 1, thrust: 0,
+        });
+    }
+}
+
+function render() {
     const u = post.u;
     const covered = u.uBlack.value > 0.999 || u.uWhite.value > 0.999;
+    let cam = null;
     if (!covered) {
         if (world === 1) {
             bh.setCamera(bhCam, post.rtBH.height);
@@ -382,18 +818,20 @@ function render(p) {
             bgMat.uniforms.t.value = post.rtBH.texture;
             renderer.setRenderTarget(post.rtScene);
             renderer.render(shipScene, shipCam);
+            cam = shipCam;
         } else {
             renderer.setRenderTarget(post.rtScene);
             renderer.render(tessScene, tessCam);
+            cam = tessCam;
         }
     }
-    post.finish(world === 1 ? 1.5 : 1.0);
+    post.finish(world === 1 ? 1.5 : 1.0, cam);
 }
 
 // ------------------------------------------------------------------ adaptive quality: sample, then step down / up
 const perf = { ema: 16.7, bad: 0, good: 0, cool: 0, raised: false };
 function sample(dtMs) {
-    if (SHOT || time - introAt < 2.5 && !SHOT && introAt !== Infinity) return;
+    if (SHOT || introAt === Infinity || time - introAt < 2.5) return;
     perf.ema = lerp(perf.ema, Math.min(dtMs, 100), 0.05);
     perf.cool -= dtMs;
     if (perf.cool > 0) return;
@@ -402,7 +840,7 @@ function sample(dtMs) {
     if (perf.bad > 1200) {
         perf.bad = 0; perf.cool = 2500;
         if (dyn > 0.76) { dyn -= 0.12; resize(); }
-        else if (tier > 0) { tier--; dyn = 1; if (tier === 0) key.castShadow = false; resize(); }
+        else if (tier > 0) { tier--; dyn = 1; if (tier === 0) { key.castShadow = false; tKey.castShadow = false; } resize(); }
     } else if (perf.good > 6000 && !perf.raised) {
         perf.good = 0; perf.cool = 3000;
         if (dyn < 1) { dyn = Math.min(1, dyn + 0.12); resize(); }
@@ -410,27 +848,90 @@ function sample(dtMs) {
     }
 }
 
-// ------------------------------------------------------------------ scroll
-history.scrollRestoration = 'manual';
-let progress = 0;
-let lenis = null;
-const scrollEl = document.getElementById('scroll');
-function readProgress() {
-    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-    progress = clamp(window.scrollY / max);
+// ------------------------------------------------------------------ input: drag to orbit, scroll to zoom, hold to burn
+const dot = document.querySelector('.site-cursor-dot');
+let cx = -100, cy = -100, dx = -100, dy = -100;
+const touches = new Map();
+let down = null;       // { x, y, t, id, moved }
+let pinch0 = 0;
+const isUI = (t) => t && t.closest && t.closest('a, button, label, input, .ap-nav, .g-gate');
+function setPointer(e) {
+    pointer.set((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
+    cx = e.clientX; cy = e.clientY;
 }
-if (!SHOT) {
-    window.scrollTo(0, 0);
-    lenis = new Lenis({ lerp: reduceMotion ? 1 : 0.075, smoothWheel: true, syncTouch: false, wheelMultiplier: 0.8, touchMultiplier: 1.4 });
-    lenis.stop();
-    lenis.on('scroll', readProgress);
-    root.classList.add('g-locked');
-} else {
-    document.getElementById('gate').style.display = 'none';
-    scrollEl.style.height = '0';
-    root.classList.add('is-running');
-    if (Q.has('clean')) root.classList.add('g-clean');
-}
+window.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse' || touches.size) { setPointer(e); pointerIn = e.pointerType === 'mouse' || S.mode === 'ranger'; }
+    if (e.pointerType === 'mouse') dot.classList.add('is-on');
+    dot.classList.toggle('is-hover', !!isUI(e.target));
+    ctl.idle = 0;
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch0) ctl.zoomT[S.mode] -= Math.log(d / pinch0) * 1.4;
+        pinch0 = d;
+        return;
+    }
+    if (!down || down.id !== e.pointerId) return;
+    const mx = e.clientX - down.lx, my = e.clientY - down.ly;
+    down.lx = e.clientX; down.ly = e.clientY;
+    const steering = S.phase === 'orbit' && S.mode === 'ranger';
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 7 && !ctl.hold && !steering) { down.moved = true; ctl.drag = true; }
+    if (ctl.drag) {
+        // grab-the-world orbiting: drag right and the camera swings left round its subject
+        const sx = 3.2 / window.innerWidth, sy = 2.2 / window.innerHeight;
+        const py = S.phase === 'orbit' && S.mode === 'free' ? 1 : -1;   // free cam pitch is elevation, the rest is view pitch
+        ctl.tyaw -= mx * sx; ctl.tpitch += my * sy * py;
+        const now = performance.now(), dtv = Math.max(8, now - down.lt) / 1000;
+        down.lt = now;
+        ctl.fyaw = lerp(ctl.fyaw, -mx * sx / dtv, 0.5);
+        ctl.fpitch = lerp(ctl.fpitch, my * sy * py / dtv, 0.5);
+    }
+}, { passive: true });
+canvas.addEventListener('pointerdown', (e) => {
+    if (introAt === Infinity) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) { pinch0 = 0; ctl.hold = false; ctl.drag = false; down = null; return; }
+    setPointer(e);
+    pointerIn = true;
+    down = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, lt: performance.now(), t: performance.now(), moved: false };
+    ctl.fyaw = ctl.fpitch = 0;
+    ctl.idle = 0;
+    // in the Ranger the press is the throttle; elsewhere it becomes a hold if it does not turn into a drag
+    if (S.mode === 'ranger' && S.phase === 'orbit') ctl.hold = true;
+    else setTimeout(() => { if (down && !down.moved && down.id === e.pointerId) ctl.hold = true; }, 200);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
+});
+const release = (e) => {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch0 = 0;
+    if (down && down.id === e.pointerId) {
+        down = null; ctl.drag = false; ctl.hold = false;
+        if (e.pointerType !== 'mouse') pointerIn = false;
+    }
+};
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
+document.addEventListener('pointerleave', () => { dot.classList.remove('is-on'); pointerIn = false; });
+document.addEventListener('pointerenter', () => { pointerIn = true; });
+window.addEventListener('wheel', (e) => {
+    if (introAt === Infinity || S.phase !== 'orbit') return;
+    const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    ctl.zoomT[S.mode] += clamp(d, -120, 120) * 0.0016;
+    ctl.idle = 0;
+}, { passive: true });
+window.addEventListener('keydown', (e) => {
+    if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if (introAt === Infinity) return;
+    if (e.code === 'Space') { if (!e.repeat) ctl.hold = true; e.preventDefault(); }
+    else if (e.key === '1' || e.key === 'e' || e.key === 'E') setMode('endurance');
+    else if (e.key === '2' || e.key === 'r' || e.key === 'R') setMode('ranger');
+    else if (e.key === '3' || e.key === 'f' || e.key === 'F') setMode('free');
+    else if (e.key === 'm' || e.key === 'M') document.getElementById('mute').click();
+    ctl.idle = 0;
+});
+window.addEventListener('keyup', (e) => { if (e.code === 'Space') ctl.hold = false; });
+window.addEventListener('blur', () => { ctl.hold = false; ctl.drag = false; down = null; });
 
 // ------------------------------------------------------------------ the gate
 const gate = document.getElementById('gate');
@@ -443,7 +944,9 @@ document.getElementById('gateGo').addEventListener('click', () => {
     root.classList.remove('g-locked');
     root.classList.add('is-running');
     introAt = time;
-    lenis && lenis.start();
+    // arrive from far out, settling into the chase
+    ctl.zoom.endurance = Math.log(900); ctl.zoomT.endurance = Math.log(170);
+    ctl.yaw = -0.7; ctl.tyaw = 0; ctl.pitch = 0.12; ctl.tpitch = 0;
 });
 document.getElementById('mute').addEventListener('click', (e) => {
     const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
@@ -453,17 +956,50 @@ document.getElementById('mute').addEventListener('click', (e) => {
     sound.setMuted(on);
 });
 
-// ------------------------------------------------------------------ pointer + the white cursor
-const dot = document.querySelector('.site-cursor-dot');
-let cx = -100, cy = -100, dx = -100, dy = -100;
-window.addEventListener('pointermove', (e) => {
-    pointer.set((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
-    cx = e.clientX; cy = e.clientY;
-    if (e.pointerType === 'mouse') dot.classList.add('is-on');
-    const t = e.target.closest && e.target.closest('a, button, label');
-    dot.classList.toggle('is-hover', !!t);
-}, { passive: true });
-document.addEventListener('pointerleave', () => dot.classList.remove('is-on'));
+// ------------------------------------------------------------------ shots: fixed states for frame renders (?shot=name&t=s)
+let SHOT_PT = 0;
+function applyShot(name) {
+    gate.style.display = 'none';
+    root.classList.add('is-running');
+    root.classList.remove('g-locked');
+    if (Q.has('clean')) root.classList.add('g-clean');
+    const pt = Q.has('pt') ? parseFloat(Q.get('pt')) : null;
+    const Z = (m, d) => { ctl.zoom[m] = ctl.zoomT[m] = Math.log(d); };
+    S.tau = 4321.37; S.earth = 2741; S.loop = Q.has('loop') ? parseInt(Q.get('loop'), 10) : 1;
+    switch (name) {
+        case 'endurance-wide': Z('endurance', 520); ctl.tyaw = ctl.yaw = -0.3; ctl.tpitch = ctl.pitch = 0.06; break;
+        case 'endurance-side': Z('endurance', 140); ctl.tyaw = ctl.yaw = 1.2; ctl.tpitch = ctl.pitch = 0.15; break;
+        case 'ranger': case 'ranger-near': {
+            undock();
+            S.mode = 'ranger';
+            v1.set(0, 0, 1).applyQuaternion(rgr.Q);
+            toHole.copy(endP).negate().normalize();
+            frameQ(toHole, q1); q1.multiply(q2.setFromAxisAngle(UP, Math.PI));
+            rgr.Q.copy(q1).multiply(q2.setFromEuler(new THREE.Euler(0.12, 0.35, 0)));
+            // behind the Endurance (further out), a little high and to the side, so the station sits between us and the hole
+            rgr.P.copy(endP).addScaledVector(toHole, -260 / K).addScaledVector(v2.set(0, 1, 0), 24 / K).addScaledVector(v3.crossVectors(toHole, UP).normalize(), -60 / K);
+            rgr.want = 1; Z('ranger', name === 'ranger' ? 36 : 30);
+            if (name === 'ranger-near') { rgr.P.copy(toHole).multiplyScalar(-4.2); }
+            break;
+        }
+        case 'free': S.mode = 'free'; Z('free', 18); ctl.tyaw = ctl.yaw = 0.3; ctl.tpitch = ctl.pitch = 0.07; break;
+        case 'lens': S.mode = 'free'; Z('free', 22); ctl.tyaw = ctl.yaw = 0.3; ctl.tpitch = ctl.pitch = 0.05; pointerIn = true; break;
+        case 'free-close': S.mode = 'free'; Z('free', 2.6); ctl.tyaw = ctl.yaw = 0.3; ctl.tpitch = ctl.pitch = 0.05; break;
+        case 'return': S.loop = 2; SHOT_PT = pt ?? 1.2; S.pt = SHOT_PT; Z('endurance', 200); ctl.tyaw = ctl.yaw = -0.5; ctl.tpitch = ctl.pitch = 0.05; break;
+        case 'eject': case 'streak':
+            S.mode = 'free'; Z('free', 6); ctl.tyaw = ctl.yaw = 0.3; ctl.tpitch = ctl.pitch = 0.06;
+            free.P.set(6 * Math.sin(0.3), 6 * 0.06, 6 * Math.cos(0.3));
+            startDive('free');
+            S.pt = pt ?? (name === 'eject' ? 2.2 : 4.8);
+            break;
+        case 'tess-fall': case 'cooper': case 'watch': case 'fold':
+            startTess();
+            S.pt = pt ?? { 'tess-fall': 4.5, cooper: 13, watch: 30.4, fold: 33 }[name];
+            break;
+        default: break;
+    }
+    syncModeUI();
+}
 
 // ------------------------------------------------------------------ loop
 let raf = 0, last = performance.now(), frames = 0;
@@ -471,23 +1007,32 @@ function frame(now) {
     raf = requestAnimationFrame(frame);
     const dtMs = Math.min(100, now - last);
     last = now;
-    const dt = dtMs / 1000;
-    if (FIXED_T == null) time += dt;
-    if (lenis) lenis.raf(now);
-    const p = SHOT ? FIXED_P : progress;
-    update(p, dt);
-    render(p);
+    let dt = dtMs / 1000;
+    if (SHOT) {
+        // shots hold the phase clock still; only the first frames settle springs
+        const keepPt = S.pt;
+        update(0.0001);
+        S.pt = keepPt;
+    } else {
+        if (FIXED_T == null) time += dt;
+        update(dt);
+    }
+    render();
     sample(dtMs);
     dx += (cx - dx) * 0.35; dy += (cy - dy) * 0.35;
     dot.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
-    if (SHOT && ++frames === 6) window.__gargShot = true;
+    frames++;
+    if (SHOT && frames === 8) window.__gargShot = true;
 }
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { cancelAnimationFrame(raf); raf = 0; sound.pause(true); }
+    if (document.hidden) { cancelAnimationFrame(raf); raf = 0; sound.pause(true); ctl.hold = false; }
     else if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); sound.pause(false); }
 });
 window.addEventListener('resize', resize);
 resize();
+if (SHOT) { time = FIXED_T ?? 10; root.classList.add('g-shot'); applyShot(SHOT); }
+else { root.classList.add('g-locked'); }
+syncModeUI();
 raf = requestAnimationFrame(frame);
 
 // the shared nav types its home-page line on load; this page keeps its own
@@ -498,4 +1043,7 @@ if (navMsg) {
         .observe(navMsg, { childList: true, characterData: true, subtree: true });
 }
 
-window.__garg = { get tier() { return TIERS[tier].name; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound };
+window.__garg = {
+    get tier() { return TIERS[tier].name; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound, S, ctl, rgr,
+    astro: cooper.stats, setMode, startDive, endurance, ranger, shipCam, focus, endP, tessScene, tKey, cooper,
+};

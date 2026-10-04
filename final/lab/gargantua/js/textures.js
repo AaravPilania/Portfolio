@@ -132,6 +132,88 @@ export function gridTexture(seed = 5, size = 512, cells = 16, base = '#14161a', 
     return tex(c, true);
 }
 
+// height field -> tangent-space normal map (Sobel), so painted relief shades under real lights
+function heightToNormal(h, size, strength) {
+    const [c, x] = canvas(size);
+    const img = x.createImageData(size, size);
+    const H = (i, j) => h[((j + size) % size) * size + ((i + size) % size)];
+    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+        const dx = (H(i + 1, j - 1) + 2 * H(i + 1, j) + H(i + 1, j + 1)) - (H(i - 1, j - 1) + 2 * H(i - 1, j) + H(i - 1, j + 1));
+        const dy = (H(i - 1, j + 1) + 2 * H(i, j + 1) + H(i + 1, j + 1)) - (H(i - 1, j - 1) + 2 * H(i, j - 1) + H(i + 1, j - 1));
+        let nx = -dx * strength, ny = -dy * strength, nz = 1;
+        const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+        const k = (j * size + i) * 4;
+        img.data[k] = (nx * 0.5 + 0.5) * 255; img.data[k + 1] = (ny * 0.5 + 0.5) * 255; img.data[k + 2] = (nz * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    return tex(c, false);
+}
+
+// Ortho-fabric, the EVA outer layer: a plain weave of Gore-Tex / Nomex / Kevlar with a heavier ripstop grid every few
+// millimetres, slubs in the yarn and a faint puckered quilting. One tile = 6 cm of cloth.
+export function fabricNormal(size = 512) {
+    const R = rng(11);
+    const h = new Float32Array(size * size);
+    const slub = new Float32Array(size);
+    for (let i = 0; i < size; i++) slub[i] = (R() - 0.5) * 0.35;
+    const cell = 64, yarn = 4;
+    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+        // plain weave: warp over weft over warp, each yarn a rounded ridge
+        const wu = i / yarn, wv = j / yarn;
+        const over = ((Math.floor(wu) + Math.floor(wv)) & 1) ? 1 : 0;
+        const ru = Math.sin((wu % 1) * Math.PI), rv = Math.sin((wv % 1) * Math.PI);
+        let v = over ? ru * 0.6 + rv * 0.25 : rv * 0.6 + ru * 0.25;
+        v += slub[j] * 0.4 + slub[i] * 0.4;
+        // ripstop: doubled yarns on a coarser grid
+        const gi = i % cell, gj = j % cell;
+        if (gi < 3 || gj < 3) v += 0.75;
+        h[j * size + i] = v;
+    }
+    // quilting pucker: low, round domes between the ripstop lines
+    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+        const u = (i % (cell * 2)) / (cell * 2), w = (j % (cell * 2)) / (cell * 2);
+        h[j * size + i] += Math.sin(u * Math.PI) * Math.sin(w * Math.PI) * 1.4;
+    }
+    return heightToNormal(h, size, 0.55);
+}
+
+// Moulded fibreglass / polycarbonate: almost flat, a faint orange peel and the odd sanded swirl
+export function plasticNormal(size = 256) {
+    const R = rng(23);
+    const h = new Float32Array(size * size);
+    const blobs = [];
+    for (let i = 0; i < 260; i++) blobs.push([R() * size, R() * size, 3 + R() * 9, (R() - 0.5)]);
+    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+        let v = 0;
+        for (let b = 0; b < 12; b++) {
+            const [bx, by, br, ba] = blobs[(i * 7 + j * 13 + b * 31) % blobs.length];
+            const dx = ((i - bx + size * 1.5) % size) - size / 2, dy = ((j - by + size * 1.5) % size) - size / 2;
+            v += ba * Math.exp(-(dx * dx + dy * dy) / (br * br));
+        }
+        h[j * size + i] = v;
+    }
+    return heightToNormal(h, size, 0.25);
+}
+
+// The shoulder patch: a mission roundel in embroidered thread, no flag, no logo
+export function patchTexture(size = 256) {
+    const [c, x] = canvas(size);
+    const m = size / 2;
+    x.fillStyle = '#0b0d12'; x.beginPath(); x.arc(m, m, m - 2, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#c8b27a'; x.lineWidth = size * 0.035; x.beginPath(); x.arc(m, m, m - size * 0.05, 0, Math.PI * 2); x.stroke();
+    // the hole and its disk, in thread
+    x.strokeStyle = '#e09a4a'; x.lineWidth = size * 0.03;
+    x.beginPath(); x.ellipse(m, m * 1.04, m * 0.56, m * 0.1, 0, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = '#000'; x.beginPath(); x.arc(m, m * 1.04, m * 0.2, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#f1c27d'; x.lineWidth = size * 0.016; x.beginPath(); x.arc(m, m * 1.04, m * 0.23, Math.PI * 1.05, Math.PI * 1.95); x.stroke();
+    x.fillStyle = '#d9d2c2'; x.font = `500 ${size * 0.075}px "G Mono", monospace`; x.textAlign = 'center';
+    x.fillText('ENDURANCE', m, m * 0.5);
+    x.fillText('LAZARUS', m, m * 1.6);
+    const t = tex(c, true);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+}
+
 // Woven suit fabric: a fine twill with soft seam lines, used as a bump so the white suit reads as cloth, not plastic.
 export function fabricBump(size = 512) {
     const [c, x] = canvas(size);

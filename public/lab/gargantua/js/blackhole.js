@@ -3,6 +3,8 @@
 // path of a particle under a = -1.5 h^2 r / |r|^5 with h = |r x v| conserved, so the ray is integrated in flat 3D with
 // that force (velocity Verlet, step proportional to radius). The thin disk is found where the ray crosses y = 0;
 // it is semi-transparent, so the far side bent over and under the shadow and the photon ring all come for free.
+// Two extra modes: a whole-sky equirect from the lens (for image-based lighting of whatever is near it), and a
+// second point mass that follows the cursor, applied as a thin-lens deflection of the escaped starlight.
 import * as THREE from 'three';
 
 const vert = /* glsl */`
@@ -29,6 +31,9 @@ uniform float uStarGain;
 uniform float uDoppler;
 uniform float uSpin;
 uniform float uExposure;
+uniform vec3 uLensDir;
+uniform float uLensK;
+uniform float uEquirect;
 
 #define MAX_STEPS 320
 
@@ -136,9 +141,18 @@ vec4 disk(vec3 hp, float rh, vec3 rayDir) {
 }
 
 void main() {
-    vec2 p = vUv * 2.0 - 1.0;
-    p.x *= uAspect;
-    vec3 dir = normalize(uCamRot * vec3(p * uTanFov, -1.0));
+    vec3 dir;
+    if (uEquirect > 0.5) {
+        // the whole sky around the lens, for image-based lighting of everything near it
+        // three.js equirect convention: u = atan(d.z, d.x) / 2pi + 0.5, v = asin(d.y) / pi + 0.5
+        float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.1415927;
+        dir = vec3(cos(lon) * cos(lat), sin(lat), sin(lon) * cos(lat));
+    } else {
+        vec2 p = vUv * 2.0 - 1.0;
+        p.x *= uAspect;
+        dir = normalize(uCamRot * vec3(p * uTanFov, -1.0));
+    }
+    vec3 dir0 = dir;
 
     vec3 pos = uCamPos;
     vec3 vel = dir;
@@ -181,7 +195,23 @@ void main() {
         if (r < 1.0) { captured = true; break; }
         if (r > escR && dot(pos, vel) > 0.0) break;
     }
-    if (!captured) col += (1.0 - alpha) * sky(normalize(vel));
+    if (!captured) {
+        vec3 sd = normalize(vel);
+        // the cursor is a second, invisible point mass: starlight behind it is pulled round it (thin-lens, softened core)
+        if (uLensK > 1e-6 && uEquirect < 0.5) {
+            float c = clamp(dot(dir0, uLensDir), -1.0, 1.0);
+            float th = acos(c);
+            float alphaL = uLensK * th / (th * th + uLensK * 0.08);
+            vec3 ax = cross(dir0, uLensDir);
+            float al = length(ax);
+            if (al > 1e-5) {
+                ax /= al;
+                float s = sin(alphaL), cs = cos(alphaL);
+                sd = sd * cs + cross(ax, sd) * s + ax * dot(ax, sd) * (1.0 - cs);
+            }
+        }
+        col += (1.0 - alpha) * sky(sd);
+    }
     gl_FragColor = vec4(col * uExposure, 1.0);
 }
 `;
@@ -203,6 +233,9 @@ export function createBlackHole() {
         uDoppler: { value: 0.6 },
         uSpin: { value: 1 },
         uExposure: { value: 1 },
+        uLensDir: { value: new THREE.Vector3(0, 0, -1) },
+        uLensK: { value: 0 },
+        uEquirect: { value: 0 },
     };
     const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader: frag, depthTest: false, depthWrite: false });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);

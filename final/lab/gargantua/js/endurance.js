@@ -144,20 +144,26 @@ function rnd(seed) {
     return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-export function createEndurance({ shadows = true } = {}) {
-    const panel = panelTextures(7);
-    const foil = foilTextures(3);
-    const rad = gridTexture(5, 512, 24, '#1a1c20', '#30343a', 14);
-    const tile = gridTexture(9, 512, 20, '#0f1012', '#1d1f22', 26);
+let TEX = null;
+function textures() {
+    return TEX ||= {
+        panel: panelTextures(7),
+        foil: foilTextures(3),
+        rad: gridTexture(5, 512, 24, '#1a1c20', '#30343a', 14),
+        tile: gridTexture(9, 512, 20, '#0f1012', '#1d1f22', 26),
+    };
+}
+const stretchUniforms = () => ({ uStretch: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uFade: { value: 1 }, uRed: { value: 0 } });
 
-    const shipU = { uStretch: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uFade: { value: 1 }, uRed: { value: 0 } };
+function makeMaterials(shipU) {
+    const { panel, foil, rad, tile } = textures();
     const hook = (m) => {
         m.onBeforeCompile = (sh) => {
             Object.assign(sh.uniforms, shipU);
             sh.vertexShader = 'uniform float uStretch;\nuniform vec3 uCenter;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
             {
                 vec3 q = mvPosition.xyz - uCenter;
-                vec3 ax = normalize(-uCenter);
+                vec3 ax = normalize(vec3(0.0, 0.0, 1e-3) - uCenter);
                 float along = dot(q, ax);
                 vec3 perp = q - ax * along;
                 // spaghettified toward the hole: drawn out along the line of fall, pinched across it
@@ -179,6 +185,76 @@ export function createEndurance({ shadows = true } = {}) {
         tile: hook(new THREE.MeshStandardMaterial({ color: 0xffffff, map: tile, roughness: 0.75, metalness: 0.0 })),
         glass: hook(new THREE.MeshPhysicalMaterial({ color: 0x050607, roughness: 0.06, metalness: 0.2, clearcoat: 1 })),
     };
+    return mats;
+}
+
+// The Ranger on its own: same hull and materials as when docked, plus two engine plumes and the glow they throw on
+// the tail. Built nose +Z, belly -Y. Throttle 0..1 drives the plume, the light and the flicker.
+export function createRanger({ shadows = true } = {}) {
+    const shipU = stretchUniforms();
+    const mats = makeMaterials(shipU);
+    const B = new Builder();
+    buildRanger(B);
+    const hull = B.build(mats);
+    hull.traverse((o) => { if (o.isMesh) { o.castShadow = shadows; o.receiveShadow = shadows; } });
+    const root = new THREE.Group();
+    root.add(hull);
+
+    const plumeU = { uThrottle: { value: 0 }, uTime: { value: 0 }, uFade: shipU.uFade };
+    const plumeMat = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: plumeU,
+        vertexShader: /* glsl */`
+            varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+            void main() { vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+        fragmentShader: /* glsl */`
+            uniform float uThrottle, uTime, uFade; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+            float h(float n) { return fract(sin(n) * 43758.5453); }
+            void main() {
+                float along = 1.0 - vUv.y;                       // 0 at the nozzle
+                float rim = pow(1.0 - abs(dot(vN, vV)), 1.6);
+                float core = 1.0 - rim;
+                // shock diamonds: bright knots at regular intervals that slide with throttle
+                float knots = 0.6 + 0.4 * pow(0.5 + 0.5 * cos(along * 38.0 - uTime * 30.0), 6.0);
+                float flick = 0.85 + 0.15 * h(floor(uTime * 40.0));
+                float fade = pow(1.0 - along, 1.6 + (1.0 - uThrottle) * 3.0);
+                vec3 hot = mix(vec3(1.0, 0.55, 0.22), vec3(0.75, 0.85, 1.0), core * (1.0 - along));
+                float a = fade * core * knots * flick * uThrottle * uFade;
+                gl_FragColor = vec4(hot * a * 3.2, a);
+            }`,
+    });
+    const plumes = [];
+    for (const sx of [-1.6, 1.6]) {
+        const g = new THREE.ConeGeometry(0.5, 7, 24, 1, true);
+        g.translate(0, -3.5, 0);
+        const m = new THREE.Mesh(g, plumeMat);
+        m.position.set(sx, 0.2, -10.1);
+        m.rotation.x = -Math.PI / 2;
+        m.renderOrder = 5;
+        root.add(m); plumes.push(m);
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(0.42, 24), new THREE.MeshBasicMaterial({ color: 0xffc894, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        disc.position.set(sx, 0.2, -9.0); disc.rotation.y = Math.PI;
+        root.add(disc); plumes.push(disc);
+    }
+    const glow = new THREE.PointLight(0xffa860, 0, 28, 2);
+    glow.position.set(0, 0.6, -11.5);
+    root.add(glow);
+
+    let throttle = 0;
+    function update(dt, time, want) {
+        throttle += (want - throttle) * Math.min(1, dt * (want > throttle ? 9 : 4));
+        plumeU.uThrottle.value = throttle;
+        plumeU.uTime.value = time;
+        for (const p of plumes) { p.visible = throttle > 0.01; if (p.isMesh && p.geometry.type === 'ConeGeometry') p.scale.set(0.8 + throttle * 0.4, 0.4 + throttle * 0.9, 0.8 + throttle * 0.4); }
+        plumes.forEach((p) => { if (p.material.isMeshBasicMaterial) p.material.opacity = throttle * shipU.uFade.value; });
+        glow.intensity = throttle * 160 * (0.9 + 0.1 * Math.sin(time * 61)) * shipU.uFade.value;
+        return throttle;
+    }
+    return { root, shipU, materials: mats, update, get throttle() { return throttle; } };
+}
+
+export function createEndurance({ shadows = true } = {}) {
+    const shipU = stretchUniforms();
+    const mats = makeMaterials(shipU);
 
     const B = new Builder();
     // ring
@@ -228,11 +304,6 @@ export function createEndurance({ shadows = true } = {}) {
         B.add('metal', cyl(0.14, 0.14, 2.4, 8), [sx * 4.8, -2.6, 0], [0, 0, Math.PI / 2]);
         B.add('radiator', box(7.5, 0.12, 2.6, 3), [sx * 9.6, -2.6, 0]);
     }
-    // the Ranger, docked belly-down on the forward port, nose across the ring
-    B.push(T(0, 8.35, 0).multiply(RY(0.35)));
-    buildRanger(B);
-    B.pop();
-
     const ship = B.build(mats);
     ship.traverse((o) => { if (o.isMesh) { o.castShadow = shadows; o.receiveShadow = shadows; } });
 
@@ -269,6 +340,10 @@ export function createEndurance({ shadows = true } = {}) {
     const spinner = new THREE.Group();
     spinner.add(ship, puffs);
     root.add(spinner);
+    // the Ranger rides here when docked: belly-down on the forward port, nose across the ring
+    const dock = new THREE.Group();
+    dock.position.set(0, 8.35, 0); dock.rotation.y = 0.35;
+    spinner.add(dock);
 
     const sites = [];
     for (let k = 1; k < 12; k += 3) {
@@ -280,11 +355,11 @@ export function createEndurance({ shadows = true } = {}) {
         }
     }
     let nextPuff = 1.5, slot = 0;
-    function update(dt, time) {
+    function update(dt, time, busy = 0) {
         spinner.rotation.y += dt * 0.045;
         nextPuff -= dt;
         if (nextPuff <= 0) {
-            nextPuff = 0.9 + Math.random() * 2.6;
+            nextPuff = (0.9 + Math.random() * 2.6) / (1 + busy * 6);
             const [p, d] = sites[(Math.random() * sites.length) | 0];
             const burst = 2 + ((Math.random() * 3) | 0);
             for (let b = 0; b < burst; b++) {
@@ -304,5 +379,5 @@ export function createEndurance({ shadows = true } = {}) {
         pGeo.attributes.aAge.needsUpdate = true;
     }
 
-    return { root, spinner, shipU, materials: mats, update, puffMat: pMat };
+    return { root, spinner, dock, shipU, materials: mats, update, puffMat: pMat };
 }

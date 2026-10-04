@@ -2,6 +2,9 @@
 // with a slow chiff and wind wobble, through a generated cathedral impulse. Original slow chords, 8.75 s each (seven
 // ticks), under a clock that ticks every 1.25 s. The scroll sets how much organ there is; the horizon is silence.
 // (b) The owner's own score file, if one has been placed at audio/score.mp3.
+// Time dilation is heard, not shown: one constant source feeds every oscillator's and filter's detune, so near the
+// horizon the whole instrument sinks in pitch together, and the clock's tick interval stretches by the same factor.
+// Holding the thrusters opens a band of brown noise under it all.
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 // A minor, never resolving where you expect: i(add9) - VI(maj7) - III/5 - VII6sus - iv(add9) - VI - i/5 - V(sus4)
@@ -15,6 +18,7 @@ export class Sound {
     constructor() {
         this.ctx = null; this.mode = 'off'; this.muted = false;
         this.level = 0; this.bright = 0; this.tickLevel = 0; this.arp = 0;
+        this.rate = 1; this.thrust = 0;
         this.scoreEl = null;
     }
 
@@ -31,6 +35,7 @@ export class Sound {
         if (mode === 'score') {
             this.scoreEl = new Audio(new URL('../audio/score.mp3', import.meta.url).href);
             this.scoreEl.loop = true; this.scoreEl.volume = 0;
+            this.scoreEl.preservesPitch = false;
             this.scoreEl.play().catch(() => {});
             return;
         }
@@ -58,6 +63,7 @@ export class Sound {
         this.morseBus.connect(this.master); this.morseBus.connect(this.reverb);
         this.arpBus = ctx.createGain(); this.arpBus.gain.value = 0;
         this.arpBus.connect(this.tone);
+        this.pitch = ctx.createConstantSource(); this.pitch.offset.value = 0; this.pitch.start();
 
         // pipe timbres: principal chorus and a flute-ish pedal
         const wave = (amps) => { const re = new Float32Array(amps.length + 1), im = new Float32Array(amps.length + 1); amps.forEach((a, i) => { im[i + 1] = a; }); return ctx.createPeriodicWave(re, im); };
@@ -68,6 +74,17 @@ export class Sound {
         this.noise = ctx.createBuffer(1, ctx.sampleRate * 0.25, ctx.sampleRate);
         const d = this.noise.getChannelData(0);
         for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+        // thrusters: looping brown noise through a lowpass that opens with the burn
+        const bn = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), bd = bn.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < bd.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; bd[i] = last * 3.5; }
+        const src = ctx.createBufferSource(); src.buffer = bn; src.loop = true;
+        this.thrustLp = ctx.createBiquadFilter(); this.thrustLp.type = 'lowpass'; this.thrustLp.frequency.value = 120; this.thrustLp.Q.value = 0.7;
+        this.thrustBus = ctx.createGain(); this.thrustBus.gain.value = 0;
+        src.connect(this.thrustLp).connect(this.thrustBus).connect(this.master);
+        this.thrustBus.connect(this.reverb);
+        src.start();
 
         this.t0 = ctx.currentTime + 0.1;
         this.nextBar = this.t0; this.bar = 0;
@@ -109,23 +126,35 @@ export class Sound {
             const lfo = ctx.createOscillator(), lg = ctx.createGain();
             lfo.frequency.value = 0.15 + Math.random() * 0.2; lg.gain.value = 1.2;
             lfo.connect(lg).connect(o.detune);
+            this.bend(o);
             o.connect(g);
             o.start(t); lfo.start(t); o.stop(end); lfo.stop(end);
         }
         // chiff: a breath of noise at the speech of the pipe
         const n = ctx.createBufferSource(); n.buffer = this.noise;
         const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq * 3; bp.Q.value = 4;
+        this.bend(bp, t + 0.45);
         const ng = ctx.createGain(); ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(gain * 0.25, t + 0.06); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
         n.connect(bp).connect(ng).connect(out); n.start(t); n.stop(t + 0.42);
+    }
+
+    // route the dilation pitch into an oscillator's or filter's detune for as long as it lives
+    bend(node, until) {
+        this.pitch.connect(node.detune);
+        const off = () => { try { this.pitch.disconnect(node.detune); } catch (e) { /* already gone */ } };
+        if (node.addEventListener && node.start) node.addEventListener('ended', off);
+        else setTimeout(off, Math.max(0, (until - this.ctx.currentTime) * 1000) + 100);
     }
 
     tick(t, strength = 1, pitch = 1, bus = this.tickBus) {
         const ctx = this.ctx;
         const n = ctx.createBufferSource(); n.buffer = this.noise;
         const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 3200 * pitch; hp.Q.value = 2.5;
+        this.bend(hp, t + 0.08);
         const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * strength, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
         n.connect(hp).connect(g).connect(bus); n.start(t); n.stop(t + 0.06);
         const o = ctx.createOscillator(); o.frequency.value = 1760 * pitch; o.type = 'sine';
+        this.bend(o);
         const og = ctx.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.12 * strength, t + 0.003); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
         o.connect(og).connect(bus); o.start(t); o.stop(t + 0.1);
     }
@@ -145,7 +174,8 @@ export class Sound {
         }
         while (this.nextTick < ahead) {
             if (this.tickLevel > 0.01) this.tick(this.nextTick, 1, 1);
-            this.nextTick += TICK;
+            // Miller's clock: each tick waits longer the deeper we are
+            this.nextTick += TICK / Math.max(0.12, this.rate);
         }
         // the tesseract's ostinato: chord tones, a quarter of a tick apart, rising and falling
         while (this.nextArp < ahead) {
@@ -155,6 +185,7 @@ export class Sound {
                 const m = this.chord[pat[step % pat.length]] + 12;
                 const ctx2 = this.ctx, o = ctx2.createOscillator(), g = ctx2.createGain();
                 o.setPeriodicWave(this.flute); o.frequency.value = mtof(m);
+                this.bend(o);
                 g.gain.setValueAtTime(0, this.nextArp); g.gain.linearRampToValueAtTime(0.05, this.nextArp + 0.02); g.gain.exponentialRampToValueAtTime(0.0005, this.nextArp + 0.9);
                 o.connect(g).connect(this.arpBus); o.start(this.nextArp); o.stop(this.nextArp + 1);
             }
@@ -162,13 +193,17 @@ export class Sound {
         }
     }
 
-    // called every frame with the scroll's wishes; everything glides
-    set({ level = 0, bright = 0, tick = 0, arp = 0 }) {
-        this.level = level; this.bright = bright; this.tickLevel = tick; this.arp = arp;
+    // called every frame with the piece's wishes; everything glides. rate is dtau/dt-ish (1 far out, toward 0 deep in)
+    set({ level = 0, bright = 0, tick = 0, arp = 0, rate = 1, thrust = 0 }) {
+        this.level = level; this.bright = bright; this.tickLevel = tick; this.arp = arp; this.rate = rate; this.thrust = thrust;
         const m = this.muted ? 0 : 1;
+        // pitch follows the clock, gently: a fifth down at a third of normal time, never more than an octave
+        const pf = Math.max(0.5, Math.pow(Math.max(0.05, rate), 0.35));
         if (this.scoreEl) {
             const v = Math.max(0, Math.min(1, level * m));
             this.scoreEl.volume += (v - this.scoreEl.volume) * 0.05;
+            const pr = Math.round(pf * 100) / 100;
+            if (Math.abs(this.scoreEl.playbackRate - pr) > 0.009) this.scoreEl.playbackRate = pr;
             return;
         }
         if (!this.ctx) return;
@@ -177,6 +212,9 @@ export class Sound {
         this.tone.frequency.setTargetAtTime(500 + bright * 2600, now, 0.8);
         this.tickBus.gain.setTargetAtTime(tick * m * 0.7, now, 0.15);
         this.arpBus.gain.setTargetAtTime(arp * m, now, 0.8);
+        this.pitch.offset.setTargetAtTime(1200 * Math.log2(pf), now, 0.4);
+        this.thrustBus.gain.setTargetAtTime(thrust * m * 0.55, now, thrust > 0.05 ? 0.06 : 0.35);
+        this.thrustLp.frequency.setTargetAtTime(110 + thrust * 520, now, 0.12);
     }
 
     // a single tick right now: the watch's Morse

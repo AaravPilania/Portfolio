@@ -12,9 +12,13 @@ varying vec4 vInfo;
 varying vec3 vWorld;
 varying vec3 vN;
 varying vec3 vLocal;
+uniform float uCollapse;
 void main() {
     vLocal = position;
     vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    // "they" fold the place shut: the far lattice is drawn in toward the line of sight, a tunnel to one point
+    float far = smoothstep(2.0, 70.0, cameraPosition.z - wp.z);
+    wp.xy = mix(wp.xy, cameraPosition.xy + (wp.xy - cameraPosition.xy) * 0.04, uCollapse * far);
     vWorld = wp.xyz;
     vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
     vColor = aColor;
@@ -37,6 +41,9 @@ uniform float uFogDensity;
 uniform float uReveal;
 uniform float uGain;
 uniform float uFlow;
+uniform vec3 uKeyDir;
+uniform vec3 uRimDir;
+uniform vec3 uRimCol;
 
 float hash(float n) { return fract(sin(n) * 43758.5453); }
 
@@ -45,18 +52,27 @@ void main() {
     int axis = int(vInfo.y + 0.5);
     float along = axis == 0 ? vWorld.x : axis == 1 ? vWorld.y : vWorld.z;
     vec3 n = normalize(vN);
+    vec3 V = normalize(cameraPosition - vWorld);
 
-    // warm key from above-ahead, cooler bounce from below
-    vec3 L = normalize(vec3(0.35, 0.8, 0.45));
-    float diff = 0.28 + 0.72 * max(dot(n, L), 0.0);
-    float back = max(dot(n, -L), 0.0) * 0.18;
+    // the same lights that model Cooper: a soft neutral key from above, a hard amber rim from deep in the lattice
+    vec3 L = normalize(uKeyDir);
+    float wrap = max((dot(n, L) + 0.35) / 1.35, 0.0);
+    float diff = 0.2 + 0.8 * wrap;
+    float back = max(dot(n, -L), 0.0) * 0.12;
     // book spines: worn bands along each strand, so each reads as a moment, not a pipe
     float band = 0.82 + 0.18 * sin(along * (0.6 + seed * 1.7) + seed * 40.0);
     vec3 col = vColor * (diff + back) * band;
-    // dark arrises between neighbouring spines: each book reads as its own volume
+    // dark arrises between neighbouring spines, and contact shadow where books sit on the shelf
     vec2 cr = axis == 2 ? vLocal.xy : axis == 0 ? vLocal.yz : vLocal.xz;
     float edge = min(abs(cr.x), abs(cr.y)) * 2.0;
     col *= 0.5 + 0.5 * (1.0 - smoothstep(0.72, 1.0, edge));
+    if (axis == 2) col *= 0.62 + 0.38 * smoothstep(-0.5, 0.25, vLocal.y);
+    // cloth-bound spines: a broad, low sheen; gilt titles catch a tight glint now and then
+    vec3 Hk = normalize(L + V);
+    float gloss = mix(14.0, 70.0, fract(seed * 7.31));
+    col += vec3(1.0, 0.92, 0.8) * pow(max(dot(n, Hk), 0.0), gloss) * 0.22 * band;
+    float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * max(dot(n, normalize(uRimDir)) * 0.6 + 0.4, 0.0);
+    col += uRimCol * rim * 0.35;
 
     // light running along time
     float s = along * 0.08 + uTime * vInfo.w * uFlow + seed * 17.0;
@@ -140,7 +156,8 @@ export function createTesseract({ N = 4, layers = 12 } = {}) {
         vertexShader: vert, fragmentShader: frag,
         uniforms: {
             uTime: { value: 0 }, uFog: { value: new THREE.Color(0.2, 0.1, 0.035) }, uFogFar: { value: new THREE.Color(1.1, 0.62, 0.26) }, uFogDensity: { value: 0.032 },
-            uReveal: { value: 0 }, uGain: { value: 1 }, uFlow: { value: 1 },
+            uReveal: { value: 0 }, uGain: { value: 1 }, uFlow: { value: 1 }, uCollapse: { value: 0 },
+            uKeyDir: { value: new THREE.Vector3(-0.4, 0.85, 0.35) }, uRimDir: { value: new THREE.Vector3(0.5, 0.25, -0.8) }, uRimCol: { value: new THREE.Color(1.0, 0.6, 0.28) },
         },
     });
     const mesh = new THREE.InstancedMesh(geo, mat, count);
