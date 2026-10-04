@@ -54,9 +54,10 @@ section.ll-section--together.wt {
     z-index: 1;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.6s var(--wt-ease);
+    visibility: hidden;
+    transition: opacity 0.6s var(--wt-ease), visibility 0s linear 0.6s;
 }
-.wt-glasses.is-on { opacity: 1; }
+.wt-glasses.is-on { opacity: 1; visibility: visible; transition: opacity 0.6s var(--wt-ease); }
 
 html.is-sticker-drag,
 html.is-sticker-drag * {

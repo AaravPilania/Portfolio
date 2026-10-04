@@ -645,6 +645,49 @@
 };</script>
 
     <meta name="generator" content="WP Rocket 3.23.3.3" data-wpr-features="wpr_cdn wpr_desktop" />
+    <script>
+        /* Device tier for the canvases: software GL, few cores or little memory start low; the first seconds of frames
+           can still demote a machine that looked capable. Modules read __apPerf.dpr()/low and listen for ap:tier. */
+        (function () {
+            const P = window.__apPerf = { low: false, reason: '', gpu: '' };
+            const demote = (why) => {
+                if (P.low) return;
+                P.low = true;
+                P.reason = why;
+                document.documentElement.classList.add('is-low-tier');
+                window.dispatchEvent(new CustomEvent('ap:tier', { detail: P }));
+            };
+            P.dpr = (cap) => Math.min(window.devicePixelRatio || 1, P.low ? 1 : 1.5, cap || 2);
+            try {
+                const c = document.createElement('canvas');
+                const gl = c.getContext('webgl', { failIfMajorPerformanceCaveat: false });
+                if (!gl) demote('no-webgl');
+                else {
+                    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                    P.gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+                    if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(P.gpu)) demote('software-gl');
+                    const lose = gl.getExtension('WEBGL_lose_context');
+                    if (lose) lose.loseContext();
+                }
+            } catch (e) { /* no probe */ }
+            if ((navigator.hardwareConcurrency || 8) <= 4) demote('cores');
+            if (navigator.deviceMemory && navigator.deviceMemory <= 4) demote('memory');
+            if (navigator.connection && navigator.connection.saveData) demote('save-data');
+            let n = 0, t0 = 0, slow = 0, last = 0;
+            const sample = (t) => {
+                if (!t0) t0 = t;
+                else if (t - last > 34) slow++;
+                last = t;
+                n++;
+                if (t - t0 < 3500 && !P.low) requestAnimationFrame(sample);
+                else if (n > 20 && slow / n > 0.3) demote('fps');
+            };
+            let armed = false;
+            const arm = () => { if (!armed) { armed = true; setTimeout(() => requestAnimationFrame(sample), 600); } };
+            window.addEventListener('intro-complete', arm, { once: true });
+            window.addEventListener('load', () => setTimeout(arm, 8000), { once: true });
+        })();
+    </script>
     <script src="/js/page-transition.js"></script>
     <script>
         /* Slide 04's backdrop dither reads the raw video luminance, so its dark scenes crush to empty cells and the
@@ -3480,9 +3523,19 @@
                             }
                         }
                     }
-                    requestAnimationFrame(syncPortrait);
+                    if (heroOnScreen) requestAnimationFrame(syncPortrait);
+                    else syncing = false;
                 }
+                let heroOnScreen = true, syncing = true;
                 requestAnimationFrame(syncPortrait);
+                if ('IntersectionObserver' in window) {
+                    new IntersectionObserver((es) => {
+                        heroOnScreen = es[es.length - 1].isIntersecting;
+                        const eng = window.__heroAvatarEngine;
+                        if (eng && eng.start && eng.stop) { if (heroOnScreen) eng.start(); else eng.stop(); }
+                        if (heroOnScreen && !syncing) { syncing = true; requestAnimationFrame(syncPortrait); }
+                    }, { rootMargin: '25% 0px' }).observe(cardCanvas);
+                }
             }
 
             // 2. Rive Signature (Removed per studio directive)
@@ -3490,6 +3543,7 @@
 
             // 3. Living Sketch Spectacles Line-Boil Animation System
             const SPECS_FRAMES = [{"left":{"outer":"M -19.6 -28.1 C -44.9 -32.3, -66.7 -35.1, -93.8 -33.8 C -114 -25.8, -119.4 -21.2, -117.9 -12.8 C -114.7 6.9, -108 23.8, -94.3 34.6 C -68.8 35.6, -42.9 34.7, -27.4 24.1 C -18.2 4.7, -19.9 -13.9, -19.6 -28.1 Z","inner":"M -26.3 -21.7 C -46.3 -28, -69.4 -27.2, -91 -25.8 C -106.1 -21.9, -109.2 -13.2, -109.1 5.7 C -106 19.4, -90.5 24.5, -67.2 31.1 C -49.4 28.4, -34.8 17.3, -25.6 4.7 C -25.7 -4.6, -25.6 -16, -26.5 -22.3 Z","brow":"M -22.9 -27.6 C -47.7 -35.9, -70 -34.7, -97.2 -34.1 C -112.8 -29.4, -120.8 -23.4, -117.3 -10.2","hatch":"M -104.3 -19.1 L -113.9 -12.3 M -98.4 -22.4 L -108.9 -17.5","bridge":"M -20.9 -13.9 C -14.1 -18.200000000000003, -6.9 -17.6, 0 -17.6 L 0 -8.4 C -4.9 -8.8, -13.5 -7.2, -22.2 -7.6 Z","temple":"M -115.2 -18.8 C -136.9 -18.1, -153.5 -15.7, -177 -10.1","nosePad":"M -25 4.1 C -28.5 10.4, -28.5 19.3, -23.1 23.7","glare1":{"x1":-96.5,"y1":-19.4,"x2":-76.8,"y2":-1.9},"glare2":{"x1":-88.4,"y1":-23,"x2":-75.7,"y2":-9.9},"rivet1":{"x":-110.9,"y":-21.8},"rivet2":{"x":-105.3,"y":-23.5}},"right":{"outer":"M 19.6 -28.1 C 44.9 -32.3, 66.7 -35.1, 93.8 -33.8 C 114.0 -25.8, 119.4 -21.2, 117.9 -12.8 C 114.7 6.9, 108.0 23.8, 94.3 34.6 C 68.8 35.6, 42.9 34.7, 27.4 24.1 C 18.2 4.7, 19.9 -13.9, 19.6 -28.1 Z","inner":"M 26.3 -21.7 C 46.3 -28, 69.4 -27.2, 91.0 -25.8 C 106.1 -21.9, 109.2 -13.2, 109.1 5.7 C 106.0 19.4, 90.5 24.5, 67.2 31.1 C 49.4 28.4, 34.8 17.3, 25.6 4.7 C 25.7 -4.6, 25.6 -16, 26.5 -22.3 Z","brow":"M 22.9 -27.6 C 47.7 -35.9, 70.0 -34.7, 97.2 -34.1 C 112.8 -29.4, 120.8 -23.4, 117.3 -10.2","hatch":"M 104.3 -19.1 L 113.9 -12.3 M 98.4 -22.4 L 108.9 -17.5","bridge":"M 20.9 -13.9 C 14.1 -18.200000000000003, 6.9 -17.6, 0 -17.6 L 0 -8.4 C 4.9 -8.8, 13.5 -7.2, 22.2 -7.6 Z","temple":"M 115.2 -18.8 C 136.9 -18.1, 153.5 -15.7, 177.0 -10.1","nosePad":"M 25.0 4.1 C 28.5 10.4, 28.5 19.3, 23.1 23.7","glare1":{"x1":76.8,"y1":-19.4,"x2":96.5,"y2":-1.9},"glare2":{"x1":75.7,"y1":-23,"x2":88.4,"y2":-9.9},"rivet1":{"x":110.9,"y":-21.8},"rivet2":{"x":105.3,"y":-23.5}}},{"left":{"outer":"M -20 -29 C -43.9 -34.5, -69.4 -33.7, -95.5 -31.5 C -112.5 -25.2, -116.7 -21.8, -115.6 -13.7 C -116 9.3, -107.3 24.7, -93.1 32.1 C -68.2 39.4, -40.2 34.8, -25 23.1 C -17.8 3.6, -20.2 -16.6, -20 -29 Z","inner":"M -24.7 -20.9 C -46.3 -27.8, -67.8 -27.7, -93.1 -26.6 C -105 -22.2, -110.4 -12.9, -107.2 4.9 C -106.3 17, -92.5 27.3, -69.4 30.1 C -47.6 27.7, -34.4 19.4, -26.3 5.9 C -23.8 -5.7, -26 -14.7, -26.7 -20.9 Z","brow":"M -23.4 -29.9 C -48.7 -35.4, -71.9 -36.9, -98.1 -33.2 C -111.4 -28.5, -117.7 -23.1, -115.6 -11.2","hatch":"M -104.5 -20.5 L -113.2 -11.1 M -96.8 -22.8 L -108.2 -16.2","bridge":"M -21.9 -13.3 C -14.2 -16.400000000000002, -6.6 -15.8, 0 -15.8 L 0 -10.4 C -5 -10.8, -12.8 -9.200000000000001, -21 -7.8 Z","temple":"M -117 -21.2 C -135 -17.4, -155.6 -13.1, -176.4 -11.5","nosePad":"M -25.4 2.7 C -29.6 11.1, -29.3 17.5, -23.4 23.6","glare1":{"x1":-94.9,"y1":-20.5,"x2":-76.8,"y2":-3.1},"glare2":{"x1":-86.9,"y1":-24,"x2":-75.4,"y2":-10},"rivet1":{"x":-110.9,"y":-22},"rivet2":{"x":-105,"y":-21.7}},"right":{"outer":"M 20.0 -29 C 43.9 -34.5, 69.4 -33.7, 95.5 -31.5 C 112.5 -25.2, 116.7 -21.8, 115.6 -13.7 C 116.0 9.3, 107.3 24.7, 93.1 32.1 C 68.2 39.4, 40.2 34.8, 25.0 23.1 C 17.8 3.6, 20.2 -16.6, 20.0 -29 Z","inner":"M 24.7 -20.9 C 46.3 -27.8, 67.8 -27.7, 93.1 -26.6 C 105.0 -22.2, 110.4 -12.9, 107.2 4.9 C 106.3 17, 92.5 27.3, 69.4 30.1 C 47.6 27.7, 34.4 19.4, 26.3 5.9 C 23.8 -5.7, 26.0 -14.7, 26.7 -20.9 Z","brow":"M 23.4 -29.9 C 48.7 -35.4, 71.9 -36.9, 98.1 -33.2 C 111.4 -28.5, 117.7 -23.1, 115.6 -11.2","hatch":"M 104.5 -20.5 L 113.2 -11.1 M 96.8 -22.8 L 108.2 -16.2","bridge":"M 21.9 -13.3 C 14.2 -16.400000000000002, 6.6 -15.8, 0 -15.8 L 0 -10.4 C 5.0 -10.8, 12.8 -9.200000000000001, 21.0 -7.8 Z","temple":"M 117.0 -21.2 C 135.0 -17.4, 155.6 -13.1, 176.4 -11.5","nosePad":"M 25.4 2.7 C 29.6 11.1, 29.3 17.5, 23.4 23.6","glare1":{"x1":76.8,"y1":-20.5,"x2":94.9,"y2":-3.1},"glare2":{"x1":75.4,"y1":-24,"x2":86.9,"y2":-10},"rivet1":{"x":110.9,"y":-22},"rivet2":{"x":105,"y":-21.7}}},{"left":{"outer":"M -21.9 -28.9 C -45.2 -34.3, -66.8 -34.2, -94.7 -33.2 C -113.8 -25.3, -117.4 -21.4, -115.9 -12.8 C -115.8 9.2, -110.5 26.7, -96.8 33.1 C -69.4 37.7, -41 34.7, -24.3 22.8 C -18.9 4.9, -20.4 -15.5, -21.9 -28.9 Z","inner":"M -26.8 -22 C -43.8 -27.9, -67.3 -28.8, -93 -27.5 C -104.7 -21, -109 -13.4, -109.2 5 C -106.3 18.3, -92.2 24.9, -67.2 28.3 C -48.1 26.2, -35.8 20.6, -25.2 6.6 C -24.4 -3.9, -24.3 -14.8, -27.4 -21 Z","brow":"M -23.7 -29.7 C -48.4 -36.1, -70.1 -36.9, -98 -34.9 C -112.7 -31.2, -117.2 -23.6, -116.9 -9.3","hatch":"M -106.2 -20.7 L -112.7 -12.4 M -96.6 -23.3 L -107.7 -17.2","bridge":"M -21 -13.8 C -13.3 -18.1, -4.9 -17.5, 0 -17.5 L 0 -8.9 C -6.3 -9.3, -14.2 -7.7, -22.1 -7 Z","temple":"M -116.4 -20.4 C -135.1 -18.2, -156.6 -14.7, -178 -11.9","nosePad":"M -26 1.7 C -28.1 10.5, -29 19.1, -21.9 24.6","glare1":{"x1":-95.9,"y1":-20.1,"x2":-78.9,"y2":-1.4},"glare2":{"x1":-88.4,"y1":-22.8,"x2":-75.3,"y2":-8.4},"rivet1":{"x":-109.1,"y":-23.4},"rivet2":{"x":-105.8,"y":-22.5}},"right":{"outer":"M 21.9 -28.9 C 45.2 -34.3, 66.8 -34.2, 94.7 -33.2 C 113.8 -25.3, 117.4 -21.4, 115.9 -12.8 C 115.8 9.2, 110.5 26.7, 96.8 33.1 C 69.4 37.7, 41.0 34.7, 24.3 22.8 C 18.9 4.9, 20.4 -15.5, 21.9 -28.9 Z","inner":"M 26.8 -22 C 43.8 -27.9, 67.3 -28.8, 93.0 -27.5 C 104.7 -21, 109.0 -13.4, 109.2 5 C 106.3 18.3, 92.2 24.9, 67.2 28.3 C 48.1 26.2, 35.8 20.6, 25.2 6.6 C 24.4 -3.9, 24.3 -14.8, 27.4 -21 Z","brow":"M 23.7 -29.7 C 48.4 -36.1, 70.1 -36.9, 98.0 -34.9 C 112.7 -31.2, 117.2 -23.6, 116.9 -9.3","hatch":"M 106.2 -20.7 L 112.7 -12.4 M 96.6 -23.3 L 107.7 -17.2","bridge":"M 21.0 -13.8 C 13.3 -18.1, 4.9 -17.5, 0 -17.5 L 0 -8.9 C 6.3 -9.3, 14.2 -7.7, 22.1 -7 Z","temple":"M 116.4 -20.4 C 135.1 -18.2, 156.6 -14.7, 178.0 -11.9","nosePad":"M 26.0 1.7 C 28.1 10.5, 29.0 19.1, 21.9 24.6","glare1":{"x1":78.9,"y1":-20.1,"x2":95.9,"y2":-1.4},"glare2":{"x1":75.3,"y1":-22.8,"x2":88.4,"y2":-8.4},"rivet1":{"x":109.1,"y":-23.4},"rivet2":{"x":105.8,"y":-22.5}}}];
+            window.__specsFrames = SPECS_FRAMES;
             let specsBoilFrame = 0;
             let lastSpecsBoilTime = 0;
 

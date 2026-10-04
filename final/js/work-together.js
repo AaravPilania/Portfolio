@@ -16,6 +16,7 @@
     if (!stage || !ctx || !title) return;
     const scroller = document.querySelector('.js-scroller') || document.scrollingElement || document.documentElement;
     const STATIC = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const perf = window.__apPerf || { low: false, dpr: (c) => Math.min(window.devicePixelRatio || 1, 1.5, c || 2) };
 
     const INK = '#f4f2ea', VOID = '#121316', SUN = '#FFED29';
     const MONO = '"IBM Plex Mono", "Sometype Mono", monospace';
@@ -335,6 +336,7 @@
     const floorEl = stage.querySelector('.sig-bar') || (foot && foot.querySelector('.sig-bar'));
     const contactEl = stage.querySelector('.wt-contact');
     const wtState = window.__wtState = { p: 0, settled: false };
+    const LOW_COUNT = 24;
     let titleChars = [];
 
     let W = 0, H = 0, dpr = 1, vTop = 0, unitA = 0, built = 0, buildMs = 0, queued = false, near = false, visible = false;
@@ -344,7 +346,7 @@
     let stTop = 1e5;
     const stageTopNow = () => stTop;
     let mode = 'float', fallT = 0, liftT = 0, floorY = 0, acc = 0, engine = null, walls = [], pileReady = false, pitH = 0;
-    let dirty = true, resting = false, footVel = 0, drag = null;
+    let dirty = true, resting = false, footVel = 0, drag = null, calmT = 0;
     const look = { x: 0, y: 0 };
     const ptr = { cx: 0, cy: 0, on: false, block: false };
     let hovered = null, labelled = false;
@@ -380,13 +382,27 @@
         s.va = dir * spin;
     }
 
+    // The section's place in the scroller is read on resize and ScrollTrigger refresh; each frame derives its top from
+    // the scroll alone, so the loop never forces a layout
+    let secTop = 0, secH = 0;
+    function measureSec() {
+        const r = sec.getBoundingClientRect();
+        secTop = r.top - vTop + scroller.scrollTop;
+        secH = r.height;
+    }
+    const scrollNow = () => {
+        const l = window.__lenis;
+        return l && typeof l.scroll === 'number' ? l.scroll : scroller.scrollTop;
+    };
+
     function measure() {
         W = window.innerWidth;
         H = window.innerHeight;
-        dpr = Math.min(2, window.devicePixelRatio || 1);
+        dpr = perf.dpr(perf.low ? 1 : 1.5);
         canvas.width = Math.round(W * dpr);
         canvas.height = Math.round(H * dpr);
         vTop = scroller === document.scrollingElement || scroller === document.documentElement ? 0 : scroller.getBoundingClientRect().top;
+        measureSec();
         const aspect = W / H;
         yHalf = H * Math.min(1, Math.max(0.62, 1.32 / aspect));
         xHalf = W * 0.53;
@@ -420,6 +436,7 @@
     function queue() {
         if (queued || built >= items.length) return;
         queued = true;
+        if (perf.low && !built && items.length > LOW_COUNT) { items.length = LOW_COUNT; measure(); }
         const step = () => {
             const t0 = performance.now();
             while (built < items.length && performance.now() - t0 < 8) {
@@ -441,7 +458,7 @@
     // Physics lives in viewport coordinates (the stage stays pinned to the end of the page): the floor is the bottom edge
     function world() {
         if (!Mt) return false;
-        if (!engine) engine = Mt.Engine.create({ enableSleeping: true, positionIterations: 8, velocityIterations: 6 });
+        if (!engine) engine = Mt.Engine.create({ enableSleeping: true, positionIterations: perf.low ? 6 : 8, velocityIterations: perf.low ? 4 : 6 });
         engine.gravity.y = 1;
         engine.gravity.scale = (0.0022 * H) / 1000;
         if (walls.length) Mt.Composite.remove(engine.world, walls);
@@ -463,7 +480,7 @@
             if (s.proto || !s.img) continue;
             const w = (s.img.bw * s.side) / s.ppu, h = (s.img.bh * s.side) / s.ppu;
             s.proto = Mt.Bodies.rectangle(0, 0, w, h, {
-                chamfer: { radius: Math.min(w, h) * 0.22 },
+                chamfer: perf.low ? { radius: Math.min(w, h) * 0.22, quality: 1, qualityMin: 1, qualityMax: 2 } : { radius: Math.min(w, h) * 0.22 },
                 restitution: 0.3, friction: 0.55, frictionStatic: 0.9, frictionAir: 0.012, density: 0.0016,
                 sleepThreshold: 40,
                 collisionFilter: { category: C_GHOST, mask: C_WALL },
@@ -495,9 +512,10 @@
         Mt.Composite.add(engine.world, b);
     }
 
-    // A sticker spawned overlapping another falls through it as a ghost until it is clear, so the conveyor's overlaps
-    // never detonate on the first step
+    // A sticker spawned overlapping another falls through it as a ghost and only turns solid once it is clear, however
+    // long that takes, so an overlap is never resolved by the solver as a kick
     function solidify(dt) {
+        let solids = null;
         for (const s of items) {
             const b = s.body;
             if (!b || b.collisionFilter.category === C_SOLID) continue;
@@ -512,23 +530,25 @@
                 }
                 return false;
             };
-            const clear = s.ghost > 1.4 || !hits(items.map((o) => (o.body && o.body.collisionFilter.category === C_SOLID ? o.body : null)));
-            if (clear) b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 };
+            if (b.isSleeping) continue;
+            if (!solids) solids = items.map((o) => (o.body && o.body.collisionFilter.category === C_SOLID ? o.body : null));
+            const clear = !hits(solids);
+            if (clear) { b.collisionFilter = { category: C_SOLID, mask: C_WALL | C_SOLID, group: 0 }; solids.push(b); }
         }
     }
 
-    // Each sticker lets go exactly where it rides, at rest, at its own size: gravity alone takes it down. Ones parked
-    // below the viewport by the conveyor rain in from above instead of spawning inside the floor.
+    // Each sticker lets go where it rides, at rest, at its own size: gravity alone takes it down and nothing else ever
+    // pushes it. Ones parked below the viewport rain in from above instead of spawning inside the floor.
     function fall() {
         if (built < items.length || !world()) return;
         clearBodies();
-        mode = 'fall'; fallT = 0; acc = 0; resting = false;
+        mode = 'fall'; fallT = 0; acc = 0; resting = false; calmT = 0;
         for (const s of items) {
             const h = (s.img.bh * s.side) / s.ppu;
             let y = s.y;
             if (y > floorY - h * 0.5) y = -h - s.cr[3] * H * 0.6;
             s.ks = s.k0 = 1; s.o0 = s.o;
-            spawn(s, s.x, y, s.a, 0, 0, s.va / 60);
+            spawn(s, s.x, y, s.a, 0, 0, 0);
         }
     }
 
@@ -705,11 +725,10 @@
     }
 
     function tick(dt, clock = dt) {
-        const sr = sec.getBoundingClientRect();
-        wtTop = sr.top - vTop;
-        stTop = stage.getBoundingClientRect().top - vTop;
+        wtTop = secTop - scrollNow();
+        if (STATIC) stTop = stage.getBoundingClientRect().top - vTop;
         footTop = 0;
-        const maxScroll = Math.max(1, sr.height - H);
+        const maxScroll = Math.max(1, secH - H);
         const wtProgress = clamp01(-wtTop / maxScroll);
 
         const moved = !(Math.abs(wtTop - lastWt) < 0.25);
@@ -772,7 +791,7 @@
         wtState.p = wtProgress;
         wtState.settled = STATIC || (mode === 'fall' && (resting || fallT > 2.2));
 
-        wtH = sr.height;
+        wtH = secH;
         const offY = STATIC ? stageTopNow() : Math.max(0, wtTop);
         if (mode === 'fall') {
             fallT += dt;
@@ -782,6 +801,7 @@
                 drag.c.pointA.y = ptr.cy;
             }
             let n = 0;
+            if (resting && !drag) acc = 0;
             while (acc >= STEP && n < 4) {
                 for (const s of items) if (s.body) { s.qx = s.body.position.x; s.qy = s.body.position.y; s.qa = s.body.angle; }
                 solidify(STEP / 1000);
@@ -792,7 +812,7 @@
             // Fixed 60 Hz physics, drawn between its last two states so 120/144 Hz displays don't judder
             const al = acc / STEP;
             const kO = ease(Math.min(1, fallT / 0.3));
-            let asleep = fallT > 0.6 && !drag;
+            let asleep = fallT > 0.6 && !drag, calm = fallT > 0.6 && !drag;
             for (const s of items) {
                 const b = s.body;
                 if (!b) continue;
@@ -801,7 +821,21 @@
                 s.a = s.qa + (b.angle - s.qa) * al;
                 s.ks = s.k0 + (1 - s.k0) * kO;
                 s.o = s.o0 + (1 - s.o0) * kO;
-                if (!b.isSleeping) asleep = false;
+                if (!b.isSleeping) {
+                    asleep = false;
+                    if (b.speed > 0.06 || Math.abs(b.angularVelocity) > 0.002) calm = false;
+                }
+            }
+            // Once the pile has been still for a moment it is put to sleep whole, so the solver's micro-jitter never
+            // shows and nothing moves again until a sticker is grabbed
+            calmT = calm ? calmT + dt : 0;
+            if (!asleep && calmT > 0.5) {
+                for (const s of items) {
+                    if (!s.body) continue;
+                    s.x = s.qx = s.body.position.x; s.y = s.qy = s.body.position.y; s.a = s.qa = s.body.angle;
+                    Mt.Sleeping.set(s.body, true);
+                }
+                asleep = true;
             }
             resting = asleep;
         } else if (mode === 'lift') {
@@ -837,14 +871,22 @@
         if (animating || moved || hvMoving || dirty) { render(); dirty = false; }
     }
 
-    function frame(now) {
-        raf = 0;
+    // On the page's gsap ticker, after Lenis has moved, so the stickers and headline read this frame's scroll
+    const useTicker = !!(window.gsap && gsap.ticker);
+    function frame() {
+        const now = performance.now();
+        if (!useTicker) raf = 0;
         const raw = last ? (now - last) / 1000 : 1 / 60;
         last = now;
         if (visible) tick(Math.min(0.05, raw), Math.min(0.25, raw));
-        if (visible) raf = requestAnimationFrame(frame);
+        if (!visible) { if (useTicker && raf) { gsap.ticker.remove(frame); raf = 0; } }
+        else if (!useTicker) raf = requestAnimationFrame(frame);
     }
-    function kick() { if (!raf && visible) { last = 0; raf = requestAnimationFrame(frame); } }
+    function kick() {
+        if (raf || !visible) return;
+        last = 0;
+        if (useTicker) { raf = 1; gsap.ticker.add(frame); } else raf = requestAnimationFrame(frame);
+    }
 
     let resizeT = 0, lastW = 0, lastH = 0;
     function onResize() {
@@ -884,6 +926,8 @@
         measure();
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); kick(); });
         window.addEventListener('resize', onResize, { passive: true });
+        if (window.ScrollTrigger) ScrollTrigger.addEventListener('refresh', () => { measureSec(); dirty = true; });
+        window.addEventListener('ap:tier', () => { measure(); kick(); });
         window.addEventListener('pointermove', (e) => {
             ptr.cx = e.clientX; ptr.cy = e.clientY; ptr.on = true;
             ptr.block = !!(e.target && e.target.closest && e.target.closest('a, button, input, canvas.sig-canvas'));
@@ -915,7 +959,7 @@
             new IntersectionObserver((es) => {
                 near = es[es.length - 1].isIntersecting;
                 if (near) queue();
-            }, { rootMargin: '300% 0px' }).observe(sec);
+            }, { root: scroller === document.scrollingElement || scroller === document.documentElement ? null : scroller, rootMargin: '300% 0px' }).observe(sec);
             const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1200));
             const early = () => idle(() => { near = true; queue(); }, { timeout: 5000 });
             if (document.readyState === 'complete') early(); else window.addEventListener('load', early, { once: true });

@@ -664,7 +664,7 @@
     const lenisOf = () => {
         const app = appMod && appMod.n;
         const s = app && app.instances && app.instances.get('scroller');
-        return (s && s.lenis) || null;
+        return (s && s.lenis) || root.__lenis || null;
     };
 
     function scrollTo(y, dur) {
@@ -1301,9 +1301,11 @@
     function tick(time, dt) {
         const s = Math.max(1, Math.min(dt, 50)) / 1000;
         const y = scroller.scrollTop;
-        // Free scroll: the wheel follows the page through its arm windows and never holds the scroll on a detent
-        zone.A = A;
-        zone.B = B;
+        run(zone.frame(y, A, B, dragging || now() < passUntil, now() < animUntil));
+        if (zone.pinned) {
+            const lenis = lenisOf();
+            if (lenis && !lenis.isStopped) lenis.stop();
+        }
         const want = zone.desired(y);
         if (want !== shown) show(want, want > shown ? 1 : -1);
         const held = zone.pinned || (y > A && y < B);

@@ -1427,7 +1427,8 @@ void main() {
                 stencil: false,
                 powerPreference: "high-performance"
             });
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+            this.renderer.setPixelRatio(window.__apPerf ? window.__apPerf.dpr(1.5) : Math.min(window.devicePixelRatio || 1, 1.5));
+            window.addEventListener('ap:tier', () => this.renderer.setPixelRatio(window.__apPerf.dpr(1.5)));
 
             this.scene = new THREE.Scene();
             this.camera = new THREE.PerspectiveCamera(15, window.innerWidth / window.innerHeight, 1, 10000);
@@ -1569,6 +1570,11 @@ void main() {
                 if (key) this.enterProject(key, targetRow);
             };
 
+            this.sectionFar = false;
+            if (section && 'IntersectionObserver' in window) {
+                const sc = document.querySelector('.js-scroller');
+                new IntersectionObserver((es) => { this.sectionFar = !es[es.length - 1].isIntersecting; }, { root: sc && sc.contains(section) ? sc : null, rootMargin: '50% 0px' }).observe(section);
+            }
             this.checkSectionBounds = () => {
                 if (!section || !entries.length) return;
 
@@ -1816,6 +1822,9 @@ void main() {
 
             const delta = this.clock.getDelta();
             this.timeElapsed += delta;
+
+            // Far from the section nothing is read or drawn; the observer wakes the bounds check on approach
+            if (this.sectionFar && !this.isSectionInView && this.queueMap.size === 0) return;
 
             // Check section bounds
             if (this.checkSectionBounds) {
