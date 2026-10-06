@@ -333,20 +333,15 @@
     }
 
     // ------------------------------------------------------------ what the bar says and shows, per section
-    let section = here === 'home' ? 'hero' : here, hold = null;
-    const GLYPH_OF = { hero: 'ap', screen: 'heart', projects: 'code', stack: 'layers', watch: 'eye', together: 'bulb', end: 'mail', contact: 'cal', lost: 'ask' };
+    // Top-left mark remains consistently the editorial AP mark across all sections
+    let section = here === 'home' ? 'hero' : here;
     function apply() {
         line(LINES[section] || LINES.hero);
-        if (morphTo) morphTo(hold || GLYPH_OF[section] || 'ap');
+        if (morphTo) morphTo('ap');
     }
-    window.addEventListener('ap:glyph', (e) => { hold = e.detail || null; apply(); });
     if (mark) {
         mark.addEventListener('pointerenter', () => { if (morphTo) morphTo('ap'); });
         mark.addEventListener('pointerleave', apply);
-    }
-    for (const a of nav.querySelectorAll('a[href="/contact"]')) {
-        a.addEventListener('pointerenter', () => { if (here !== 'contact' && morphTo) morphTo('mail'); });
-        a.addEventListener('pointerleave', apply);
     }
 
     // ------------------------------------------------------------ the form button: on /contact it opens the brief

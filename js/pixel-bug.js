@@ -129,9 +129,12 @@
         heart: ['yy.yy', 'yyyyy', '.yyy.', '..y..'],
         z: ['yyyy', '..y.', '.y..', 'yyyy'],
         bang: ['y', 'y', 'y', '.', 'y'],
+        sparkle: ['.y.', 'yyy', '.y.'],
+        note: ['..yy', '.yyy', '.y.y', 'yy.y', 'yy..'],
     };
 
     const LINES = {
+        dance: ['vibing with the calendar.', 'got the rhythm.', 'look at these moves.', 'drop the beat.', 'nav bug on duty.', 'pencil me in for a dance.'],
         scroll: ['whoa, slow down.', 'wind in my antennae.', 'hold on, i\'m coming.', 'motion sickness is a feature.'],
         hero: ['move your cursor. he watches it. i just try not to get squashed.', 'drag me anywhere. i won\'t file a report.'],
         screen: ['same guy, smaller screen. i live in the gaps between the words.', 'keep it simple, stupid. i\'m the simple part.'],
@@ -371,7 +374,7 @@
         let heading = 0, speed = 0, entered = false, live = false, shown = false;
         let act = null;
         let pauseUntil = 0, stride = 0, stepSide = 1, nextInterest = 0, lastVisit = 0;
-        let state = 'idle', hover = false, happy = 0, squash = 0, lift = 0, wob = 0, flipUntil = 0, flips = 0;
+        let state = 'idle', hover = false, happy = 0, squash = 0, lift = 0, wob = 0, flipUntil = 0, flips = 0, danceMode = false;
         let lastActive = performance.now(), clock = 0, travelled = 0;
         let twitch = 0, twitchSide = 'L', nextTwitch = 1.5;
         const mouse = { x: -1, y: -1, t: 0, vx: 0, seen: false, travel: 0 };
@@ -495,7 +498,7 @@
         const lastSaid = {};
         let pending = null;
         const PICK = {
-            click: () => (state === 'flip' ? draw('flip', LINES.flip) : draw('click:' + skinKey, LINES.click.concat(skin.click || []))),
+            click: () => (state === 'flip' ? draw('flip', LINES.flip) : danceMode ? draw('dance', LINES.dance) : draw('click:' + skinKey, LINES.click.concat(skin.click || []))),
             pet: () => {
                 const lines = section && LINES[section];
                 if (pets % 2 === 1 && lines) {
@@ -647,7 +650,8 @@
             const wasAsleep = wake(now, true);
             twitch = 0.35;
             twitchSide = e.clientX < x ? 'L' : 'R';
-            if (!wasAsleep) spawn('bang');
+            if (!wasAsleep) spawn(danceMode ? 'sparkle' : 'bang');
+            if (danceMode) happy = Math.min(6, happy + 1.5);
             squash = Math.max(squash, 0.12);
             const spot = { x: e.clientX, y: e.clientY };
             if (!reduced && !entering() && !leash) {
@@ -801,7 +805,7 @@
                 lastActive = now;
                 if (state === 'sleep') wake(now, true);
             }
-            if ((state === 'idle' || state === 'walk' || state === 'groom') && now - lastActive > 18000 && !say && !queue.length) {
+            if (!danceMode && (state === 'idle' || state === 'walk' || state === 'groom') && now - lastActive > 18000 && !say && !queue.length) {
                 state = 'sleep';
                 speed = 0;
                 act = null;
@@ -907,7 +911,8 @@
                     if (dt > 0) speed = Math.hypot(x - ox, y - oy) / dt;
                 }
                 footsteps(dt);
-                state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
+                if (danceMode && leash && leash.arrived) state = 'dance';
+                else state = liftTo > 0.5 ? 'fly' : speed > 20 ? 'walk' : 'idle';
             } else if (leash && reduced) {
                 const p = leash.target(now);
                 leash.avoid = p && p.avoid;
@@ -1105,7 +1110,24 @@
             }
             const pose = { skin: skinKey, legs: 'stand', antL: 'out', antR: 'out', fly: 0, belly: false, happy: false, lit: lantern > 0.45 };
             const talking = say && now - say.start < say.text.length * 31;
-            if (state === 'walk') {
+            if (state === 'dance') {
+                if (window.CalendarAudio && typeof window.CalendarAudio.onset === 'function') {
+                    const onset = window.CalendarAudio.onset();
+                    if (onset > 0.15) {
+                        squash = 0.24;
+                        if (Math.random() < 0.4) spawn('sparkle');
+                    }
+                }
+                const tempo = 0.14;
+                const beat = Math.floor(clock / tempo);
+                const step = beat % 6;
+                pose.legs = ['a', 'groomL', 'b', 'groomR', 'flail0', 'flail1'][step];
+                pose.antL = beat % 2 === 0 ? 'up' : 'out';
+                pose.antR = beat % 2 === 1 ? 'up' : 'wide';
+                pose.fly = step === 2 || step === 5 ? 1 : 0;
+                pose.happy = true;
+                if (beat % 16 === 0 && Math.random() < 0.3) spawn('note');
+            } else if (state === 'walk') {
                 pose.legs = ['a', 'stand', 'b', 'stand'][Math.floor(stride) % 4];
                 if (speed > 180) pose.antL = pose.antR = 'wide';
             } else if (state === 'fly') {
@@ -1164,6 +1186,11 @@
             let deg = Math.round((heading + Math.PI / 2) * 180 / Math.PI / STEP) * STEP;
             deg += Math.round(wob / STEP) * STEP;
             if (happy > 1.2 && state === 'idle') deg += Math.floor(clock / 0.12) % 2 ? STEP : -STEP;
+            if (state === 'dance') {
+                const beat = Math.floor(clock / 0.14);
+                deg += (beat % 2 === 0 ? 1 : -1) * STEP;
+                squash = Math.max(squash, Math.sin(clock * 14) * 0.15);
+            }
             if (state === 'flip') deg += Math.floor(clock / 0.2) % 2 ? STEP : 0;
             deg += hoverTilt * STEP;
             const sc = (1 + lift * 0.18) * (1 + squash * 0.4);
@@ -1214,6 +1241,24 @@
             spawn('bang');
             squash = 0.25;
             speak(skin.welcome, now, 'skin', USER);
+        };
+        window.__pixelBugDance = (enable) => {
+            danceMode = !!enable;
+            if (enable) {
+                state = 'dance';
+                happy = 4.0;
+                lastActive = performance.now();
+                wake(performance.now(), true);
+            } else if (state === 'dance') {
+                state = 'idle';
+            }
+        };
+        window.__pixelBugSetState = (s) => {
+            state = s;
+            if (s === 'dance') danceMode = true;
+            else if (danceMode) danceMode = false;
+            lastActive = performance.now();
+            wake(performance.now(), true);
         };
         // Scenes can take GLITCH over: target(now) returns { x, y, heading, lift?, avoid? } in viewport px every frame
         // (heading 0 = right, lift 1 = fly, avoid = { l, t, r, b } its approach arc bends away from). It flies in and calls

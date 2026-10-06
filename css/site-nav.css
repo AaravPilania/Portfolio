@@ -175,6 +175,13 @@ html body.is-nav-hidden .ap-nav__scrim {
     opacity: 0;
 }
 
+.ap-nav__mark.is-bug-perched svg,
+.ap-nav__mark.is-bug-perched .ap-nav__px {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 .ap-nav__msg {
     position: absolute;
     max-width: calc(100% - 112 * var(--u));

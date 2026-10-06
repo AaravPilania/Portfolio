@@ -143,6 +143,45 @@
     <script src="js/calendar-grain.js"></script>
     <script src="js/calendar-contact.js"></script>
     <script src="js/calendar-invite.js"></script>
+    <script>window.__pixelBugSkin = 'beetle';</script>
+    <script src="/js/pixel-bug.js"></script>
+    <script>
+        // On /contact: GLITCH flies straight to the top-left navbar AP spot,
+        // perches directly over it, hides the AP mark completely,
+        // and dances to the calendar beats!
+        (function () {
+            function leashBugToNav() {
+                const mark = document.querySelector('.ap-nav__mark');
+                if (!mark || typeof window.__pixelBugLeash !== 'function') {
+                    setTimeout(leashBugToNav, 60);
+                    return;
+                }
+                const spot = { x: 0, y: 0, heading: -Math.PI / 2 };
+                window.__pixelBugLeash(() => {
+                    const r = mark.getBoundingClientRect();
+                    spot.x = r.left + r.width / 2;
+                    spot.y = r.top + r.height / 2;
+                    spot.heading = -Math.PI / 2; // Facing upward
+                    return spot;
+                }, {
+                    onArrive: () => {
+                        mark.classList.add('is-bug-perched');
+                        if (typeof window.__pixelBugDance === 'function') {
+                            window.__pixelBugDance(true);
+                        }
+                        if (typeof window.__pixelBugSay === 'function') {
+                            window.__pixelBugSay('took over the mark. vibe with the beats.');
+                        }
+                    }
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', leashBugToNav);
+            } else {
+                leashBugToNav();
+            }
+        })();
+    </script>
 </body>
 
 </html>
