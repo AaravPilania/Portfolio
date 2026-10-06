@@ -101,6 +101,20 @@
         return { g, aspect: w / h };
     }
 
+    let sigProgImg = null;
+    try {
+        sigProgImg = new Image();
+        sigProgImg.src = '/images/signature-progress.png';
+        sigProgImg.onload = () => {
+            if (built && decalMat && sigTex && lens) {
+                const TW = perf.low ? 640 : 1024, TH = Math.round(TW / lens.aspect);
+                const updated = paintSignature(TW, TH);
+                sigTex.image = updated;
+                sigTex.needsUpdate = true;
+            }
+        };
+    } catch (e) {}
+
     // The signature: authentic round-tip pen line following Aarav's real handwriting trajectory,
     // revealed along its writing timeline by the decal shader.
     function paintSignature(TW, TH) {
@@ -109,11 +123,20 @@
         const g = c.getContext('2d');
         g.fillStyle = '#000';
         g.fillRect(0, 0, TW, TH);
+
+        if (sigProgImg && sigProgImg.complete && sigProgImg.naturalWidth > 0) {
+            const sc = Math.min((TW * 0.90) / sigProgImg.width, (TH * 0.82) / sigProgImg.height);
+            const w = sigProgImg.width * sc, h = sigProgImg.height * sc;
+            const ox = (TW - w) / 2, oy = (TH - h) / 2;
+            g.drawImage(sigProgImg, ox, oy, w, h);
+            return c;
+        }
+
         const D = window.__SIG_DATA;
         if (!D || !D.s) return c;
-        const sc = Math.min((TW * 0.84) / D.w, (TH * 0.72) / D.h);
-        const ox = TW / 2 - (D.w / 2) * sc, oy = TH * 0.52 + (D.h / 2) * sc;
-        const strokeW = Math.max(2.6, (D.pen || 32.2) * sc * 0.42);
+        const sc = Math.min((TW * 0.88) / D.w, (TH * 0.80) / D.h);
+        const ox = TW / 2 - (D.w / 2) * sc, oy = TH * 0.50 + (D.h / 2) * sc;
+        const strokeW = Math.max(2.6, (D.pen || 24.0) * sc * 0.44);
         g.lineCap = 'round';
         g.lineJoin = 'round';
         g.lineWidth = strokeW;
