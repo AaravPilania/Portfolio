@@ -927,6 +927,51 @@
         for (let i = 0; i < size; i++) frames[i] = raw[i];
         for (let i = size; i < n * size; i++) frames[i] = raw[i] ^ frames[i - size];
         for (let i = 0; i < n * size; i++) frames[i] = remap[frames[i]];
+
+        // Creative studio pass: harmonize character clothing colors in middle dance sequences (frames 225-345, 390-410)
+        // removing unnatural solid green chroma-key artifacts and restoring rich denim blues, graphite styling, and white details
+        for (let f = 0; f < n; f++) {
+            if ((f >= 225 && f <= 345) || (f >= 390 && f <= 410)) {
+                let topR = -1, botR = -1, minC = 999, maxC = -1;
+                for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+                    if (frames[f * size + r * w + c] !== FIELD) {
+                        if (topR === -1) topR = r;
+                        botR = r;
+                        if (c < minC) minC = c;
+                        if (c > maxC) maxC = c;
+                    }
+                }
+                if (topR !== -1) {
+                    const H = botR - topR + 1, W = maxC - minC + 1, midC = (minC + maxC) / 2;
+                    for (let c = minC; c <= maxC; c++) {
+                        for (let r = topR; r <= botR; r++) {
+                            const idx = f * size + r * w + c;
+                            if (frames[idx] === COL.basil) {
+                                const yNorm = (r - topR) / H;
+                                const isEdge = Math.abs(c - midC) / (Math.max(1, W / 2)) > 0.35;
+                                let newCol = COL.basil;
+                                if (yNorm < 0.16) {
+                                    newCol = COL.graphite;
+                                } else if (yNorm < 0.24) {
+                                    newCol = isEdge ? COL.graphite : 3;
+                                } else if (yNorm < 0.52) {
+                                    newCol = isEdge ? ((c % 2 === 0) ? COL.graphite : COL.blueberry) : 3;
+                                } else if (yNorm < 0.88) {
+                                    const relX = c - minC;
+                                    if (relX % 3 === 0) newCol = COL.blueberry;
+                                    else if (relX % 3 === 1) newCol = 6;
+                                    else newCol = (r % 4 === 0) ? COL.lavender : COL.blueberry;
+                                } else {
+                                    newCol = (r >= botR - 1) ? COL.graphite : 3;
+                                }
+                                frames[idx] = newCol;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Per-frame dancer centre, averaged over +-8 frames so a narrow window glides instead of jittering
         const cen = new Float64Array(n), cx = new Float64Array(n);
         for (let f = 0; f < n; f++) {
@@ -969,7 +1014,7 @@
         document.fonts.ready.then(layout);
     }
 
-    loadDance('data/calendar-dance.bin').catch(() => {});
+    loadDance('data/calendar-dance.bin?v=2.1').catch(() => {});
 
     // ---------------------------------------------------------------- sound
     // The gate's answer starts the cycle: with sound, or silently on the same audio clock so unmuting stays in time.
