@@ -2,12 +2,12 @@
  * SPONGE CAROUSEL ENGINE
  * 1:1 Boutique Creative Developer Experience
  * 
- * Physics:
- * - Horizontally moving conveyor runway aligned dead center vertically.
- * - Dynamic spatial compression lens in the middle of the viewport.
- * - Velocity-dependent sponge squishing (lateral compression, vertical volume preservation bulge,
- *   inertia shear skew, and ballooning rounded corners).
- * - Elastic harmonic spring-back when scrolling stops.
+ * Features:
+ * - Wide landscape aspect ratio (long lengthwise, not heightwise)
+ * - Zero gap, zero border: directly connected edge-to-edge images
+ * - Purely horizontal spatial sponge compression in the middle
+ * - Locked vertical height (zero vertical stretch or bouncing)
+ * - Velocity-dependent squish intensity with harmonic spring recovery
  */
 
 (function () {
@@ -136,6 +136,25 @@
         }
     ];
 
+    /**
+     * Closed-form continuous spatial deformation field.
+     * Maps uncompressed coordinate u (relative to viewport center) to screen offset.
+     * Within the middle zone [-R, R], space is compressed horizontally by S * cos^2(pi*u / (2R)).
+     * Because the mapping is monotonic and C1 continuous everywhere, adjacent items
+     * sharing boundary u are GUARANTEED to share the exact same screen coordinate,
+     * producing zero gap and zero overlap at all times!
+     */
+    function spongeX(u, R, S) {
+        if (S <= 0.0001) return u;
+        if (u > R) {
+            return u - S * (R * 0.5);
+        } else if (u < -R) {
+            return u + S * (R * 0.5);
+        } else {
+            return u - S * (0.5 * u + (R / (2 * Math.PI)) * Math.sin((Math.PI * u) / R));
+        }
+    }
+
     class SpongeCarousel {
         constructor() {
             this.stage = document.getElementById('spongeStage');
@@ -151,25 +170,25 @@
 
             if (!this.track) return;
 
-            // State variables
+            // Scroll & Velocity State
             this.scrollX = 0;
             this.targetScrollX = 0;
             this.lastScrollX = 0;
-            this.velocity = 0;
             this.smoothedVelocity = 0;
+            this.currentSquish = 0;
 
-            // Drag state
+            // Pointer Drag State
             this.isDragging = false;
             this.dragStartX = 0;
             this.dragScrollStart = 0;
             this.lastDragX = 0;
             this.dragVelocity = 0;
 
-            // Virtual infinite wrapping
+            // Virtual infinite wrapping metrics
             this.cardItems = [];
+            this.cardWidth = 640;
             this.singleSetWidth = 0;
-            this.cardWidth = 0;
-            this.cardGap = 0;
+            this.REPEATS = 4; // 48 items total for seamless wrapping
 
             this.init();
         }
@@ -185,9 +204,7 @@
             this.track.innerHTML = '';
             this.cardItems = [];
 
-            // Duplicate 3 times (36 cards total) for infinite looping
-            const REPEATS = 3;
-            for (let r = 0; r < REPEATS; r++) {
+            for (let r = 0; r < this.REPEATS; r++) {
                 PROJECTS.forEach((proj, idx) => {
                     const card = document.createElement('div');
                     card.className = 'sponge-card';
@@ -197,7 +214,7 @@
                     const inner = document.createElement('div');
                     inner.className = 'sponge-card-inner';
 
-                    // Media
+                    // Background Media (Edge-to-edge landscape)
                     const mediaWrap = document.createElement('div');
                     mediaWrap.className = 'sponge-card-media';
 
@@ -214,7 +231,7 @@
                         mediaEl = document.createElement('img');
                         mediaEl.src = proj.mediaSrc;
                         mediaEl.alt = proj.title;
-                        mediaEl.loading = r === 1 ? 'eager' : 'lazy';
+                        mediaEl.loading = (r === 1 || r === 2) ? 'eager' : 'lazy';
                     }
                     mediaWrap.appendChild(mediaEl);
                     inner.appendChild(mediaWrap);
@@ -228,6 +245,10 @@
                     sheen.className = 'sponge-card-sheen';
                     inner.appendChild(sheen);
 
+                    // Overlay Content (Counter-scaled against horizontal squish)
+                    const content = document.createElement('div');
+                    content.className = 'sponge-card-content';
+
                     // Header
                     const header = document.createElement('div');
                     header.className = 'sponge-card-header';
@@ -235,14 +256,16 @@
                         <span class="sponge-card-num">[ ${proj.num} ]</span>
                         <span class="sponge-card-tag">${proj.tag}</span>
                     `;
-                    inner.appendChild(header);
+                    content.appendChild(header);
 
-                    // Footer / Details
+                    // Footer
                     const footer = document.createElement('div');
                     footer.className = 'sponge-card-footer';
                     footer.innerHTML = `
-                        <h2 class="sponge-card-title">${proj.title}</h2>
-                        <p class="sponge-card-desc">${proj.desc}</p>
+                        <div class="sponge-card-meta">
+                            <h2 class="sponge-card-title">${proj.title}</h2>
+                            <p class="sponge-card-desc">${proj.desc}</p>
+                        </div>
                         <div class="sponge-card-actions">
                             <a href="${proj.launchUrl}" ${proj.launchUrl.startsWith('http') ? 'target="_blank" rel="noopener"' : ''} class="sponge-btn sponge-btn--launch">
                                 Launch
@@ -253,17 +276,18 @@
                             </a>
                         </div>
                     `;
-                    inner.appendChild(footer);
+                    content.appendChild(footer);
 
+                    inner.appendChild(content);
                     card.appendChild(inner);
                     this.track.appendChild(card);
 
                     this.cardItems.push({
                         el: card,
                         inner: inner,
+                        content: content,
                         media: mediaEl,
                         project: proj,
-                        currentSquish: 0,
                         origIndex: idx
                     });
                 });
@@ -272,41 +296,35 @@
 
         measureMetrics() {
             if (this.cardItems.length === 0) return;
-            const firstCard = this.cardItems[0].el;
-            const secondCard = this.cardItems[1]?.el;
+            // Read computed resting card width from CSS
+            const sample = this.cardItems[0].el;
+            this.cardWidth = sample.offsetWidth || Math.min(window.innerWidth * 0.48, 720);
+            this.singleSetWidth = PROJECTS.length * this.cardWidth;
 
-            this.cardWidth = firstCard.offsetWidth;
-            this.cardGap = secondCard ? (secondCard.offsetLeft - (firstCard.offsetLeft + this.cardWidth)) : 40;
-            this.singleSetWidth = PROJECTS.length * (this.cardWidth + this.cardGap);
-
-            // Start in the center set
-            this.scrollX = this.singleSetWidth;
-            this.targetScrollX = this.singleSetWidth;
-            this.lastScrollX = this.singleSetWidth;
+            // Start in middle repeat set for seamless bidirectional scrolling
+            if (this.scrollX === 0) {
+                this.scrollX = this.singleSetWidth * 1.5;
+                this.targetScrollX = this.scrollX;
+                this.lastScrollX = this.scrollX;
+            }
         }
 
         bindEvents() {
-            // Resize
             window.addEventListener('resize', () => {
                 this.measureMetrics();
             }, { passive: true });
 
-            // Wheel (Vertical wheel moves horizontal carousel)
+            // Wheel: Downward scroll advances right-to-left
             window.addEventListener('wheel', (e) => {
-                // Ignore if modifying keys are pressed
                 if (e.ctrlKey || e.metaKey) return;
-
                 const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-                // Move from right to left on downward scroll
                 this.targetScrollX += delta * 1.35;
             }, { passive: true });
 
-            // Pointer Drag
+            // Pointer Drag / Swipe
             const stage = this.stage || window;
             stage.addEventListener('pointerdown', (e) => {
-                // Allow clicking links without dragging taking over
                 if (e.target.closest('a, button')) return;
-
                 this.isDragging = true;
                 this.dragStartX = e.clientX;
                 this.dragScrollStart = this.targetScrollX;
@@ -327,132 +345,127 @@
                 if (!this.isDragging) return;
                 this.isDragging = false;
                 if (this.stage) this.stage.classList.remove('is-dragging');
-                // Apply remaining momentum
-                this.targetScrollX += this.dragVelocity * 4.5;
+                this.targetScrollX += this.dragVelocity * 4.2;
             };
 
             window.addEventListener('pointerup', onPointerEnd);
             window.addEventListener('pointercancel', onPointerEnd);
 
-            // Arrow keys
+            // Arrow Keys
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                    this.targetScrollX += 380;
+                    this.targetScrollX += this.cardWidth * 0.85;
                 } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                    this.targetScrollX -= 380;
+                    this.targetScrollX -= this.cardWidth * 0.85;
                 }
             });
 
-            // Navigation Arrows
+            // Floating Navigation Arrows
             if (this.arrowPrev) {
                 this.arrowPrev.addEventListener('click', () => {
-                    this.targetScrollX -= (this.cardWidth + this.cardGap);
+                    this.targetScrollX -= this.cardWidth;
                 });
             }
             if (this.arrowNext) {
                 this.arrowNext.addEventListener('click', () => {
-                    this.targetScrollX += (this.cardWidth + this.cardGap);
+                    this.targetScrollX += this.cardWidth;
                 });
             }
         }
 
         tick() {
             // Smooth lerp on scroll position
-            const lerpFactor = this.isDragging ? 0.22 : 0.082;
+            const lerpFactor = this.isDragging ? 0.22 : 0.084;
             this.scrollX += (this.targetScrollX - this.scrollX) * lerpFactor;
 
-            // Infinite wrapping
+            // Infinite wrapping across repeats
             if (this.singleSetWidth > 0) {
-                if (this.scrollX < this.singleSetWidth * 0.5) {
+                if (this.scrollX < this.singleSetWidth) {
                     this.scrollX += this.singleSetWidth;
                     this.targetScrollX += this.singleSetWidth;
                     this.lastScrollX += this.singleSetWidth;
-                } else if (this.scrollX > this.singleSetWidth * 2.0) {
+                } else if (this.scrollX > this.singleSetWidth * 2.5) {
                     this.scrollX -= this.singleSetWidth;
                     this.targetScrollX -= this.singleSetWidth;
                     this.lastScrollX -= this.singleSetWidth;
                 }
             }
 
-            // Real-time instantaneous velocity
+            // Real-time instantaneous scroll velocity
             const rawV = this.scrollX - this.lastScrollX;
             this.lastScrollX = this.scrollX;
-            this.smoothedVelocity += (rawV - this.smoothedVelocity) * 0.18;
+            this.smoothedVelocity += (rawV - this.smoothedVelocity) * 0.16;
 
             const absV = Math.abs(this.smoothedVelocity);
             // Normalized velocity [0, 1]
-            const normV = Math.min(absV / 28.0, 1.0);
+            const normV = Math.min(absV / 24.0, 1.0);
 
-            // Apply horizontal transform to track
-            this.track.style.transform = `translate3d(${-this.scrollX}px, -50%, 0)`;
+            // Target horizontal sponge compression intensity in the middle
+            // High velocity = maximum horizontal sponge squish (up to 44% width compression)
+            const targetSquish = 0.44 * normV;
+            // Harmonic spring recovery
+            this.currentSquish += (targetSquish - this.currentSquish) * 0.22;
+            const S = this.currentSquish;
 
             // Subtle parallax on background grid
             if (this.gridBg) {
-                const gridOffset = (-this.scrollX * 0.12) % 60;
+                const gridOffset = (-this.scrollX * 0.1) % 60;
                 this.gridBg.style.transform = `translate3d(${gridOffset}px, 0, 0)`;
             }
 
-            // Center Compression Lens Metrics
+            // Viewport & Sponge Zone Geometry
             const viewportWidth = window.innerWidth;
             const midX = viewportWidth * 0.5;
-            // Radius of middle sponge zone (cards inside this zone get compressed)
-            const zoneRadius = Math.min(viewportWidth * 0.42, 500);
+            // Radius of horizontal sponge zone around center
+            const R = Math.min(viewportWidth * 0.45, 520);
 
+            const W0 = this.cardWidth;
             let closestCard = null;
             let minDistance = Infinity;
 
-            // Iterate over all cards and apply spatial sponge squishing
-            const dir = Math.sign(this.smoothedVelocity) || 1;
-
+            // Update each card along the continuous conveyor runway
             for (let i = 0; i < this.cardItems.length; i++) {
                 const item = this.cardItems[i];
-                const rect = item.el.getBoundingClientRect();
-                const cardCenterX = rect.left + rect.width * 0.5;
-                const dist = Math.abs(cardCenterX - midX);
+                const uLeft = i * W0 - this.scrollX;
+                const uRight = (i + 1) * W0 - this.scrollX;
 
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestCard = item;
+                // Deform boundary points through continuous horizontal mapping
+                const screenLeft = midX + spongeX(uLeft, R, S);
+                const screenRight = midX + spongeX(uRight, R, S);
+
+                // Viewport culling: skip offscreen cards
+                if (screenRight < -160 || screenLeft > viewportWidth + 160) {
+                    item.el.style.display = 'none';
+                    continue;
+                }
+                item.el.style.display = '';
+
+                // Calculate current squished width
+                const currentWidth = screenRight - screenLeft;
+                const scaleX = currentWidth / W0;
+
+                // PURELY HORIZONTAL SQUISH:
+                // scaleX compresses horizontally; scaleY is strictly locked (never vertical squish!)
+                item.el.style.transform = `translate3d(${screenLeft.toFixed(2)}px, 0, 0) scaleX(${scaleX.toFixed(4)})`;
+                item.el.style.transformOrigin = '0 50%';
+
+                // Counter-scale text content horizontally so typography stays crisp
+                if (item.content) {
+                    const counterX = (1 / Math.max(0.35, scaleX)).toFixed(3);
+                    item.content.style.transform = `scaleX(${counterX})`;
+                    item.content.style.transformOrigin = '0 50%';
                 }
 
-                // Smooth bell-curve proximity to the middle
-                const proximity = dist < zoneRadius 
-                    ? (0.5 * (1 + Math.cos(Math.PI * (dist / zoneRadius)))) 
-                    : 0;
-
-                // Squish intensity is strictly tied to BOTH proximity to middle AND scroll velocity!
-                // "with movement it squishes like a sponge in the middle be it whatever in the middle yeah and the squishiness depends on the velocity of scroll yeah"
-                const targetSquish = proximity * normV;
-
-                // Elastic spring interpolation for organic sponge recovery
-                item.currentSquish += (targetSquish - item.currentSquish) * 0.24;
-                const q = item.currentSquish;
-
-                // 1. ScaleX: Lateral compression (sponge squishing)
-                const scaleX = 1.0 - (q * 0.46);
-
-                // 2. ScaleY: Vertical expansion (Poisson's ratio volume preservation)
-                const scaleY = 1.0 + (q * 0.24);
-
-                // 3. SkewX: Inertial shear angle in direction of travel
-                const skewX = -dir * q * 9.0;
-
-                // 4. Border Radius: Corners mushroom and soften under compression
-                const borderRadius = 18 + q * 34;
-
-                // Apply to inner wrapper
-                item.inner.style.transform = `scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)}) skewX(${skewX.toFixed(2)}deg)`;
-                item.inner.style.borderRadius = `${borderRadius.toFixed(1)}px`;
-
-                // Internal media counter-parallax & zoom
-                if (item.media) {
-                    const imgScale = 1.08 + q * 0.18;
-                    const parallaxX = (cardCenterX - midX) * -0.055;
-                    item.media.style.transform = `scale(${imgScale.toFixed(3)}) translate3d(${parallaxX.toFixed(1)}px, 0, 0)`;
+                // Check distance to center for active HUD tracking
+                const cardCenter = (screenLeft + screenRight) * 0.5;
+                const distFromMid = Math.abs(cardCenter - midX);
+                if (distFromMid < minDistance) {
+                    minDistance = distFromMid;
+                    closestCard = item;
                 }
             }
 
-            // Mark active center card and update HUD
+            // Mark active center card & update HUD
             if (closestCard) {
                 this.cardItems.forEach(c => {
                     c.el.classList.toggle('is-center', c === closestCard);
@@ -464,9 +477,9 @@
                 }
             }
 
-            // Update Velocity Gauge in HUD
+            // Update Velocity Sponge Compression Gauge in HUD
             if (this.gaugeFill && this.gaugeVal) {
-                const fillPct = Math.min(absV * 3.4, 100);
+                const fillPct = Math.min(absV * 3.6, 100);
                 this.gaugeFill.style.width = `${fillPct.toFixed(1)}%`;
                 this.gaugeVal.textContent = `${Math.round(absV * 10)} PX/S`;
             }

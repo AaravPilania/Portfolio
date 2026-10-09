@@ -1,11 +1,13 @@
 /**
  * SPONGE CAROUSEL STYLES
  * Boutique, high-velocity creative developer carousel
+ * 
  * Features:
- * - Dead-center vertical alignment
- * - Dynamic sponge squish compression field in the middle
- * - Elastic spring-back recovery
- * - High-contrast editorial typography and tactile HUD
+ * - Wide landscape aspect ratio (long lengthwise, not heightwise)
+ * - Zero gaps and zero borders: directly connected edge-to-edge image band
+ * - Purely horizontal velocity-dependent sponge squishing in the middle
+ * - Locked vertical height (zero vertical stretch or bouncing)
+ * - Elastic spring recovery when scrolling settles
  */
 
 :root {
@@ -16,6 +18,10 @@
     --sponge-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
     --sponge-sans: 'PP-Mori', -apple-system, BlinkMacSystemFont, sans-serif;
     --sponge-serif: 'Brier', serif, sans-serif;
+    
+    /* Long lengthwise (wide landscape) dimensions */
+    --card-w: clamp(540px, 48vw, 760px);
+    --card-h: clamp(280px, 35vh, 400px);
 }
 
 html, body {
@@ -58,6 +64,7 @@ html, body {
     will-change: transform;
 }
 
+/* Center Compression Lens Axis */
 .sponge-lens-guide {
     position: absolute;
     top: 0;
@@ -73,7 +80,7 @@ html, body {
     align-items: center;
     padding: 90px 0 90px;
     box-sizing: border-box;
-    opacity: 0.45;
+    opacity: 0.35;
     transition: opacity 0.3s ease;
 }
 
@@ -88,7 +95,7 @@ html, body {
     letter-spacing: 0.16em;
     text-transform: uppercase;
     white-space: nowrap;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.85);
     padding: 3px 8px;
     border-radius: 4px;
     border: 1px solid rgba(255, 237, 41, 0.3);
@@ -116,6 +123,7 @@ html, body {
     align-items: center;
     justify-content: flex-start;
     cursor: grab;
+    overflow: hidden;
 }
 
 .sponge-stage.is-dragging {
@@ -123,52 +131,49 @@ html, body {
 }
 
 .sponge-track {
-    display: flex;
-    align-items: center;
     position: absolute;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    will-change: transform;
-    gap: clamp(28px, 3.5vw, 56px);
-    padding: 0 50vw;
+    height: var(--card-h);
+    width: 100%;
+    pointer-events: auto;
 }
 
-/* CARDS */
+/* CARDS: DIRECTLY CONNECTED, ZERO SPACE, ZERO BORDERLINE */
 .sponge-card {
-    position: relative;
-    flex: 0 0 clamp(320px, 26vw, 450px);
-    height: clamp(470px, 62vh, 690px);
-    transform-origin: center center;
-    will-change: transform;
-    perspective: 1200px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--card-w);
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: hidden;
     box-sizing: border-box;
+    transform-origin: 0 50%;
+    will-change: transform;
+    background-color: #0b0c10;
 }
 
 .sponge-card-inner {
     width: 100%;
     height: 100%;
     position: relative;
-    border-radius: 18px;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
     overflow: hidden;
-    background-color: #0b0c10;
-    border: 1px solid var(--sponge-border);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
-    transform-origin: center center;
-    will-change: transform, border-radius;
-    transition: border-color 0.35s ease, box-shadow 0.35s ease;
-}
-
-.sponge-card.is-center .sponge-card-inner {
-    border-color: rgba(255, 237, 41, 0.55);
-    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 237, 41, 0.12);
+    background-color: #000000;
 }
 
 .sponge-card-media {
     position: absolute;
-    inset: -5%;
-    width: 110%;
-    height: 110%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     pointer-events: none;
 }
@@ -180,14 +185,14 @@ html, body {
     object-fit: cover;
     display: block;
     will-change: transform;
-    transform: scale(1.08);
-    filter: brightness(0.92) contrast(1.05);
-    transition: filter 0.3s ease;
+    filter: brightness(0.9) contrast(1.05);
+    transition: filter 0.3s ease, transform 0.4s ease;
 }
 
 .sponge-card:hover .sponge-card-media img,
 .sponge-card:hover .sponge-card-media video {
-    filter: brightness(1) contrast(1.08);
+    filter: brightness(1) contrast(1.1);
+    transform: scale(1.03);
 }
 
 /* Card Scrim & Sheen */
@@ -196,10 +201,10 @@ html, body {
     inset: 0;
     background: linear-gradient(
         180deg,
-        rgba(0, 0, 0, 0.55) 0%,
-        rgba(0, 0, 0, 0.05) 35%,
-        rgba(0, 0, 0, 0.25) 60%,
-        rgba(0, 0, 0, 0.92) 100%
+        rgba(0, 0, 0, 0.62) 0%,
+        rgba(0, 0, 0, 0.05) 32%,
+        rgba(0, 0, 0, 0.28) 58%,
+        rgba(0, 0, 0, 0.94) 100%
     );
     pointer-events: none;
     z-index: 2;
@@ -212,7 +217,7 @@ html, body {
     pointer-events: none;
     z-index: 3;
     opacity: 0;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.3s ease;
 }
 
 .sponge-card.is-center .sponge-card-sheen,
@@ -220,16 +225,27 @@ html, body {
     opacity: 1;
 }
 
+/* Card Content Overlay (Counter-scaled against horizontal squish) */
+.sponge-card-content {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px 24px;
+    box-sizing: border-box;
+    pointer-events: none;
+    transform-origin: 0 50%;
+    will-change: transform;
+}
+
 /* Card Header */
 .sponge-card-header {
-    position: absolute;
-    top: 22px;
-    left: 22px;
-    right: 22px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    z-index: 10;
+    width: 100%;
 }
 
 .sponge-card-num {
@@ -237,12 +253,10 @@ html, body {
     font-size: 11px;
     font-weight: 500;
     color: var(--sponge-accent);
-    background: rgba(0, 0, 0, 0.72);
+    background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 237, 41, 0.35);
     letter-spacing: 0.08em;
 }
 
@@ -256,27 +270,29 @@ html, body {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding: 4px 9px;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* Card Footer / Body */
+/* Card Footer / Details */
 .sponge-card-footer {
-    position: absolute;
-    bottom: 22px;
-    left: 22px;
-    right: 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 18px;
+    width: 100%;
+}
+
+.sponge-card-meta {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    z-index: 10;
+    gap: 4px;
+    max-width: 68%;
 }
 
 .sponge-card-title {
     font-family: var(--sponge-serif);
-    font-size: clamp(24px, 2.3vw, 36px);
+    font-size: clamp(22px, 2.2vw, 32px);
     font-weight: 700;
-    line-height: 1.08;
+    line-height: 1.1;
     color: #ffffff;
     text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
     letter-spacing: -0.01em;
@@ -285,21 +301,22 @@ html, body {
 
 .sponge-card-desc {
     font-family: var(--sponge-sans);
-    font-size: 12.5px;
+    font-size: 12px;
     color: rgba(255, 255, 255, 0.72);
-    line-height: 1.45;
+    line-height: 1.4;
     margin: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
 }
 
 .sponge-card-actions {
     display: flex;
     gap: 8px;
     align-items: center;
-    margin-top: 4px;
+    pointer-events: auto;
 }
 
 .sponge-btn {
@@ -307,10 +324,10 @@ html, body {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    padding: 8px 15px;
+    padding: 8px 14px;
     border-radius: 999px;
     font-family: var(--sponge-mono);
-    font-size: 10.5px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     text-decoration: none;
@@ -555,9 +572,9 @@ html, body {
 
 /* RESPONSIVE ADAPTATIONS */
 @media (max-width: 900px) {
-    .sponge-card {
-        flex: 0 0 clamp(280px, 72vw, 360px);
-        height: clamp(420px, 58vh, 520px);
+    :root {
+        --card-w: clamp(380px, 78vw, 540px);
+        --card-h: clamp(220px, 32vh, 320px);
     }
     .sponge-top-bar {
         top: 70px;
@@ -573,6 +590,19 @@ html, body {
         display: none;
     }
     .sponge-nav-arrow {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    :root {
+        --card-w: clamp(300px, 86vw, 420px);
+        --card-h: clamp(180px, 28vh, 250px);
+    }
+    .sponge-card-meta {
+        max-width: 85%;
+    }
+    .sponge-card-desc {
         display: none;
     }
 }
