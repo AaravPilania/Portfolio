@@ -2,12 +2,13 @@
  * SPONGE CAROUSEL ENGINE
  * 1:1 Boutique Creative Developer Experience
  * 
- * Features:
- * - Wide landscape aspect ratio (long lengthwise, not heightwise)
- * - Zero gap, zero border: directly connected edge-to-edge images
- * - Purely horizontal spatial sponge compression in the middle
- * - Locked vertical height (zero vertical stretch or bouncing)
- * - Velocity-dependent squish intensity with harmonic spring recovery
+ * Vertical Sponge Press Mechanics:
+ * - Wide landscape format (long lengthwise, not heightwise)
+ * - Zero gaps and zero borders: directly connected edge-to-edge images
+ * - Symmetric vertical squish: invisible "human hand" pressing down in the center
+ * - Continuous, seamless C1-smooth Bézier curve across all cards (zero stair-steps)
+ * - Inward-snuggling content hierarchy so text/buttons remain centered in the pressed waist
+ * - Elastic spring recovery when scrolling settles
  */
 
 (function () {
@@ -136,25 +137,6 @@
         }
     ];
 
-    /**
-     * Closed-form continuous spatial deformation field.
-     * Maps uncompressed coordinate u (relative to viewport center) to screen offset.
-     * Within the middle zone [-R, R], space is compressed horizontally by S * cos^2(pi*u / (2R)).
-     * Because the mapping is monotonic and C1 continuous everywhere, adjacent items
-     * sharing boundary u are GUARANTEED to share the exact same screen coordinate,
-     * producing zero gap and zero overlap at all times!
-     */
-    function spongeX(u, R, S) {
-        if (S <= 0.0001) return u;
-        if (u > R) {
-            return u - S * (R * 0.5);
-        } else if (u < -R) {
-            return u + S * (R * 0.5);
-        } else {
-            return u - S * (0.5 * u + (R / (2 * Math.PI)) * Math.sin((Math.PI * u) / R));
-        }
-    }
-
     class SpongeCarousel {
         constructor() {
             this.stage = document.getElementById('spongeStage');
@@ -167,6 +149,11 @@
             this.gaugeVal = document.getElementById('spongeGaugeVal');
             this.arrowPrev = document.getElementById('spongePrev');
             this.arrowNext = document.getElementById('spongeNext');
+
+            // SVG elements for continuous organic hand-press curve
+            this.clipPathEl = document.getElementById('spongeHandPressPath');
+            this.contourTop = document.getElementById('spongeContourTop');
+            this.contourBot = document.getElementById('spongeContourBot');
 
             if (!this.track) return;
 
@@ -184,11 +171,12 @@
             this.lastDragX = 0;
             this.dragVelocity = 0;
 
-            // Virtual infinite wrapping metrics
+            // Layout Metrics
             this.cardItems = [];
             this.cardWidth = 640;
+            this.cardHeight = 340;
             this.singleSetWidth = 0;
-            this.REPEATS = 4; // 48 items total for seamless wrapping
+            this.REPEATS = 4; // 48 items total for infinite smooth wrapping
 
             this.init();
         }
@@ -245,11 +233,11 @@
                     sheen.className = 'sponge-card-sheen';
                     inner.appendChild(sheen);
 
-                    // Overlay Content (Counter-scaled against horizontal squish)
+                    // Content Overlay
                     const content = document.createElement('div');
                     content.className = 'sponge-card-content';
 
-                    // Header
+                    // Header (Pill tags)
                     const header = document.createElement('div');
                     header.className = 'sponge-card-header';
                     header.innerHTML = `
@@ -258,7 +246,7 @@
                     `;
                     content.appendChild(header);
 
-                    // Footer
+                    // Footer (Title, description, actions)
                     const footer = document.createElement('div');
                     footer.className = 'sponge-card-footer';
                     footer.innerHTML = `
@@ -286,6 +274,8 @@
                         el: card,
                         inner: inner,
                         content: content,
+                        header: header,
+                        footer: footer,
                         media: mediaEl,
                         project: proj,
                         origIndex: idx
@@ -296,12 +286,12 @@
 
         measureMetrics() {
             if (this.cardItems.length === 0) return;
-            // Read computed resting card width from CSS
             const sample = this.cardItems[0].el;
             this.cardWidth = sample.offsetWidth || Math.min(window.innerWidth * 0.48, 720);
+            this.cardHeight = this.track.offsetHeight || 340;
             this.singleSetWidth = PROJECTS.length * this.cardWidth;
 
-            // Start in middle repeat set for seamless bidirectional scrolling
+            // Start in middle set for seamless bidirectional scrolling
             if (this.scrollX === 0) {
                 this.scrollX = this.singleSetWidth * 1.5;
                 this.targetScrollX = this.scrollX;
@@ -360,7 +350,7 @@
                 }
             });
 
-            // Floating Navigation Arrows
+            // Navigation Arrows
             if (this.arrowPrev) {
                 this.arrowPrev.addEventListener('click', () => {
                     this.targetScrollX -= this.cardWidth;
@@ -400,12 +390,13 @@
             // Normalized velocity [0, 1]
             const normV = Math.min(absV / 24.0, 1.0);
 
-            // Target horizontal sponge compression intensity in the middle
-            // High velocity = maximum horizontal sponge squish (up to 44% width compression)
-            const targetSquish = 0.44 * normV;
+            // Vertical Sponge Squish Depth:
+            // Symmetrically presses from top and bottom toward center line.
+            // Depth scales with velocity up to 46% of total height!
+            const targetSquish = 0.46 * normV;
             // Harmonic spring recovery
             this.currentSquish += (targetSquish - this.currentSquish) * 0.22;
-            const S = this.currentSquish;
+            const pressDepth = this.currentSquish;
 
             // Subtle parallax on background grid
             if (this.gridBg) {
@@ -413,52 +404,117 @@
                 this.gridBg.style.transform = `translate3d(${gridOffset}px, 0, 0)`;
             }
 
-            // Viewport & Sponge Zone Geometry
-            const viewportWidth = window.innerWidth;
-            const midX = viewportWidth * 0.5;
-            // Radius of horizontal sponge zone around center
-            const R = Math.min(viewportWidth * 0.45, 520);
+            // Viewport & Geometry Metrics
+            const W = window.innerWidth;
+            const H = this.cardHeight;
+            const midX = W * 0.5;
+            const midY = window.innerHeight * 0.5;
+            // Radius of horizontal reach of the hand-press
+            const R = Math.min(W * 0.44, 520);
+            const Delta = (H * 0.5) * pressDepth; // Vertical pinch depth from top and bottom
 
+            // =========================================================================
+            // GENERATE CONTINUOUS C1-SMOOTH BÉZIER CONTOUR (HUMAN HAND VERTICAL PRESS)
+            // =========================================================================
+            const X0 = Math.max(0, midX - R);
+            const X2 = Math.min(W, midX + R);
+            const dx = midX - X0;
+            const cpx = dx * 0.52; // Cubic Bézier smooth tangent control distance
+
+            let trackClipD;
+            if (Delta < 0.2) {
+                // Flat rectangle when stationary
+                trackClipD = `M 0 0 L ${W} 0 L ${W} ${H} L 0 ${H} Z`;
+            } else {
+                // Symmetrically curved top & bottom hand press
+                trackClipD = [
+                    `M 0 0`,
+                    `L ${X0.toFixed(1)} 0`,
+                    `C ${(X0 + cpx).toFixed(1)} 0, ${(midX - cpx).toFixed(1)} ${Delta.toFixed(1)}, ${midX.toFixed(1)} ${Delta.toFixed(1)}`,
+                    `C ${(midX + cpx).toFixed(1)} ${Delta.toFixed(1)}, ${(X2 - cpx).toFixed(1)} 0, ${X2.toFixed(1)} 0`,
+                    `L ${W} 0`,
+                    `L ${W} ${H}`,
+                    `L ${X2.toFixed(1)} ${H}`,
+                    `C ${(X2 - cpx).toFixed(1)} ${H}, ${(midX + cpx).toFixed(1)} ${(H - Delta).toFixed(1)}, ${midX.toFixed(1)} ${(H - Delta).toFixed(1)}`,
+                    `C ${(midX - cpx).toFixed(1)} ${(H - Delta).toFixed(1)}, ${(X0 + cpx).toFixed(1)} ${H}, ${X0.toFixed(1)} ${H}`,
+                    `L 0 ${H}`,
+                    `Z`
+                ].join(' ');
+            }
+
+            // Update SVG ClipPath on track
+            if (this.clipPathEl) {
+                this.clipPathEl.setAttribute('d', trackClipD);
+            }
+
+            // Update Luminous Glowing Contour Overlay (Screen Coordinates)
+            if (this.contourTop && this.contourBot) {
+                const topY0 = midY - H * 0.5;
+                const botY0 = midY + H * 0.5;
+
+                const topD = [
+                    `M ${X0.toFixed(1)} ${topY0.toFixed(1)}`,
+                    `C ${(X0 + cpx).toFixed(1)} ${topY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${midX.toFixed(1)} ${(topY0 + Delta).toFixed(1)}`,
+                    `C ${(midX + cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${topY0.toFixed(1)}, ${X2.toFixed(1)} ${topY0.toFixed(1)}`
+                ].join(' ');
+
+                const botD = [
+                    `M ${X0.toFixed(1)} ${botY0.toFixed(1)}`,
+                    `C ${(X0 + cpx).toFixed(1)} ${botY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${midX.toFixed(1)} ${(botY0 - Delta).toFixed(1)}`,
+                    `C ${(midX + cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${botY0.toFixed(1)}, ${X2.toFixed(1)} ${botY0.toFixed(1)}`
+                ].join(' ');
+
+                this.contourTop.setAttribute('d', topD);
+                this.contourBot.setAttribute('d', botD);
+
+                const glowAlpha = Math.min(pressDepth * 2.4, 0.85);
+                this.contourTop.style.opacity = glowAlpha.toFixed(2);
+                this.contourBot.style.opacity = glowAlpha.toFixed(2);
+            }
+
+            // =========================================================================
+            // UPDATE CARDS: FLUSH EDGE-TO-EDGE + INWARD SNUGGLING CONTENT HIERARCHY
+            // =========================================================================
             const W0 = this.cardWidth;
             let closestCard = null;
             let minDistance = Infinity;
 
-            // Update each card along the continuous conveyor runway
             for (let i = 0; i < this.cardItems.length; i++) {
                 const item = this.cardItems[i];
-                const uLeft = i * W0 - this.scrollX;
-                const uRight = (i + 1) * W0 - this.scrollX;
-
-                // Deform boundary points through continuous horizontal mapping
-                const screenLeft = midX + spongeX(uLeft, R, S);
-                const screenRight = midX + spongeX(uRight, R, S);
+                const screenLeft = i * W0 - this.scrollX;
+                const screenRight = screenLeft + W0;
 
                 // Viewport culling: skip offscreen cards
-                if (screenRight < -160 || screenLeft > viewportWidth + 160) {
+                if (screenRight < -120 || screenLeft > W + 120) {
                     item.el.style.display = 'none';
                     continue;
                 }
                 item.el.style.display = '';
 
-                // Calculate current squished width
-                const currentWidth = screenRight - screenLeft;
-                const scaleX = currentWidth / W0;
+                // Flush horizontal alignment (zero gaps, zero horizontal scale)
+                item.el.style.transform = `translate3d(${screenLeft.toFixed(2)}px, 0, 0)`;
 
-                // PURELY HORIZONTAL SQUISH:
-                // scaleX compresses horizontally; scaleY is strictly locked (never vertical squish!)
-                item.el.style.transform = `translate3d(${screenLeft.toFixed(2)}px, 0, 0) scaleX(${scaleX.toFixed(4)})`;
-                item.el.style.transformOrigin = '0 50%';
+                // Distance from card center to hand-press axis
+                const cardCenterX = screenLeft + W0 * 0.5;
+                const distFromMid = Math.abs(cardCenterX - midX);
 
-                // Counter-scale text content horizontally so typography stays crisp
-                if (item.content) {
-                    const counterX = (1 / Math.max(0.35, scaleX)).toFixed(3);
-                    item.content.style.transform = `scaleX(${counterX})`;
-                    item.content.style.transformOrigin = '0 50%';
+                // Smooth bell-curve proximity factor
+                const prox = distFromMid < R 
+                    ? Math.cos((Math.PI * distFromMid) / (2 * R)) ** 2 
+                    : 0;
+
+                // Dynamic vertical inward displacement for header and footer
+                // Keeps text and buttons nested comfortably inside the pinched waist
+                const cardDeltaY = (H * 0.5) * pressDepth * prox;
+
+                if (item.header) {
+                    item.header.style.transform = `translate3d(0, ${cardDeltaY.toFixed(1)}px, 0)`;
+                }
+                if (item.footer) {
+                    item.footer.style.transform = `translate3d(0, -${cardDeltaY.toFixed(1)}px, 0)`;
                 }
 
-                // Check distance to center for active HUD tracking
-                const cardCenter = (screenLeft + screenRight) * 0.5;
-                const distFromMid = Math.abs(cardCenter - midX);
+                // Check closest card to center for HUD
                 if (distFromMid < minDistance) {
                     minDistance = distFromMid;
                     closestCard = item;
@@ -479,12 +535,12 @@
 
             // Update Velocity Sponge Compression Gauge in HUD
             if (this.gaugeFill && this.gaugeVal) {
-                const fillPct = Math.min(absV * 3.6, 100);
+                const fillPct = Math.min((pressDepth / 0.46) * 100, 100);
                 this.gaugeFill.style.width = `${fillPct.toFixed(1)}%`;
-                this.gaugeVal.textContent = `${Math.round(absV * 10)} PX/S`;
+                this.gaugeVal.textContent = `${Math.round(fillPct)}% PRESSED`;
             }
 
-            // Lens guide indicator state
+            // Lens guide indicator state & position
             if (this.lensGuide) {
                 this.lensGuide.classList.toggle('is-squishing', normV > 0.08);
             }

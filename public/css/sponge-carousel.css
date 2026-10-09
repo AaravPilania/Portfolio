@@ -5,8 +5,9 @@
  * Features:
  * - Wide landscape aspect ratio (long lengthwise, not heightwise)
  * - Zero gaps and zero borders: directly connected edge-to-edge image band
- * - Purely horizontal velocity-dependent sponge squishing in the middle
- * - Locked vertical height (zero vertical stretch or bouncing)
+ * - Symmetric vertical press squish (human hand depression in the center)
+ * - Continuous, seamless C1-smooth curved contour across the entire band
+ * - Inward-snuggling content hierarchy that adapts dynamically to the pinched waist
  * - Elastic spring recovery when scrolling settles
  */
 
@@ -78,7 +79,7 @@ html, body {
     flex-direction: column;
     justify-content: space-between;
     align-items: center;
-    padding: 90px 0 90px;
+    padding: 85px 0 85px;
     box-sizing: border-box;
     opacity: 0.35;
     transition: opacity 0.3s ease;
@@ -100,6 +101,7 @@ html, body {
     border-radius: 4px;
     border: 1px solid rgba(255, 237, 41, 0.3);
     box-shadow: 0 0 12px rgba(255, 237, 41, 0.25);
+    transition: transform 0.1s linear;
 }
 
 .sponge-lens-line {
@@ -130,14 +132,37 @@ html, body {
     cursor: grabbing;
 }
 
+/* Continuous Horizontal Band with SVG Smooth Vertical Press Clip */
 .sponge-track {
     position: absolute;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
     height: var(--card-h);
-    width: 100%;
+    width: 100vw;
     pointer-events: auto;
+    clip-path: url(#spongeHandPressClip);
+    -webkit-clip-path: url(#spongeHandPressClip);
+    will-change: clip-path;
+}
+
+/* Dynamic Luminous Contour Curves (Human Hand Press Glow) */
+.sponge-contour-svg {
+    position: absolute;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 14;
+}
+
+.sponge-contour-path {
+    fill: none;
+    stroke: var(--sponge-accent);
+    stroke-width: 1.5px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    filter: drop-shadow(0 0 8px rgba(255, 237, 41, 0.7));
 }
 
 /* CARDS: DIRECTLY CONNECTED, ZERO SPACE, ZERO BORDERLINE */
@@ -151,9 +176,9 @@ html, body {
     padding: 0;
     border: none !important;
     border-radius: 0 !important;
+    box-shadow: none !important;
     overflow: hidden;
     box-sizing: border-box;
-    transform-origin: 0 50%;
     will-change: transform;
     background-color: #0b0c10;
 }
@@ -201,9 +226,9 @@ html, body {
     inset: 0;
     background: linear-gradient(
         180deg,
-        rgba(0, 0, 0, 0.62) 0%,
-        rgba(0, 0, 0, 0.05) 32%,
-        rgba(0, 0, 0, 0.28) 58%,
+        rgba(0, 0, 0, 0.65) 0%,
+        rgba(0, 0, 0, 0.05) 30%,
+        rgba(0, 0, 0, 0.25) 58%,
         rgba(0, 0, 0, 0.94) 100%
     );
     pointer-events: none;
@@ -225,7 +250,7 @@ html, body {
     opacity: 1;
 }
 
-/* Card Content Overlay (Counter-scaled against horizontal squish) */
+/* Card Content Overlay (Dynamically snuggles inward under vertical squish) */
 .sponge-card-content {
     position: absolute;
     inset: 0;
@@ -233,11 +258,9 @@ html, body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 20px 24px;
+    padding: 18px 24px;
     box-sizing: border-box;
     pointer-events: none;
-    transform-origin: 0 50%;
-    will-change: transform;
 }
 
 /* Card Header */
@@ -246,6 +269,8 @@ html, body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
+    will-change: transform;
+    transition: transform 0.06s linear;
 }
 
 .sponge-card-num {
@@ -279,6 +304,8 @@ html, body {
     align-items: flex-end;
     gap: 18px;
     width: 100%;
+    will-change: transform;
+    transition: transform 0.06s linear;
 }
 
 .sponge-card-meta {
