@@ -447,29 +447,42 @@
                 this.clipPathEl.setAttribute('d', trackClipD);
             }
 
-            // Update Luminous Glowing Contour Overlay (Screen Coordinates)
+            // Update Luminous Glowing Boundary Lines (Spanning Full Visible Row)
             if (this.contourTop && this.contourBot) {
                 const topY0 = midY - H * 0.5;
                 const botY0 = midY + H * 0.5;
 
-                const topD = [
-                    `M ${X0.toFixed(1)} ${topY0.toFixed(1)}`,
-                    `C ${(X0 + cpx).toFixed(1)} ${topY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${midX.toFixed(1)} ${(topY0 + Delta).toFixed(1)}`,
-                    `C ${(midX + cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${topY0.toFixed(1)}, ${X2.toFixed(1)} ${topY0.toFixed(1)}`
-                ].join(' ');
+                let topD, botD;
+                if (Delta < 0.2) {
+                    // Straight lines covering the full visible row
+                    topD = `M 0 ${topY0.toFixed(1)} L ${W} ${topY0.toFixed(1)}`;
+                    botD = `M 0 ${botY0.toFixed(1)} L ${W} ${botY0.toFixed(1)}`;
+                } else {
+                    // Full visible row spanning edge-to-edge, smoothly flexing in the middle
+                    topD = [
+                        `M 0 ${topY0.toFixed(1)}`,
+                        `L ${X0.toFixed(1)} ${topY0.toFixed(1)}`,
+                        `C ${(X0 + cpx).toFixed(1)} ${topY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${midX.toFixed(1)} ${(topY0 + Delta).toFixed(1)}`,
+                        `C ${(midX + cpx).toFixed(1)} ${(topY0 + Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${topY0.toFixed(1)}, ${X2.toFixed(1)} ${topY0.toFixed(1)}`,
+                        `L ${W} ${topY0.toFixed(1)}`
+                    ].join(' ');
 
-                const botD = [
-                    `M ${X0.toFixed(1)} ${botY0.toFixed(1)}`,
-                    `C ${(X0 + cpx).toFixed(1)} ${botY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${midX.toFixed(1)} ${(botY0 - Delta).toFixed(1)}`,
-                    `C ${(midX + cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${botY0.toFixed(1)}, ${X2.toFixed(1)} ${botY0.toFixed(1)}`
-                ].join(' ');
+                    botD = [
+                        `M 0 ${botY0.toFixed(1)}`,
+                        `L ${X0.toFixed(1)} ${botY0.toFixed(1)}`,
+                        `C ${(X0 + cpx).toFixed(1)} ${botY0.toFixed(1)}, ${(midX - cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${midX.toFixed(1)} ${(botY0 - Delta).toFixed(1)}`,
+                        `C ${(midX + cpx).toFixed(1)} ${(botY0 - Delta).toFixed(1)}, ${(X2 - cpx).toFixed(1)} ${botY0.toFixed(1)}, ${X2.toFixed(1)} ${botY0.toFixed(1)}`,
+                        `L ${W} ${botY0.toFixed(1)}`
+                    ].join(' ');
+                }
 
                 this.contourTop.setAttribute('d', topD);
                 this.contourBot.setAttribute('d', botD);
 
-                const glowAlpha = Math.min(pressDepth * 2.4, 0.85);
-                this.contourTop.style.opacity = glowAlpha.toFixed(2);
-                this.contourBot.style.opacity = glowAlpha.toFixed(2);
+                // Always visible across full row, brightening with velocity compression
+                const lineAlpha = 0.55 + Math.min(pressDepth * 1.5, 0.45);
+                this.contourTop.style.opacity = lineAlpha.toFixed(2);
+                this.contourBot.style.opacity = lineAlpha.toFixed(2);
             }
 
             // =========================================================================

@@ -160,9 +160,9 @@ html, body {
     fill: none;
     stroke: var(--sponge-accent);
     stroke-width: 1.5px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    filter: drop-shadow(0 0 8px rgba(255, 237, 41, 0.7));
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+    filter: drop-shadow(0 0 6px rgba(255, 237, 41, 0.5));
 }
 
 /* CARDS: DIRECTLY CONNECTED, ZERO SPACE, ZERO BORDERLINE */
