@@ -1,0 +1,578 @@
+/**
+ * SPONGE CAROUSEL STYLES
+ * Boutique, high-velocity creative developer carousel
+ * Features:
+ * - Dead-center vertical alignment
+ * - Dynamic sponge squish compression field in the middle
+ * - Elastic spring-back recovery
+ * - High-contrast editorial typography and tactile HUD
+ */
+
+:root {
+    --sponge-bg: #000000;
+    --sponge-accent: #FFED29;
+    --sponge-border: rgba(255, 255, 255, 0.14);
+    --sponge-border-active: rgba(255, 237, 41, 0.65);
+    --sponge-mono: 'IBM Plex Mono', 'Sometype Mono', monospace;
+    --sponge-sans: 'PP-Mori', -apple-system, BlinkMacSystemFont, sans-serif;
+    --sponge-serif: 'Brier', serif, sans-serif;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden !important;
+    background-color: var(--sponge-bg) !important;
+    color: #ffffff;
+    font-family: var(--sponge-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    cursor: none;
+    user-select: none;
+}
+
+/* Background Atmosphere */
+.sponge-viewport {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #000000;
+    touch-action: none;
+    z-index: 10;
+}
+
+.sponge-grid-bg {
+    position: absolute;
+    inset: -50px;
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    background-position: center center;
+    pointer-events: none;
+    opacity: 0.7;
+    will-change: transform;
+}
+
+.sponge-lens-guide {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 100%;
+    pointer-events: none;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 90px 0 90px;
+    box-sizing: border-box;
+    opacity: 0.45;
+    transition: opacity 0.3s ease;
+}
+
+.sponge-lens-guide.is-squishing {
+    opacity: 0.95;
+}
+
+.sponge-lens-mark {
+    font-family: var(--sponge-mono);
+    font-size: 9px;
+    color: var(--sponge-accent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 237, 41, 0.3);
+    box-shadow: 0 0 12px rgba(255, 237, 41, 0.25);
+}
+
+.sponge-lens-line {
+    width: 1px;
+    flex: 1;
+    background: linear-gradient(180deg, 
+        rgba(255, 237, 41, 0.4) 0%, 
+        rgba(255, 255, 255, 0.04) 30%, 
+        rgba(255, 255, 255, 0.04) 70%, 
+        rgba(255, 237, 41, 0.4) 100%);
+    margin: 8px 0;
+}
+
+/* CAROUSEL STAGE & TRACK */
+.sponge-stage {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    cursor: grab;
+}
+
+.sponge-stage.is-dragging {
+    cursor: grabbing;
+}
+
+.sponge-track {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    will-change: transform;
+    gap: clamp(28px, 3.5vw, 56px);
+    padding: 0 50vw;
+}
+
+/* CARDS */
+.sponge-card {
+    position: relative;
+    flex: 0 0 clamp(320px, 26vw, 450px);
+    height: clamp(470px, 62vh, 690px);
+    transform-origin: center center;
+    will-change: transform;
+    perspective: 1200px;
+    box-sizing: border-box;
+}
+
+.sponge-card-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    background-color: #0b0c10;
+    border: 1px solid var(--sponge-border);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+    transform-origin: center center;
+    will-change: transform, border-radius;
+    transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.sponge-card.is-center .sponge-card-inner {
+    border-color: rgba(255, 237, 41, 0.55);
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 237, 41, 0.12);
+}
+
+.sponge-card-media {
+    position: absolute;
+    inset: -5%;
+    width: 110%;
+    height: 110%;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.sponge-card-media img,
+.sponge-card-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    will-change: transform;
+    transform: scale(1.08);
+    filter: brightness(0.92) contrast(1.05);
+    transition: filter 0.3s ease;
+}
+
+.sponge-card:hover .sponge-card-media img,
+.sponge-card:hover .sponge-card-media video {
+    filter: brightness(1) contrast(1.08);
+}
+
+/* Card Scrim & Sheen */
+.sponge-card-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.55) 0%,
+        rgba(0, 0, 0, 0.05) 35%,
+        rgba(0, 0, 0, 0.25) 60%,
+        rgba(0, 0, 0, 0.92) 100%
+    );
+    pointer-events: none;
+    z-index: 2;
+}
+
+.sponge-card-sheen {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(255, 237, 41, 0.08) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.sponge-card.is-center .sponge-card-sheen,
+.sponge-card:hover .sponge-card-sheen {
+    opacity: 1;
+}
+
+/* Card Header */
+.sponge-card-header {
+    position: absolute;
+    top: 22px;
+    left: 22px;
+    right: 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.sponge-card-num {
+    font-family: var(--sponge-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--sponge-accent);
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 237, 41, 0.35);
+    letter-spacing: 0.08em;
+}
+
+.sponge-card-tag {
+    font-family: var(--sponge-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Card Footer / Body */
+.sponge-card-footer {
+    position: absolute;
+    bottom: 22px;
+    left: 22px;
+    right: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
+}
+
+.sponge-card-title {
+    font-family: var(--sponge-serif);
+    font-size: clamp(24px, 2.3vw, 36px);
+    font-weight: 700;
+    line-height: 1.08;
+    color: #ffffff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
+    letter-spacing: -0.01em;
+    margin: 0;
+}
+
+.sponge-card-desc {
+    font-family: var(--sponge-sans);
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sponge-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.sponge-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 15px;
+    border-radius: 999px;
+    font-family: var(--sponge-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, color 0.25s ease;
+    will-change: transform;
+}
+
+.sponge-btn:active {
+    transform: scale(0.96);
+}
+
+.sponge-btn--launch {
+    background-color: var(--sponge-accent);
+    color: #000000;
+    font-weight: 600;
+    border: none;
+}
+
+.sponge-btn--launch:hover {
+    background-color: #ffffff;
+    color: #000000;
+    transform: translateY(-1px) scale(1.04);
+}
+
+.sponge-btn--launch svg {
+    width: 8px;
+    height: 8px;
+    fill: currentColor;
+}
+
+.sponge-btn--gh {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+}
+
+.sponge-btn--gh:hover {
+    background-color: rgba(255, 255, 255, 0.24);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px) scale(1.04);
+}
+
+.sponge-btn--gh svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
+/* TOP STATUS TICKER */
+.sponge-top-bar {
+    position: fixed;
+    top: 76px;
+    left: 32px;
+    right: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 50;
+    font-family: var(--sponge-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.08em;
+}
+
+.sponge-top-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.sponge-top-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--sponge-accent);
+    box-shadow: 0 0 8px var(--sponge-accent);
+    animation: spongeDotPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes spongeDotPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.55; }
+}
+
+/* BOTTOM HUD & TACTILE VELOCITY GAUGE */
+.sponge-hud {
+    position: fixed;
+    bottom: 28px;
+    left: 32px;
+    right: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 50;
+    font-family: var(--sponge-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.08em;
+}
+
+.sponge-hud-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+}
+
+.sponge-hud-index {
+    color: var(--sponge-accent);
+    font-weight: 600;
+}
+
+.sponge-hud-name {
+    color: #ffffff;
+    font-family: var(--sponge-serif);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+/* Tactile Velocity Sponge Gauge (Center) */
+.sponge-gauge {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 6px 18px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    pointer-events: auto;
+}
+
+.sponge-gauge-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    letter-spacing: 0.12em;
+}
+
+.sponge-gauge-bar {
+    width: 110px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+
+.sponge-gauge-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #FFED29, #ffffff);
+    border-radius: 999px;
+    box-shadow: 0 0 12px rgba(255, 237, 41, 0.8);
+    will-change: width, transform;
+    transition: width 0.08s linear;
+}
+
+.sponge-gauge-val {
+    font-size: 10.5px;
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+    min-width: 52px;
+    text-align: right;
+}
+
+.sponge-hud-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    pointer-events: auto;
+}
+
+.sponge-hud-hint {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 10px;
+}
+
+.sponge-hud-link {
+    color: var(--sponge-accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255, 237, 41, 0.4);
+    padding-bottom: 2px;
+    transition: all 0.2s ease;
+}
+
+.sponge-hud-link:hover {
+    color: #ffffff;
+    border-bottom-color: #ffffff;
+}
+
+/* NAVIGATION ARROWS (Floating Left & Right) */
+.sponge-nav-arrow {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 40;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.sponge-nav-arrow:hover {
+    background: var(--sponge-accent);
+    color: #000000;
+    border-color: var(--sponge-accent);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.sponge-nav-arrow--prev {
+    left: 28px;
+}
+
+.sponge-nav-arrow--next {
+    right: 28px;
+}
+
+.sponge-nav-arrow svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+/* RESPONSIVE ADAPTATIONS */
+@media (max-width: 900px) {
+    .sponge-card {
+        flex: 0 0 clamp(280px, 72vw, 360px);
+        height: clamp(420px, 58vh, 520px);
+    }
+    .sponge-top-bar {
+        top: 70px;
+        left: 20px;
+        right: 20px;
+    }
+    .sponge-hud {
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+    }
+    .sponge-hud-hint {
+        display: none;
+    }
+    .sponge-nav-arrow {
+        display: none;
+    }
+}
