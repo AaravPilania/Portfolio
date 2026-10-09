@@ -32,6 +32,11 @@
         const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
         if (nav && nav.type === 'back_forward') incoming = { x: 0.5, y: 0.5 };
     }
+    const navEntry = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    if (navEntry && navEntry.type === 'reload') {
+        incoming = null;
+        try { sessionStorage.removeItem(KEY); } catch (e) {}
+    }
     window.__ptIncoming = !!incoming;
     window.__ptScroll = (incoming && incoming.s) || null;
     window.__ptIntent = (incoming && incoming.i) || null;
@@ -113,12 +118,13 @@
             const k = easeIO(clamp01((now - t0) / D)) * (1 + EDGE);
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, cv.width, cv.height);
-            const s = P * dpr;
+            const stepS = P * dpr;
+            const s = Math.ceil(stepS) + 1;
             ctx.fillStyle = SIGNAL;
             for (let i = 0; i < th.length; i++) {
                 const e = k - th[i];
                 if (e < 0) continue;
-                const x = (i % cols) * s, y = ((i / cols) | 0) * s;
+                const x = (i % cols) * stepS, y = ((i / cols) | 0) * stepS;
                 if (e < EDGE) ctx.fillRect(x, y, s, s);
                 else ctx.drawImage(sheet, x, y, s, s, x, y, s, s);
             }
@@ -139,7 +145,9 @@
         const small = document.createElement('canvas'), sg = small.getContext('2d');
         const th = order(ox, oy, 0.38);
         const go = () => {
-            const D1 = 340, D2 = 760, t0 = performance.now(), s = P * dpr;
+            const D1 = 340, D2 = 760, t0 = performance.now();
+            const stepS = P * dpr;
+            const s = Math.ceil(stepS) + 1;
             const step = (now) => {
                 if (id !== run) return;
                 const t = now - t0;
@@ -158,7 +166,7 @@
                     for (let i = 0; i < th.length; i++) {
                         const e = k - th[i];
                         if (e < 0) continue;
-                        const x = (i % cols) * s, y = ((i / cols) | 0) * s;
+                        const x = (i % cols) * stepS, y = ((i / cols) | 0) * stepS;
                         if (e < EDGE) ctx.fillRect(x, y, s, s);
                         else ctx.clearRect(x, y, s, s);
                     }
@@ -203,4 +211,13 @@
         if (document.body) reveal(at, true);
         else document.addEventListener('DOMContentLoaded', () => reveal(at, true), { once: true });
     } else root.classList.remove('pt-hold');
+
+    window.__pageTransition = {
+        navigate(href, x, y, scroll = null, intent = null) {
+            const ox = typeof x === 'number' ? x : window.innerWidth / 2;
+            const oy = typeof y === 'number' ? y : window.innerHeight / 2;
+            const fullUrl = new URL(href, location.href).href;
+            cover(ox, oy, fullUrl, scroll, intent);
+        }
+    };
 })();

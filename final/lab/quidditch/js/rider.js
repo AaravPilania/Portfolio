@@ -254,17 +254,73 @@ export function createRider() {
     trail.frustumCulled = false;
     trail.renderOrder = 6;
 
+    // --- Dracarys-style GPGPU magical particle embers & wake streaming from broom twigs
+    const PN = 360;
+    const pPos = new Float32Array(PN * 3);
+    const pVel = new Float32Array(PN * 3);
+    const pLife = new Float32Array(PN);
+    const pMaxLife = new Float32Array(PN);
+    const pCol = new Float32Array(PN * 3);
+    const pSize = new Float32Array(PN);
+
+    for (let i = 0; i < PN; i++) {
+        pLife[i] = 999;
+        pMaxLife[i] = 0.4 + Math.random() * 0.7;
+        pSize[i] = 14 + Math.random() * 26;
+        pPos[i * 3 + 1] = -9999;
+    }
+
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3).setUsage(THREE.DynamicDrawUsage));
+    pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3).setUsage(THREE.DynamicDrawUsage));
+    pGeo.setAttribute('size', new THREE.BufferAttribute(pSize, 1));
+
+    const sparkMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uTime: { value: 0 }, uGain: { value: 1.0 } },
+        vertexShader: /* glsl */`
+            attribute vec3 color;
+            attribute float size;
+            varying vec3 vColor;
+            void main() {
+                vColor = color;
+                vec4 mv = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mv;
+                gl_PointSize = clamp(size * (220.0 / -mv.z), 1.0, 48.0);
+            }
+        `,
+        fragmentShader: /* glsl */`
+            varying vec3 vColor;
+            void main() {
+                vec2 c = gl_PointCoord - 0.5;
+                float r2 = dot(c, c);
+                if (r2 > 0.25) discard;
+                float a = exp(-r2 * 14.0);
+                gl_FragColor = vec4(vColor * a, a);
+            }
+        `
+    });
+
+    const sparks = new THREE.Points(pGeo, sparkMat);
+    sparks.frustumCulled = false;
+    sparks.renderOrder = 8;
+
     const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), up = new THREE.Vector3(), right = new THREE.Vector3(), camDir = new THREE.Vector3();
     const anchorLocal = new THREE.Vector3(0.05, 0.44, 0.04), tailLocal = new THREE.Vector3(0, 0.04, -1.62);
     let primed = false;
 
-    function reset() { primed = false; }
+    function reset() {
+        primed = false;
+        for (let i = 0; i < PN; i++) { pLife[i] = 999; pPos[i * 3 + 1] = -9999; }
+    }
 
     function update(dt, s, time, camPos) {
-        // body language: tuck in on the boost, a slow breath of bob and sway otherwise
-        lean.rotation.x = 0.08 * s.boost - Math.sin(time * 1.3) * 0.015;
+        // body language: tuck in on the boost, deep lean into turns
+        lean.rotation.x = 0.12 * s.boost - Math.sin(time * 1.3) * 0.015 + Math.min(0, s.pitch) * 0.15;
         lean.position.y = Math.sin(time * 1.7) * 0.025;
-        lean.rotation.z = Math.sin(time * 0.9) * 0.02;
+        lean.rotation.z = Math.sin(time * 0.9) * 0.02 + s.roll * 0.12;
         cloakU.uSpeed.value = clamp((s.speed - 10) / 42);
         cloakU.uRoll.value = s.roll;
         group.updateMatrixWorld(true);
@@ -315,7 +371,7 @@ export function createRider() {
         }
         sGeo.attributes.position.needsUpdate = true; sGeo.attributes.normal.needsUpdate = true;
 
-        // twig wake
+        // twig wake ribbon
         for (let i = TN - 1; i > 0; i--) hist[i].copy(hist[i - 1]);
         hist[0].copy(tailLocal).applyMatrix4(group.matrixWorld);
         for (let i = 0; i < TN; i++) {
@@ -329,10 +385,64 @@ export function createRider() {
             tPos[i * 6 + 3] = hist[i].x + right.x * w; tPos[i * 6 + 4] = hist[i].y + right.y * w; tPos[i * 6 + 5] = hist[i].z + right.z * w;
         }
         tGeo.attributes.position.needsUpdate = true;
-        // seen end-on from the chase cam the ribbon stacks into a hot column; let it go when we're looking down it
         const endOn = Math.abs(camDir.subVectors(camPos, hist[0]).normalize().dot(s.fwd));
         trailU.uGain.value = (0.012 + 0.09 * s.boost) * (1 - endOn * endOn * 0.92);
+
+        // Broom embers & sparks simulation (Dracarys GPGPU particle wake)
+        const tailWorld = tmp.copy(tailLocal).applyMatrix4(group.matrixWorld);
+        const spawnCount = Math.floor(s.boost > 0.1 ? 22 : 9);
+        let spawned = 0;
+
+        for (let i = 0; i < PN; i++) {
+            pLife[i] += dt;
+            if (pLife[i] >= pMaxLife[i] && spawned < spawnCount) {
+                pLife[i] = 0;
+                pMaxLife[i] = 0.35 + Math.random() * (s.boost > 0.1 ? 0.85 : 0.55);
+                const spread = (Math.random() - 0.5) * 0.22;
+                const spreadY = (Math.random() - 0.5) * 0.22;
+                pPos[i * 3 + 0] = tailWorld.x + spread;
+                pPos[i * 3 + 1] = tailWorld.y + spreadY;
+                pPos[i * 3 + 2] = tailWorld.z + spread;
+
+                const swirlAngle = Math.random() * Math.PI * 2;
+                const swirlRad = (0.2 + Math.random() * 0.8) * (1.0 + s.boost * 1.8);
+                pVel[i * 3 + 0] = -s.fwd.x * s.speed * 0.3 + Math.cos(swirlAngle) * swirlRad;
+                pVel[i * 3 + 1] = -s.fwd.y * s.speed * 0.3 + Math.sin(swirlAngle) * swirlRad + 0.4;
+                pVel[i * 3 + 2] = -s.fwd.z * s.speed * 0.3 + Math.sin(swirlAngle) * swirlRad;
+
+                const isGold = Math.random() > 0.35;
+                if (s.boost > 0.1) {
+                    pCol[i * 3 + 0] = 1.0;
+                    pCol[i * 3 + 1] = isGold ? 0.88 : 0.45;
+                    pCol[i * 3 + 2] = isGold ? 0.25 : 0.05;
+                } else {
+                    pCol[i * 3 + 0] = 0.95;
+                    pCol[i * 3 + 1] = isGold ? 0.72 : 0.32;
+                    pCol[i * 3 + 2] = isGold ? 0.15 : 0.02;
+                }
+                spawned++;
+            } else if (pLife[i] < pMaxLife[i]) {
+                const age = pLife[i] / pMaxLife[i];
+                const drag = Math.exp(-dt * 3.2);
+                pVel[i * 3 + 0] *= drag;
+                pVel[i * 3 + 1] = (pVel[i * 3 + 1] + dt * 0.5) * drag;
+                pVel[i * 3 + 2] *= drag;
+
+                pPos[i * 3 + 0] += pVel[i * 3 + 0] * dt;
+                pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+                pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+
+                const fade = Math.pow(1.0 - age, 1.4);
+                pCol[i * 3 + 0] *= fade;
+                pCol[i * 3 + 1] *= fade;
+                pCol[i * 3 + 2] *= fade;
+            } else {
+                pPos[i * 3 + 1] = -9999;
+            }
+        }
+        pGeo.attributes.position.needsUpdate = true;
+        pGeo.attributes.color.needsUpdate = true;
     }
 
-    return { group, scarf, trail, update, reset };
+    return { group, scarf, trail, sparks, update, reset };
 }

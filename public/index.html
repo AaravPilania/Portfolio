@@ -6,15 +6,17 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
 
-    <title>Pacôme Pertant — Motion & Sound Designer</title>
+    <title>Aarav Pilania — Creative Developer & Motion Designer</title>
 
-    <meta name="copyright" content="Copyright (c) 2026 Lama Lama." />
+    <meta name="copyright" content="Copyright (c) 2026 Aarav Pilania." />
 
 
     <meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <script src="/js/page-title.js" defer></script>
     <style>
         img:is([sizes="auto" i], [sizes^="auto," i]) {
             contain-intrinsic-size: 3000px 1500px
@@ -52,7 +54,7 @@
         position: fixed !important;
         top: 0 !important;
         width: 100vw !important;
-        z-index: 20 !important;
+        z-index: 28 !important;
         display: none;
         opacity: 0;
         transition: opacity 0.3s ease;
@@ -1784,13 +1786,22 @@
     </script>
 
     <!-- INTRO LOADER: Plotter Bleed (takes over from the AP dive above, which stays as a fallback without WebGL) -->
-    <script src="intros/ap-intro-core.js"></script>
-    <script src="intros/plotter-bleed.js"></script>
+    <script src="/intros/ap-intro-core.js"></script>
+    <script src="/intros/plotter-bleed.js"></script>
     <script>
         (function () {
+            // Force intro loader on every refresh and hard refresh:
+            const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+            if (nav && nav.type === 'reload') {
+                window.__ptIncoming = false;
+                try { sessionStorage.removeItem('ap-pt'); } catch (e) {}
+            }
             // The loader plays on every fresh load and refresh; arrivals through the page transition have their own
             // reveal and open on the finished hero exactly as the loader would leave it
-            if (!window.__ptIncoming && typeof window.APIntro === 'function') { APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED)); return; }
+            if (!window.__ptIncoming && typeof window.APIntro === 'function') {
+                APIntro(Object.assign({ inPage: true }, window.AP_PLOTTER_BLEED));
+                return;
+            }
             if (typeof window.__setIntroManual === 'function') window.__setIntroManual();
             const pre = document.getElementById('preloader'), ov = document.getElementById('transition-overlay');
             if (pre) pre.style.display = 'none';
@@ -3425,9 +3436,8 @@
 <video
     class="ll-part--video js-backdrop-item"
     src="/videos/services-bg.mp4"
-    width=1920 height=1080 preload="auto"
-    autoplay loop muted playsinline data-fade-in style="opacity: 0;"
-    data-loading="eager"
+    width="1440" height="1920" preload="auto" autoplay
+    loop muted playsinline data-fade-in
     data-src="/videos/services-bg.mp4"
     data-width="1440" data-height="1920">
     <source src="/videos/services-bg.mp4" type="video/mp4">
@@ -3462,13 +3472,60 @@
 <section class="ll-section ll-section--together wt" id="work-together" aria-labelledby="wtTitle">
     <div class="wt-stage">
         <canvas class="wt-canvas" aria-hidden="true"></canvas><canvas class="wt-glasses" aria-hidden="true"></canvas>
+        <!-- RUNNING MARQUEE BEHIND SPECTACLES (RIGHT TO LEFT CONTINUOUS STREAM) -->
+        <div class="wt-marquee" aria-hidden="true">
+            <div class="wt-marquee__track">
+                <div class="wt-marquee__group">
+                    <span class="wt-m-word">LET'S BUILD SOMETHING TOGETHER</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">HAVE A PROJECT IN MIND? LET'S TALK</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word">BRING YOUR VISION, I'LL BUILD THE CODE</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">OPEN FOR FREELANCE &amp; COLLABORATION</span>
+                    <span class="wt-m-star">✦</span>
+                </div>
+                <div class="wt-marquee__group" aria-hidden="true">
+                    <span class="wt-m-word">LET'S BUILD SOMETHING TOGETHER</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">HAVE A PROJECT IN MIND? LET'S TALK</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word">BRING YOUR VISION, I'LL BUILD THE CODE</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">OPEN FOR FREELANCE &amp; COLLABORATION</span>
+                    <span class="wt-m-star">✦</span>
+                </div>
+                <div class="wt-marquee__group" aria-hidden="true">
+                    <span class="wt-m-word">LET'S BUILD SOMETHING TOGETHER</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">HAVE A PROJECT IN MIND? LET'S TALK</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word">BRING YOUR VISION, I'LL BUILD THE CODE</span>
+                    <span class="wt-m-star">✦</span>
+                    <span class="wt-m-word wt-m-accent">OPEN FOR FREELANCE &amp; COLLABORATION</span>
+                    <span class="wt-m-star">✦</span>
+                </div>
+            </div>
+        </div>
         <div class="wt-marks" aria-hidden="true"><i class="wt-mark" style="left:8%;top:18%"></i><i class="wt-mark" style="left:30%;top:18%"></i><i class="wt-mark" style="left:70%;top:18%"></i><i class="wt-mark" style="left:92%;top:18%"></i><i class="wt-mark" style="left:8%;top:82%"></i><i class="wt-mark" style="left:30%;top:82%"></i><i class="wt-mark" style="left:70%;top:82%"></i><i class="wt-mark" style="left:92%;top:82%"></i></div>
         <div class="wt-copy">
-            <p class="wt-kicker">[ Your idea, my stack ]</p>
-            <h2 class="wt-title" id="wtTitle"><span class="wt-ln"><span class="wt-li">Let&rsquo;s build</span></span><span class="wt-ln"><span class="wt-li">something <em>together.</em></span></span></h2>
-            <a class="wt-cta" href="/contact" data-no-swup>Say hello<span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
+            <h2 class="wt-title" id="wtTitle" style="display:none!important;" aria-hidden="true"><span class="wt-ln"><span class="wt-li">Let&rsquo;s build</span></span><span class="wt-ln"><span class="wt-li">something <em>together.</em></span></span></h2>
         </div>
-        <a class="wt-contact" href="/contact" data-no-swup tabindex="-1"><span class="wt-contact__t">Get in contact</span><span class="wt-cta__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 6h10M6.5 1.5 11 6l-4.5 4.5" stroke="currentColor" stroke-width="1.5"/></svg></span></a>
+        <header class="wt-end-nav" id="wtEndNav" aria-label="End screen navigation">
+            <div class="wt-end-nav__left">
+                <span class="wt-scroll-cue">Want to contact? Keep scrolling</span>
+                <div class="wt-scroll-loader" role="progressbar" aria-label="Scroll to contact">
+                    <div class="wt-scroll-fill" id="wtScrollFill"></div>
+                </div>
+            </div>
+            <nav class="wt-end-nav__right" aria-label="Site pages">
+                <a class="wt-end-nav__link" href="/" data-scroll="hero">Work</a>
+                <a class="wt-end-nav__link" href="/about">About</a>
+                <a class="wt-end-nav__link" href="/projects">Projects</a>
+                <a class="wt-end-nav__link" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a class="wt-end-nav__link wt-end-nav__link--contact" href="/contact">Contact</a>
+            </nav>
+        </header>
         <ul class="wt-sr" aria-label="The stack"><li>Python</li><li>Java</li><li>JavaScript</li><li>TypeScript</li><li>C</li><li>C++</li><li>SQL</li><li>React 19</li><li>Vite</li><li>Tailwind CSS v4</li><li>Framer Motion</li><li>GSAP</li><li>Three.js</li><li>React Three Fiber</li><li>PWA</li><li>FastAPI</li><li>Node.js</li><li>REST APIs</li><li>asyncio</li><li>PostgreSQL</li><li>SQLite</li><li>ChromaDB</li><li>PyTorch</li><li>scikit-learn</li><li>SHAP</li><li>Sentence Transformers</li><li>RAG</li><li>LLM Orchestration</li><li>Multi-Agent Pipelines</li><li>Git</li><li>GitHub</li><li>Docker</li><li>Whisper STT</li><li>Ollama</li><li>Chrome DevTools Protocol</li><li>Tesseract OCR</li></ul>
     </div>
 </section>
@@ -3505,6 +3562,7 @@
                 const cardCtx = cardCanvas.getContext('2d');
                 const paperCanvas = document.getElementById('heroPaperCanvas');
                 let paperLaid = false;
+                let initialPainted = false;
                 function syncPortrait() {
                     if (window.__heroAvatarEngine) {
                         const eng = window.__heroAvatarEngine;
@@ -3513,22 +3571,26 @@
                             eng.setPaper(false);
                             paperLaid = true;
                         }
-                        const offscreen = eng.getCanvas();
-                        if (offscreen) {
-                            cardCtx.clearRect(0, 0, cardCanvas.width, cardCanvas.height);
-                            cardCtx.drawImage(offscreen, 0, 0, cardCanvas.width, cardCanvas.height);
-                            if (reflectionCtx && reflectionCanvas.style.visibility === 'visible') {
-                                const rw = reflectionCanvas.width, rh = reflectionCanvas.height;
-                                reflectionCtx.setTransform(1, 0, 0, -1, 0, rh);
-                                if (paperLaid) reflectionCtx.drawImage(paperCanvas, 0, 0, rw, rh);
-                                reflectionCtx.drawImage(cardCanvas, 0, 0, rw, rh);
-                                reflectionCtx.setTransform(1, 0, 0, 1, 0, 0);
-                                reflectionCtx.fillStyle = reflectionShade;
-                                reflectionCtx.fillRect(0, 0, rw, rh);
-                                if (reflectionHazeCtx) {
-                                    reflectionHazeCtx.clearRect(0, 0, reflectionHaze.width, reflectionHaze.height);
-                                    reflectionHazeCtx.drawImage(reflectionCanvas, 0, 0, reflectionHaze.width, reflectionHaze.height);
+                        if (eng.isDirty || !initialPainted) {
+                            const offscreen = eng.getCanvas();
+                            if (offscreen) {
+                                cardCtx.clearRect(0, 0, cardCanvas.width, cardCanvas.height);
+                                cardCtx.drawImage(offscreen, 0, 0, cardCanvas.width, cardCanvas.height);
+                                if (reflectionCtx && reflectionCanvas.style.visibility === 'visible') {
+                                    const rw = reflectionCanvas.width, rh = reflectionCanvas.height;
+                                    reflectionCtx.setTransform(1, 0, 0, -1, 0, rh);
+                                    if (paperLaid) reflectionCtx.drawImage(paperCanvas, 0, 0, rw, rh);
+                                    reflectionCtx.drawImage(cardCanvas, 0, 0, rw, rh);
+                                    reflectionCtx.setTransform(1, 0, 0, 1, 0, 0);
+                                    reflectionCtx.fillStyle = reflectionShade;
+                                    reflectionCtx.fillRect(0, 0, rw, rh);
+                                    if (reflectionHazeCtx) {
+                                        reflectionHazeCtx.clearRect(0, 0, reflectionHaze.width, reflectionHaze.height);
+                                        reflectionHazeCtx.drawImage(reflectionCanvas, 0, 0, reflectionHaze.width, reflectionHaze.height);
+                                    }
                                 }
+                                eng.isDirty = false;
+                                initialPainted = true;
                             }
                         }
                     }
@@ -3820,15 +3882,15 @@
 
                 // A. SPECTACLES SPLITTING ON FIRST SCROLL (0px -> 360px)
                 if (leftHalf && rightHalf) {
-                    const splitRange = 360;
+                    const splitRange = Math.max(680, Math.round(winH * 0.75));
                     const splitP = Math.max(0, Math.min(1, st / splitRange));
-                    const ease = 1 - Math.pow(1 - splitP, 2.2);
+                    const ease = 1 - Math.pow(1 - splitP, 2.0);
 
-                    const travelX = 1200 * ease;
+                    const travelX = 1350 * ease;
                     const floatY = -35 * ease;
                     const rotDeg = 16 * ease;
                     const scaleFactor = 1.0 + (0.06 * Math.sin(splitP * Math.PI));
-                    const alpha = Math.max(0, 1 - Math.pow(splitP, 2.8));
+                    const alpha = Math.max(0, 1 - Math.pow(splitP, 2.2));
 
                     leftHalf.setAttribute(
                         'transform',
@@ -3941,10 +4003,55 @@
 
             }
 
-            if (scrollerEl) {
-                scrollerEl.addEventListener('scroll', () => updateSlideMotion(false), { passive: true });
+            let heroMotionInView = true;
+            let motionRaf = null;
+
+            function motionLoop(now) {
+                if (!heroMotionInView) {
+                    motionRaf = null;
+                    return;
+                }
+                updateSlideMotion(false);
+                syncOutlineMarquee();
+                updateSpecsLineBoil(now || performance.now());
+                motionRaf = requestAnimationFrame(motionLoop);
             }
-            window.addEventListener('ap:scroll', () => updateSlideMotion(false));
+
+            function wakeMotionLoop() {
+                if (!motionRaf && heroMotionInView) {
+                    motionRaf = requestAnimationFrame(motionLoop);
+                }
+            }
+
+            if ('IntersectionObserver' in window && card) {
+                new IntersectionObserver((entries) => {
+                    heroMotionInView = entries[0].isIntersecting;
+                    if (heroMotionInView) wakeMotionLoop();
+                    else if (motionRaf) {
+                        cancelAnimationFrame(motionRaf);
+                        motionRaf = null;
+                    }
+                }, { rootMargin: '150px 0px' }).observe(card);
+            } else {
+                wakeMotionLoop();
+            }
+
+            if (scrollerEl) {
+                scrollerEl.addEventListener('scroll', () => {
+                    updateSlideMotion(false);
+                    if (!heroMotionInView && getScrollTop() < winH * 2.5) {
+                        heroMotionInView = true;
+                        wakeMotionLoop();
+                    }
+                }, { passive: true });
+            }
+            window.addEventListener('ap:scroll', () => {
+                updateSlideMotion(false);
+                if (!heroMotionInView && getScrollTop() < winH * 2.5) {
+                    heroMotionInView = true;
+                    wakeMotionLoop();
+                }
+            });
             window.addEventListener('resize', () => {
                 updateViewportCache();
                 measureLine1EarShift();
@@ -3952,14 +4059,6 @@
                 syncOutlineMarquee();
                 updateSlideMotion(true);
             }, { passive: true });
-
-            function motionLoop(now) {
-                updateSlideMotion(false);
-                syncOutlineMarquee();
-                updateSpecsLineBoil(now || performance.now());
-                requestAnimationFrame(motionLoop);
-            }
-            requestAnimationFrame(motionLoop);
 
             // =======================================================
             // 5. EXACT LANDO NORRIS AE() TEXT ANIMATION SYSTEM
@@ -4290,10 +4389,14 @@
             });
 
             function renderCursor() {
-                labelX += (mouseX - labelX) * 0.16;
-                labelY += (mouseY - labelY) * 0.16;
-                if (cursorLabel) {
-                    cursorLabel.style.transform = 'translate3d(' + (labelX + 16) + 'px, ' + (labelY + 16) + 'px, 0)';
+                const dx = mouseX - labelX;
+                const dy = mouseY - labelY;
+                if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                    labelX += dx * 0.16;
+                    labelY += dy * 0.16;
+                    if (cursorLabel && cursorLabel.style.opacity !== '0') {
+                        cursorLabel.style.transform = 'translate3d(' + (labelX + 16) + 'px, ' + (labelY + 16) + 'px, 0)';
+                    }
                 }
                 requestAnimationFrame(renderCursor);
             }

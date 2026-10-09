@@ -29,6 +29,7 @@ uniform float uRout;
 uniform float uDiskGain;
 uniform float uStarGain;
 uniform float uDoppler;
+uniform float uTpeak;
 uniform float uSpin;
 uniform float uExposure;
 uniform vec3 uLensDir;
@@ -85,13 +86,21 @@ vec3 sky(vec3 d) {
 }
 
 // ------------------------------------------------------------------ the disk
-vec3 diskColor(float t) {
-    // ember -> orange -> amber -> warm white -> faint blue-white: Nolan's restrained palette, not a rainbow
-    vec3 c = mix(vec3(0.42, 0.08, 0.015), vec3(1.0, 0.36, 0.08), smoothstep(0.15, 0.55, t));
-    c = mix(c, vec3(1.0, 0.66, 0.34), smoothstep(0.5, 0.9, t));
-    c = mix(c, vec3(1.0, 0.93, 0.84), smoothstep(0.85, 1.35, t));
-    c = mix(c, vec3(0.86, 0.91, 1.0), smoothstep(1.5, 2.4, t));
-    return c;
+// colour of a blackbody at T kelvin, unit luminance, linear sRGB: the Planckian locus (Kim et al. cubic fits) to xy,
+// then XYZ (Y = 1) to linear sRGB
+vec3 blackbody(float T) {
+    T = clamp(T, 1000.0, 40000.0);
+    float i1 = 1e3 / T, i2 = i1 * i1, i3 = i2 * i1;
+    float x = T < 4000.0 ? -0.2661239 * i3 - 0.2343589 * i2 + 0.8776956 * i1 + 0.179910
+                         : -3.0258469 * i3 + 2.1070379 * i2 + 0.2226347 * i1 + 0.240390;
+    float x2 = x * x, x3 = x2 * x;
+    float y = T < 2222.0 ? -1.1063814 * x3 - 1.34811020 * x2 + 2.18555832 * x - 0.20219683
+            : T < 4000.0 ? -0.9549476 * x3 - 1.37418593 * x2 + 2.09137015 * x - 0.16748867
+                         :  3.0817580 * x3 - 5.87338670 * x2 + 3.75112997 * x - 0.37001483;
+    vec3 XYZ = vec3(x / y, 1.0, (1.0 - x - y) / y);
+    vec3 rgb = mat3(3.2406, -0.9689, 0.0557, -1.5372, 1.8758, -0.2040, -0.4986, 0.0415, 1.0570) * XYZ;
+    rgb = max(rgb, 0.0);
+    return rgb / max(dot(rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
 }
 
 float diskPattern(float rh, float a, float seed) {
@@ -122,21 +131,26 @@ vec4 disk(vec3 hp, float rh, vec3 rayDir) {
     float clump = smoothstep(0.2, 0.66, n + 0.22 * (1.0 - x));
     // opacity and glow fall off differently: the outer disk is dim dust that still hides what is behind it
     float alpha = clamp(edgeIn * sqrt(edgeOut) * (0.35 + 0.65 * clump) * 3.2, 0.0, 0.995);
-    float glow = edgeIn * edgeOut * edgeOut * (0.25 + 0.75 * clump);
+    float glow = edgeIn * edgeOut * (0.25 + 0.75 * clump);
 
-    // relativistic beaming: circular orbit speed seen by a static observer, Doppler factor, gravitational redshift
+    // emitted temperature: a thin disk with zero torque at its inner edge, T ~ r^-3/4 (1 - sqrt(r_in / r))^1/4, which
+    // peaks at 49/36 r_in; normalised so that peak is uTpeak kelvin
+    float s = uRin / rh;
+    float Temit = uTpeak * pow(s, 0.75) * pow(max(1.0 - sqrt(s), 0.0), 0.25) / 0.4880;
+    // the shift every photon carries to the lens: the Doppler factor of gas on a circular orbit, measured by a static
+    // observer at the emitter (v = sqrt(M / (r - 2M)), here r_s = 1), times the gravitational shift from the emitter's
+    // potential well up to the lens's
     vec3 tang = uSpin * normalize(vec3(hp.z, 0.0, -hp.x));
     float v = min(sqrt(0.5 / max(rh - 1.0, 0.05)), 0.8);
     float gam = inversesqrt(1.0 - v * v);
     float D = 1.0 / (gam * (1.0 - v * dot(tang, -rayDir)));
-    float gG = sqrt(max(1.0 - 1.0 / rh, 0.0));
-    float g = mix(1.0, D, uDoppler) * mix(1.0, gG / sqrt(1.0 - 1.0 / uRin), 0.75);
-
-    float temp = pow(uRin / rh, 0.85);
-    float t = temp * mix(1.0, g, 0.5);
-    // beaming kept to roughly 2.5:1 across the disk: legible, never a blown-out half
-    float I = pow(temp, 2.4) * pow(g, 2.1) * (0.4 + 1.15 * n);
-    vec3 col = diskColor(t * 1.2) * I * uDiskGain * glow;
+    float gG = sqrt(max(1.0 - 1.0 / rh, 0.0)) / sqrt(max(1.0 - 1.0 / length(uCamPos), 1e-3));
+    float g = mix(1.0, D, uDoppler) * gG;
+    // a blackbody seen through a shift g is a blackbody at g T, and I_nu / nu^3 is invariant, so the bolometric
+    // brightness goes as (g T)^4: beaming, redshift and colour are one law
+    float Tobs = Temit * g;
+    float L = pow(Tobs / uTpeak, 4.0);
+    vec3 col = blackbody(Tobs) * L * (0.4 + 1.15 * n) * uDiskGain * glow;
     return vec4(col, alpha);
 }
 
@@ -230,7 +244,8 @@ export function createBlackHole() {
         uRout: { value: 11.0 },
         uDiskGain: { value: 1 },
         uStarGain: { value: 1 },
-        uDoppler: { value: 0.6 },
+        uDoppler: { value: 1 },
+        uTpeak: { value: 6800 },
         uSpin: { value: 1 },
         uExposure: { value: 1 },
         uLensDir: { value: new THREE.Vector3(0, 0, -1) },

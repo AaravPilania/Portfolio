@@ -20,6 +20,19 @@ export class Sound {
         this.level = 0; this.bright = 0; this.tickLevel = 0; this.arp = 0;
         this.rate = 1; this.thrust = 0;
         this.scoreEl = null;
+        this.glassAudio = null;
+    }
+
+    playGlassBreak() {
+        if (this.muted || this.mode === 'off') return;
+        try {
+            if (!this.glassAudio) {
+                this.glassAudio = new Audio(new URL('../assets/audio/glass_broken.ogg', import.meta.url).href);
+            }
+            this.glassAudio.currentTime = 0;
+            this.glassAudio.volume = 0.85;
+            this.glassAudio.play().catch(() => {});
+        } catch (e) {}
     }
 
     async scoreAvailable() {

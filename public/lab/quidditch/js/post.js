@@ -89,6 +89,7 @@ uniform float uWhite;
 uniform float uMist;
 uniform vec3 uMistCol;
 uniform float uCA;
+uniform float uFrost; // Dracarys speed frost & wind condensation
 
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) {
@@ -129,6 +130,17 @@ void main() {
         float m = clamp(uMist * (0.75 + 0.5 * n) * (0.7 + 0.6 * r2 * 2.0), 0.0, 1.0);
         col = mix(col, uMistCol * (0.85 + 0.3 * n), m);
     }
+
+    // Robert Borghesi Dracarys: Speed Frost & Wind Condensation
+    if (uFrost > 0.001) {
+        vec2 fUv = uv * vec2(uRes.x / uRes.y, 1.0) * 14.0;
+        float fNoise = vnoise(fUv + vec2(sin(uTime * 0.35), cos(uTime * 0.28))) * 0.6 + vnoise(fUv * 2.8 - uTime * 0.55) * 0.4;
+        float edgeDist = length(dc * vec2(uRes.x / uRes.y, 1.0) * 1.55);
+        float frostMask = smoothstep(0.75 - uFrost * 0.32, 1.35, edgeDist + fNoise * 0.28) * uFrost;
+        vec3 frostCol = vec3(0.85, 0.94, 1.0) * (0.8 + 0.4 * fNoise);
+        col = mix(col, frostCol, clamp(frostMask * 0.92, 0.0, 1.0));
+    }
+
     col *= uExposure;
     col = filmic(col);
     float vig = smoothstep(1.2, 0.25, length(dc * vec2(uRes.x / uRes.y, 1.0) * 0.85));
@@ -168,6 +180,7 @@ export class Post {
             tScene: { value: null }, tBloom: { value: null }, tShaft: { value: null }, uRes: { value: new THREE.Vector2() }, uTime: { value: 0 },
             uBloom: { value: 0.75 }, uShaft: { value: 0 }, uExposure: { value: 1 }, uGrain: { value: 0.04 }, uVignette: { value: 0.6 }, uLetter: { value: 0 },
             uStreak: { value: 0 }, uWhite: { value: 0 }, uMist: { value: 0 }, uMistCol: { value: new THREE.Vector3(0.25, 0.26, 0.3) }, uCA: { value: 0.01 },
+            uFrost: { value: 0 }
         });
         this.u = this.comp.uniforms;
         this.shaftsOn = true;

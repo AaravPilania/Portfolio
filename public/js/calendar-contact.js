@@ -898,15 +898,21 @@
 
     // ---------------------------------------------------------------- data
     async function loadDance(url) {
-        const res = await fetch(url);
-        let buf = new Uint8Array(await res.arrayBuffer());
-        if (buf[0] === 0x1f && buf[1] === 0x8b) {
-            if (typeof DecompressionStream === 'undefined') return;
-            const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
-            buf = new Uint8Array(await new Response(stream).arrayBuffer());
-        }
-        const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-        if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'GCD2') return;
+        try {
+            let res = await fetch(url);
+            if (!res.ok) {
+                const alt = url.startsWith('/') ? url.slice(1) : '/' + url;
+                res = await fetch(alt);
+            }
+            if (!res.ok) return;
+            let buf = new Uint8Array(await res.arrayBuffer());
+            if (buf[0] === 0x1f && buf[1] === 0x8b) {
+                if (typeof DecompressionStream === 'undefined') return;
+                const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+                buf = new Uint8Array(await new Response(stream).arrayBuffer());
+            }
+            const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+            if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'GCD2') return;
         const w = dv.getUint16(5, true), h = dv.getUint16(7, true), n = dv.getUint16(9, true), np = buf[13];
         // Map the file's palette onto the source colours by nearest colour so the two can never drift apart silently
         const ours = SRC.map(rgbOf), remap = new Uint8Array(256);
@@ -943,6 +949,9 @@
         }
         dance = { w, h, n, frames, cx, seam };
         if (G) { buildSampler(); lastKey = -1; }
+        } catch (e) {
+            console.warn('Error loading dance data:', e);
+        }
     }
 
     // ---------------------------------------------------------------- boot

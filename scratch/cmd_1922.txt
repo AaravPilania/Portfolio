@@ -1,1 +1,0 @@
-"pwsh -Command \"Select-String -Path .\\public\\index.html -Pattern 'cursor' | Select-Object -First 10\""

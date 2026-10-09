@@ -129,14 +129,67 @@ ${ATMOS}
 ${NOISE}
 uniform sampler2D tRefl;
 uniform float uHasRefl;
+uniform vec4 uWake; // x, z = broom pos, y = speed, w = wake intensity (Dracarys lake wake)
+uniform vec4 uCursor; // x, z = lake pos, y = active (0..1), w = click pulse
+uniform vec4 uRipples[8]; // x, z, time, strength
+uniform vec3 uBroomPos;
 varying vec3 vW; varying vec4 vR;
+
+// Procedural Celtic / Hogwarts ancient runes & Marauder's map circles
+float celestialRunes(vec2 p, vec2 center, float radius) {
+    vec2 d = p - center;
+    float r = length(d);
+    if (r > radius || r < 0.6) return 0.0;
+    float fade = smoothstep(radius, radius * 0.25, r) * smoothstep(0.6, 1.4, r);
+    
+    // Concentric astrolabe rings
+    float rings = 0.0;
+    rings += smoothstep(0.10, 0.0, abs(r - 2.8)) * 0.75;
+    rings += smoothstep(0.10, 0.0, abs(r - 6.2)) * 0.65;
+    rings += smoothstep(0.10, 0.0, abs(r - 10.4)) * 0.70;
+    rings += smoothstep(0.12, 0.0, abs(r - 14.8)) * 0.80;
+    
+    // Astrological compass spokes
+    float ang = atan(d.y, d.x);
+    float spokes = smoothstep(0.03, 0.0, abs(sin(ang * 6.0))) * smoothstep(14.8, 2.5, r) * 0.6;
+    
+    // Fine runic dashes along outer perimeter
+    float perimeter = smoothstep(0.14, 0.0, abs(r - 14.8)) * step(0.45, sin(ang * 48.0)) * 0.7;
+    
+    // Inner 8-pointed astronomical star
+    float starLines = smoothstep(0.035, 0.0, abs(sin(ang * 8.0) * r - 1.8)) * smoothstep(9.0, 2.8, r) * 0.55;
+
+    return (rings + spokes + perimeter + starLines) * fade;
+}
+
 float waves(vec2 p, float t) {
     float h = 0.0;
     h += sin(dot(p, vec2(0.12, 0.05)) + t * 0.9) * 0.35;
     h += sin(dot(p, vec2(-0.07, 0.15)) + t * 1.1) * 0.25;
     h += sin(dot(p, vec2(0.31, -0.21)) + t * 1.7) * 0.10;
-    h += (vnoise(p * 0.35 + vec2(t * 0.4, t * 0.25)) - 0.5) * 0.5;
-    h += (vnoise(p * 1.3 - vec2(t * 0.7, -t * 0.3)) - 0.5) * 0.16;
+    h += (vnoise(p * 0.35 + vec2(t * 0.4, t * 0.25)) - 0.5) * 0.35;
+    h += (vnoise(p * 1.3 - vec2(t * 0.7, -t * 0.3)) - 0.5) * 0.12;
+
+    // Dracarys water wake furrow & concentric spray ripples from the broom
+    if (uWake.w > 0.005) {
+        vec2 d = p - uWake.xz;
+        float r = length(d);
+        float wakeWave = sin(r * 0.65 - t * 7.5) * exp(-r * 0.07) * uWake.w * 0.75;
+        float furrow = -exp(-r * r * 0.22) * uWake.w * 0.48;
+        h += wakeWave + furrow;
+    }
+
+    // Dynamic hydrodynamic ripples from user cursor interactions
+    for (int i = 0; i < 8; i++) {
+        vec4 rip = uRipples[i];
+        float dt = t - rip.z;
+        if (dt > 0.0 && dt < 4.0) {
+            float d = length(p - rip.xy);
+            float wave = sin(d * 0.85 - dt * 14.0) * exp(-d * 0.045) * exp(-dt * 1.2) * rip.w;
+            h += wave;
+        }
+    }
+
     return h;
 }
 void main() {
@@ -158,19 +211,43 @@ void main() {
     } else {
         refl = skyBand(rd);
     }
-    vec3 body = vec3(0.008, 0.016, 0.018);
-    vec3 col = mix(body, refl, clamp(fres * 1.15, 0.0, 1.0));
+
+    // Interactive Hogwarts Lumos Runes beneath the surface
+    vec2 refrP = vW.xz + n.xz * 1.5;
+    float cursorRune = uCursor.y > 0.1 ? celestialRunes(refrP, uCursor.xz, 18.0) * (0.85 + uCursor.w * 2.0) : 0.0;
+    float broomRune = celestialRunes(refrP, uBroomPos.xz, 14.0) * clamp((14.0 - uBroomPos.y) / 10.0, 0.0, 1.0);
+    float runeIntensity = cursorRune + broomRune * 0.75;
+
+    // Glowing golden amber / cyan Lumos palette
+    vec3 goldRune = vec3(1.0, 0.78, 0.32);
+    vec3 cyanLumos = vec3(0.42, 0.88, 0.96);
+    vec3 runeCol = mix(goldRune, cyanLumos, sin(vW.x * 0.08 + t * 1.2) * 0.3 + 0.3) * runeIntensity;
+
+    vec3 body = vec3(0.006, 0.012, 0.015);
+    vec3 col = mix(body + runeCol * 0.65, refl, clamp(fres * 1.15, 0.0, 1.0));
+    col += runeCol * 0.35; // punch through water
     float spec = pow(max(dot(rd, uSunDir), 0.0), 600.0);
     col += SUNCOL * spec * 26.0 + SUNCOL * pow(max(dot(rd, uSunDir), 0.0), 40.0) * 0.12;
     gl_FragColor = vec4(applyFog(col, vW), 1.0);
-}`;
+}
+`;
 
 export function createWater() {
     const g = new THREE.PlaneGeometry(LAKE.rx * 2.6, LAKE.rz * 2.6, 1, 1);
     g.rotateX(-Math.PI / 2);
+    const ripples = [];
+    for (let i = 0; i < 8; i++) ripples.push(new THREE.Vector4(-9999, -9999, -9999, 0));
     const m = new THREE.ShaderMaterial({
         vertexShader: waterVert, fragmentShader: waterFrag,
-        uniforms: uniforms({ tRefl: { value: null }, uHasRefl: { value: 0 }, uTexMat: { value: new THREE.Matrix4() } }),
+        uniforms: uniforms({
+            tRefl: { value: null },
+            uHasRefl: { value: 0 },
+            uTexMat: { value: new THREE.Matrix4() },
+            uWake: { value: new THREE.Vector4(0, 0, 0, 0) },
+            uCursor: { value: new THREE.Vector4(0, 0, 0, 0) },
+            uRipples: { value: ripples },
+            uBroomPos: { value: new THREE.Vector3(0, 0, 0) },
+        }),
     });
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set(LAKE.x, 0, LAKE.z);

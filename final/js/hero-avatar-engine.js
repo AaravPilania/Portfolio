@@ -231,15 +231,35 @@
     ctx.restore();
   }
 
+  var isDirty = true;
+  var forceRepaint = true;
+  var prevBoilFrame = -1;
+
   function renderFrame(now) {
+    var frameChanged = false;
     if (now && now - lastBoilTime > 85) {
       lastBoilTime = now;
       boilFrame = (boilFrame + 1) % 3;
+      if (boilFrame !== prevBoilFrame) {
+        prevBoilFrame = boilFrame;
+        frameChanged = true;
+      }
     }
 
     if (now) aimAtBug(now);
+    var prevDx = curDx;
+    var prevDy = curDy;
     curDx += (targetDx - curDx) * 0.12;
     curDy += (targetDy - curDy) * 0.12;
+
+    var eyesMoved = Math.abs(curDx - prevDx) > 0.03 || Math.abs(curDy - prevDy) > 0.03;
+
+    if (!frameChanged && !eyesMoved && !forceRepaint) {
+      return;
+    }
+    forceRepaint = false;
+    isDirty = true;
+    if (window.__heroAvatarEngine) window.__heroAvatarEngine.isDirty = true;
 
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
@@ -291,6 +311,7 @@
   function start() {
     if (isRunning) return;
     isRunning = true;
+    forceRepaint = true;
     renderFrame(performance.now());
     loop(performance.now());
   }
@@ -306,6 +327,8 @@
   window.__heroAvatarEngine = {
     start: start,
     stop: stop,
+    isDirty: true,
+    hasInitialPainted: false,
     getCanvas: function () {
       return animCanvas;
     },
@@ -314,9 +337,11 @@
     },
     setPaper: function (on) {
       withPaper = !!on;
+      forceRepaint = true;
       renderFrame(performance.now());
     },
     render: function () {
+      forceRepaint = true;
       renderFrame(performance.now());
     },
     earScreenY: earScreenY

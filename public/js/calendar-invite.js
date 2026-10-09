@@ -298,7 +298,7 @@ const CONTACT = {
         panel.querySelector('.gc-panel__body').inert = !open;
     }
     panel.querySelector('.gc-panel__head').addEventListener('click', () => setPanel(!panel.classList.contains('is-open')));
-    setPanel(desktop.matches);
+    setPanel(false);
 
     // ------------------------------------------------------------ camera mode: the panel opens, an open brief stays
     let cam = false;

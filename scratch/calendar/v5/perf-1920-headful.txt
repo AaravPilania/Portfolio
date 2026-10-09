@@ -1,7 +1,0 @@
-ready true phases {"refine":0.438,"empty":0.602,"text":0.876,"textFull":3.504,"coarsen":5.037,"coarse":5.201,"dance":5.694,"refine3":7.008,"refine5":7.227,"sub7":7.446,"fine":7.665,"dissolve":19.053,"outro":19.929,"week":20.093}
-shot 1 = 1.000 text@7x2:1 p-1920-0.png
-audio {"running":true,"blocked":false,"loop":21.02392290249433,"snackHidden":true}
-pre 7.702
-raf {"frames":1442,"mean":6.94,"p95":7.1,"max":7.6,"over25":0,"slow":[],"longTasks":[]} from t = 17.71
-eval {"perf":{"draws":1443,"drawP50":0.3,"drawP95":0.7,"drawMax":2.4,"frames":1442,"rafP50":6.9,"rafP95":7.1,"rafMax":7.6,"over33":0},"wraps":1,"maxAudioDeltaMs":14.4}
-errors: none

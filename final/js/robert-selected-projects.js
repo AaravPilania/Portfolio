@@ -1587,6 +1587,10 @@ void main() {
                     }
                 });
 
+                if (this.canvas) {
+                    this.canvas.style.display = 'block';
+                }
+
                 if (typeof gsap !== 'undefined') {
                     gsap.to('html', { '--mainOpacity': 0.03, duration: 0.25 });
                     if (this.renderer && this.renderer.domElement) {
@@ -1716,8 +1720,25 @@ void main() {
                 }
             };
 
-            entries.forEach((row) => {
+            entries.forEach((row, idx) => {
                 row.style.cursor = 'pointer';
+
+                row.addEventListener('mouseenter', (e) => {
+                    updateMousePosition(e.clientX, e.clientY);
+                    this.isSectionInView = true;
+                    onHoverRow(idx);
+                });
+
+                row.addEventListener('pointerenter', (e) => {
+                    if (e.pointerType === 'touch') return;
+                    updateMousePosition(e.clientX, e.clientY);
+                    this.isSectionInView = true;
+                    onHoverRow(idx);
+                });
+
+                row.addEventListener('mouseleave', () => {
+                    onLeaveRow();
+                });
 
                 // Click row to launch project
                 row.addEventListener('click', (e) => {
@@ -1729,6 +1750,16 @@ void main() {
                     }
                 });
             });
+
+            if (section) {
+                section.addEventListener('pointerenter', (e) => {
+                    if (e.pointerType === 'touch') return;
+                    updateMousePosition(e.clientX, e.clientY);
+                    this.isSectionInView = true;
+                    this.hoverDirty = true;
+                    this.resolvePointerHover();
+                });
+            }
 
             // Launch arrows: the box lights up and the pixel bug lands on it with its under-construction tag
             let ucOwner = null;

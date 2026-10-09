@@ -12,8 +12,8 @@ section.ll-section--together.wt {
     --wt-ease: cubic-bezier(0.19, 1, 0.22, 1);
     position: relative;
     z-index: 2;
-    height: 360vh;
-    height: 360dvh;
+    height: 520vh;
+    height: 520dvh;
     background: transparent;
     color: var(--wt-ink);
 }
@@ -29,6 +29,11 @@ section.ll-section--together.wt {
     height: 100dvh;
     overflow: hidden;
     isolation: isolate;
+}
+
+.wt-stage.is-visor-blur > *:not(.wt-glasses) {
+    filter: blur(var(--wt-bg-blur, 0px));
+    transition: filter 0.15s ease-out;
 }
 
 /* Viewport-fixed so the stickers can leave the stage and fall into the footer; JS clips it below slide 04 */
@@ -51,7 +56,7 @@ section.ll-section--together.wt {
     width: 100vw;
     height: 100vh;
     display: block;
-    z-index: 1;
+    z-index: 3;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
@@ -87,11 +92,83 @@ html.is-sticker-drag * {
 .wt-mark::before { left: 5px; top: 0; width: 1px; height: 11px; }
 .wt-mark::after { top: 5px; left: 0; height: 1px; width: 11px; }
 
+/* ========================================================
+   RUNNING MARQUEE BEHIND SPECTACLES (Slide 5 Background Stream)
+   Boutique editorial typography moving Right to Left continuously
+   ======================================================== */
+.wt-marquee {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    padding: 3vh 0;
+    opacity: 0;
+    transition: opacity 0.8s var(--wt-ease);
+}
+.wt-marquee.is-visible {
+    opacity: 1;
+}
+
+.wt-marquee__track {
+    display: flex;
+    width: max-content;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+.wt-marquee__group {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.wt-m-word {
+    font-family: var(--wt-display), 'Brier', Georgia, serif;
+    font-size: clamp(3.4rem, 8.8vw, 9.6rem);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1;
+    color: var(--wt-ink);
+    text-transform: uppercase;
+    padding: 0 clamp(18px, 2.2vw, 40px);
+}
+
+.wt-m-accent {
+    color: var(--wt-sun); /* #FFED29 */
+    -webkit-text-stroke: 1.5px rgba(255, 237, 41, 0.9);
+    text-shadow: 0 0 35px rgba(255, 237, 41, 0.35);
+}
+
+.wt-m-star {
+    font-size: clamp(1.8rem, 3.8vw, 4.2rem);
+    color: var(--wt-sun);
+    padding: 0 clamp(10px, 1.2vw, 24px);
+    opacity: 0.9;
+    display: inline-block;
+    transform: translateY(-0.06em);
+}
+
+.wt.is-end .wt-stage,
+html.is-wt-end .wt-stage {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+}
+
 .wt-copy {
     position: absolute;
     left: 50%;
-    top: 50%;
-    z-index: 2;
+    top: calc(50% + 140px);
+    z-index: 10;
     width: min(92vw, 1500px);
     transform: translate3d(-50%, -50%, 0);
     display: flex;
@@ -152,22 +229,10 @@ html.is-sticker-drag * {
 .wt-li { display: inline-block; }
 
 .wt-cta {
-    position: relative;
-    margin-top: clamp(26px, 4.4vh, 56px);
-    display: inline-flex;
-    align-items: center;
-    gap: 14px;
-    height: 48px;
-    padding: 0 8px 0 22px;
-    border-radius: 999px;
-    background: var(--wt-ink);
-    color: #121316;
-    font: 500 11px/1 var(--wt-mono);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    text-decoration: none;
-    pointer-events: auto;
-    transition: background-color 0.4s var(--wt-ease), color 0.4s var(--wt-ease);
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 .wt-cta__arrow {
     display: grid;
@@ -191,37 +256,140 @@ html.is-sticker-drag * {
 .wt-cta:focus-visible .wt-cta__arrow svg { transform: translate3d(0, 0, 0) rotate(-45deg); }
 .wt-cta:focus-visible { outline: 1px solid var(--wt-sun); outline-offset: 4px; }
 
-/* The last screen's one action, on the page's centre axis where the header pill stood */
-.wt-contact {
+/* Slide 06 End Screen Top Navigation & Scroll Progress Loader */
+.wt-end-nav {
     position: fixed;
-    right: clamp(20px, 3vw, 48px);
-    top: clamp(20px, 4vh, 40px);
-    z-index: 12;
-    display: inline-flex;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 25;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 16px;
-    height: 54px;
-    padding: 0 9px 0 26px;
-    border-radius: 999px;
-    background: var(--wt-ink);
-    color: #121316;
-    font: 500 12px/1 var(--wt-mono);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    text-decoration: none;
-    white-space: nowrap;
+    padding: clamp(20px, 3.8vh, 38px) clamp(24px, 4.5vw, 64px);
     opacity: 0;
     pointer-events: none;
-    transform: translate3d(0, -16px, 0);
-    transition: opacity 0.5s var(--wt-ease), transform 0.9s var(--wt-ease), background-color 0.4s var(--wt-ease);
+    transform: translate3d(0, -14px, 0);
+    transition: opacity 0.5s var(--wt-ease), transform 0.5s var(--wt-ease);
 }
-.wt-contact .wt-cta__arrow { width: 38px; height: 38px; }
-.wt.is-end .wt-contact { opacity: 1; pointer-events: auto; transform: translate3d(0, 0, 0); }
-.wt-contact:hover,
-.wt-contact:focus-visible { background: var(--wt-sun); }
-.wt-contact:hover .wt-cta__arrow svg,
-.wt-contact:focus-visible .wt-cta__arrow svg { transform: rotate(-45deg); }
-.wt-contact:focus-visible { outline: 1px solid var(--wt-sun); outline-offset: 4px; }
+
+.wt.is-end .wt-end-nav,
+html.is-wt-end .wt-end-nav {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate3d(0, 0, 0);
+}
+
+.wt-end-nav__left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.wt-scroll-cue {
+    font: 600 clamp(10px, 0.88vw, 12px)/1 var(--wt-mono);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ffffff;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+.wt-scroll-cue::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wt-sun);
+    box-shadow: 0 0 8px var(--wt-sun);
+    animation: wtPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes wtPulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.25); box-shadow: 0 0 12px var(--wt-sun); }
+}
+
+.wt-scroll-loader {
+    width: clamp(210px, 22vw, 320px);
+    height: 4px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 237, 41, 0.28);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 0, 0, 0.4);
+}
+
+.wt-scroll-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background: var(--wt-sun);
+    box-shadow: 0 0 10px rgba(255, 237, 41, 0.85), 0 0 20px rgba(255, 237, 41, 0.45);
+    transform-origin: left center;
+    transform: scaleX(0);
+    will-change: transform;
+    border-radius: 999px;
+    transition: transform 0.04s linear;
+}
+
+.wt-end-nav__right {
+    display: flex;
+    align-items: center;
+    gap: clamp(16px, 2.2vw, 32px);
+}
+
+.wt-end-nav__link {
+    font: 500 clamp(10px, 0.88vw, 12px)/1 var(--wt-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(244, 242, 234, 0.78);
+    text-decoration: none;
+    position: relative;
+    padding: 6px 0;
+    transition: color 0.3s ease;
+}
+
+.wt-end-nav__link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: var(--wt-sun);
+    transform-origin: right center;
+    transform: scaleX(0);
+    transition: transform 0.35s var(--wt-ease);
+}
+
+.wt-end-nav__link:hover {
+    color: #ffffff;
+}
+
+.wt-end-nav__link:hover::after {
+    transform-origin: left center;
+    transform: scaleX(1);
+}
+
+.wt-end-nav__link--contact {
+    color: var(--wt-sun);
+}
+
+.wt-contact {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
 html.is-wt-end .ap-nav__pill {
     animation: none;
     opacity: 0 !important;

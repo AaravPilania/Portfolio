@@ -175,6 +175,17 @@ html body.is-nav-hidden .ap-nav__scrim {
     opacity: 0;
 }
 
+/* Contact page: AP logo is completely removed; glitch beetle mascot sits directly in its place */
+body.gc .ap-nav__mark svg,
+.gc .ap-nav__mark svg,
+body.gc .ap-nav__mark .ap-nav__px,
+.gc .ap-nav__mark .ap-nav__px {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .ap-nav__msg {
     position: absolute;
     max-width: calc(100% - 112 * var(--u));

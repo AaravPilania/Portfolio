@@ -22,10 +22,12 @@
     <link rel="stylesheet" href="css/site-nav.css">
     <link rel="stylesheet" href="css/sound-toggle.css">
     <link rel="stylesheet" href="css/calendar-contact.css">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <script src="/js/page-transition.js"></script>
+    <script src="/js/page-title.js" defer></script>
 </head>
 
-<body class="gc">
+<body class="gc is-loaded">
     <h1 class="gc-sr">Contact Aarav Pilania — pencil me in</h1>
     <p class="gc-sr">A week view of a fully booked calendar. The meetings split into tiny time slots, spell out "Your move", then stretch and slide to become a dancing figure before being cancelled back into free time.</p>
 
@@ -47,15 +49,17 @@
                     <li><a class="ap-nav__item" href="/" data-scroll="projects" style="--i:0">
                         <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
                         <span class="ap-nav__t">Work</span></a></li>
-                    <li><a class="ap-nav__item" href="/" data-scroll="stack" style="--i:1">
+                    <li><a class="ap-nav__item" href="/about" style="--i:1">
                         <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
-                        <span class="ap-nav__t">Stack</span></a></li>
-                    <li><a class="ap-nav__item" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer" style="--i:2">
+                        <span class="ap-nav__t">About</span></a></li>
+                    <li><a class="ap-nav__item" href="/projects" style="--i:2">
                         <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
+                        <span class="ap-nav__t">Projects</span></a></li>
+                    <li><a class="ap-nav__item" href="https://github.com/AaravPilania" target="_blank" rel="noopener noreferrer" style="--i:3">
+                        <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="8" y="2" width="2" height="4" /><rect x="5" y="3" width="2" height="2" /><rect x="3" y="5" width="2" height="2" /><rect x="0" y="8" width="2" height="2" /><rect x="1" y="7" width="2" height="2" /></g></svg>
                         <span class="ap-nav__t">GitHub</span>
-                        <svg class="ap-nav__ext" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="2" y="0" width="8" height="2" /><rect x="8" y="2" width="2" height="4" /><rect x="5" y="3" width="2" height="2" /><rect x="3" y="5" width="2" height="2" /><rect x="0" y="8" width="2" height="2" /><rect x="1" y="7" width="2" height="2" /></g></svg>
                     </a></li>
-                    <li><a class="ap-nav__item" href="/contact" data-nav="contact" data-no-swup style="--i:3">
+                    <li><a class="ap-nav__item is-active" href="/contact" data-nav="contact" data-no-swup style="--i:4">
                         <svg class="ap-nav__ico" viewBox="0 0 10 10" aria-hidden="true"><g fill="currentColor"><rect x="4" y="0" width="2" height="2" /><rect x="6" y="2" width="2" height="2" /><rect x="0" y="4" width="10" height="2" /><rect x="6" y="6" width="2" height="2" /><rect x="4" y="8" width="2" height="2" /></g></svg>
                         <span class="ap-nav__t">Contact</span></a></li>
                 </ul>
@@ -111,9 +115,9 @@
             <span data-mono>Soundtrack</span>
             <span class="gc-sound-slot" data-sound-slot="bar"></span>
         </div>
-        <section class="gc-panel gc-panel--booth is-open" id="gcBooth" data-booth="idle">
+        <section class="gc-panel gc-panel--booth" id="gcBooth" data-booth="idle">
             <span class="gc-panel__bg" aria-hidden="true"></span>
-            <button class="gc-panel__head gc-mono" type="button" aria-expanded="true" aria-controls="gcBoothBody"><span>Join the calendar</span><span class="gc-panel__pm">( <i>−</i> )</span></button>
+            <button class="gc-panel__head gc-mono" type="button" aria-expanded="false" aria-controls="gcBoothBody"><span>Join the calendar</span><span class="gc-panel__pm">( <i>+</i> )</span></button>
             <div class="gc-panel__body" id="gcBoothBody">
                 <div class="gc-panel__inner">
                     <figure class="gc-shot" id="gcShot">
@@ -143,6 +147,69 @@
     <script src="js/calendar-grain.js"></script>
     <script src="js/calendar-contact.js"></script>
     <script src="js/calendar-invite.js"></script>
+    <script>window.__pixelBugSkin = 'beetle';</script>
+    <script src="/js/pixel-bug.js"></script>
+    <script>
+        // On /contact: GLITCH perches directly over the AP mark silently (no dance, no motion)
+        // and on click triggers a departure back to home!
+        (function () {
+            let departing = false;
+            function triggerHomeTransition(e) {
+                if (departing) return;
+                departing = true;
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                const wittyDepartures = [
+                    'Heading back to home base! Hold tight!',
+                    'Nav bug reporting out! Zooming home!',
+                    'Pencil me in for home! On my way!',
+                    'Mission complete. Heading home!'
+                ];
+                const msg = wittyDepartures[Math.floor(Math.random() * wittyDepartures.length)];
+                if (typeof window.__pixelBugSay === 'function') {
+                    window.__pixelBugSay(msg);
+                }
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 750);
+            }
+
+            function placeBugSilently() {
+                const mark = document.querySelector('.ap-nav__mark');
+                if (!mark || typeof window.__pixelBugPlaceSilently !== 'function') {
+                    setTimeout(placeBugSilently, 40);
+                    return;
+                }
+                const spot = { x: 0, y: 0, heading: -Math.PI / 2 };
+                window.__pixelBugPlaceSilently(() => {
+                    const r = mark.getBoundingClientRect();
+                    spot.x = r.left + r.width / 2;
+                    spot.y = r.top + r.height / 2;
+                    spot.heading = -Math.PI / 2;
+                    return spot;
+                });
+                if (typeof window.__pixelBugDance === 'function') {
+                    window.__pixelBugDance(false);
+                }
+            }
+
+            document.addEventListener('click', (e) => {
+                const bug = document.querySelector('.pb-bug');
+                const markEl = document.querySelector('.ap-nav__mark');
+                if ((bug && bug.contains(e.target)) || (markEl && markEl.contains(e.target))) {
+                    triggerHomeTransition(e);
+                }
+            }, true);
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', placeBugSilently);
+            } else {
+                placeBugSilently();
+            }
+        })();
+    </script>
 </body>
 
 </html>

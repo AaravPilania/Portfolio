@@ -14,6 +14,7 @@ import { Post } from './post.js';
 import { createEndurance, createRanger } from './endurance.js';
 import { createAstronaut } from './astronaut.js';
 import { createTesseract, createShards } from './tesseract.js';
+import { LusionTesseract } from './lusion_tunnel.js';
 import { createWatch } from './watch.js';
 import { Sound } from './audio.js';
 
@@ -151,11 +152,19 @@ const tessScene = new THREE.Scene();
 const tessCam = new THREE.PerspectiveCamera(50, 1, 0.05, 400);
 const tess = createTesseract({ slots: tier <= 1 ? 10 : 12, density: tier <= 0 ? 0.55 : tier === 1 ? 0.7 : 1 });
 if (tier <= 1) tess.uniforms.uFogDensity.value = 0.032;
+tess.mesh.visible = false;
 tessScene.add(tess.root);
 const shards = createShards({ count: tier <= 1 ? 60 : tier === 2 ? 110 : 150 });
+shards.root.visible = false;
 tessScene.add(shards.root);
 const watch = createWatch();
+watch.root.visible = false;
 tessScene.add(watch.root);
+
+// Lusion.co authentic multi-stage Black Hole environment
+const lusionTess = new LusionTesseract();
+lusionTess.init().catch(err => console.error('Lusion init error:', err));
+tessScene.add(lusionTess.root);
 const tKey = new THREE.DirectionalLight(0xf6f2ea, 3.2);
 tKey.castShadow = shadows;
 tKey.shadow.mapSize.set(TIERS[tier].shadow, TIERS[tier].shadow);
@@ -386,7 +395,10 @@ function startDive(from) {
 function startTess() {
     S.phase = 'tess'; S.pt = 0;
     world = 2;
-    tessScene.add(cooper.root);
+    lusionTess.reset();
+    tessCam.position.set(0, 0, 0);
+    tessCam.rotation.set(0, 0, 0);
+    tessCam.updateMatrixWorld();
     watchT0 = -1;
     syncModeUI();
 }
@@ -646,78 +658,54 @@ function tessTravel(pt) {
 }
 function updateTess(dt) {
     const pt = S.pt;
-    const rush = smooth(T_FOLD, T_END, pt);
-    const found = smooth(T_OPEN - 3, T_FOUND, pt);
-    const travel = tessTravel(pt);
+    const normPt = clamp(pt / T_END, 0, 1);
+
     if (!ctl.drag) { ctl.tyaw += ctl.fyaw * dt; ctl.tpitch += ctl.fpitch * dt; ctl.fyaw *= Math.exp(-1.6 * dt); ctl.fpitch *= Math.exp(-2.4 * dt); }
-    // the look springs home when let go: this is a place you are shown, not one you wander
     if (!ctl.drag) { ctl.tyaw *= Math.exp(-0.8 * dt); ctl.tpitch *= Math.exp(-0.8 * dt); }
     ctl.tyaw = clamp(ctl.tyaw, -0.8, 0.8); ctl.tpitch = clamp(ctl.tpitch, -0.5, 0.5);
     ctl.yaw = damp(ctl.yaw, ctl.tyaw, 5, dt); ctl.pitch = damp(ctl.pitch, ctl.tpitch, 5, dt);
-    // the cursor sways the camera off the axis a little, and leans it
     ctl.lx = damp(ctl.lx, pointerS.x, 2.2, dt); ctl.ly = damp(ctl.ly, pointerS.y, 2.2, dt);
-    const sway = (1 - found * 0.5) * (reduceMotion ? 0.3 : 1);
-    tessCam.position.set(Math.sin(time * 0.13) * 0.14 + ctl.lx * 0.55 * sway, Math.sin(time * 0.17) * 0.1 + ctl.ly * 0.35 * sway, -travel);
-    tessCam.rotation.set(Math.sin(time * 0.11) * 0.012 + ctl.pitch + ctl.ly * 0.035, Math.sin(time * 0.09) * 0.02 + ctl.yaw - ctl.lx * 0.05, Math.sin(time * 0.07) * 0.02 - ctl.lx * 0.03, 'YXZ');
-    tessCam.fov = lerp(52, 40, found) + rush * 24;
+
+    // Forward journey down the Lusion tunnel axis
+    tessCam.position.z -= 11.5 * dt;
+    tessCam.position.x = damp(tessCam.position.x, Math.sin(time * 0.4) * 0.25 + ctl.lx * 0.45, 4, dt);
+    tessCam.position.y = damp(tessCam.position.y, Math.cos(time * 0.3) * 0.18 + ctl.ly * 0.35, 4, dt);
+    tessCam.rotation.set(
+        Math.sin(time * 0.12) * 0.015 + ctl.pitch + ctl.ly * 0.03,
+        Math.sin(time * 0.15) * 0.02 + ctl.yaw - ctl.lx * 0.04,
+        Math.sin(time * 0.18) * 0.02 - ctl.lx * 0.02,
+        'YXZ'
+    );
+    tessCam.fov = lerp(54, 44, normPt);
     if (aspect < 1) tessCam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(tessCam.fov) / 2) / Math.max(0.55, aspect)));
     tessCam.updateProjectionMatrix();
     tessCam.updateMatrixWorld();
-    tess.follow(tessCam.position, time);
 
-    // Cooper: a small figure far down the axis, then close, then gone into the fold
-    const leave = smooth(T_FOLD, T_FOLD + 3.2, pt);
-    const dist = lerp(21, 4.4, found);
-    v1.set(lerp(0.25, 0.42, found) - leave * 2.2, lerp(0.15, -0.05, found) + leave * 0.5, -dist - leave * 6);
-    v1.applyMatrix4(tessCam.matrixWorld);
-    cooper.root.position.copy(v1);
-    cooper.root.visible = leave < 0.999;
-    const dis = lerp(0.46 + Math.sin(time * 0.31) * 0.05, 0, smooth(T_OPEN - 1, T_FOUND - 0.5, pt)) + smooth(T_FOLD - 0.4, T_FOLD + 2.8, pt) * 1.1;
-    cooper.update(dt, time, pointerS, { tumbleAmt: 1, spin: (1 - found) * pt * 0.09, dissolve: dis, size: H * 1.1 });
+    lusionTess.update(time, dt, normPt, tessCam, sound);
 
-    // lights ride with the camera so he is always modelled the same way: soft key above, hard amber rim behind, a cold
-    // kicker from the other side
-    v2.set(-2.6, 2.3, 4.4).applyQuaternion(tessCam.quaternion);
-    tKey.position.copy(v1).add(v2); tKey.target.position.copy(v1);
-    v2.set(3.4, 1.6, -4.2).applyQuaternion(tessCam.quaternion);
-    tRim.position.copy(v1).add(v2); tRim.target.position.copy(v1);
-    v2.set(-4, -1, -3).applyQuaternion(tessCam.quaternion);
-    tRim2.position.copy(v1).add(v2); tRim2.target.position.copy(v1);
-    tKey.intensity = lerp(1.4, 2.1, found);
-    tRim.intensity = lerp(7, 2.6, found);
-    tRim2.intensity = lerp(3, 1.8, found);
-    tHemi.intensity = 0.12;
+    // Dynamic studio and tunnel lights
+    tKey.position.set(-2, 3, tessCam.position.z + 4);
+    tKey.target.position.set(0, 0, tessCam.position.z - 4);
+    tRim.position.set(2, -1, tessCam.position.z - 4);
+    tRim.target.position.set(0, 0, tessCam.position.z);
 
-    const open = smooth(T_OPEN, T_FOUND + 1, pt) * (1 - smooth(T_FOLD + 0.2, T_FOLD + 1.8, pt));
-    const U = tess.uniforms;
-    U.uOpen.value = open;
-    tess.mesh.visible = open < 0.995;
-    U.uTime.value = time;
-    U.uFlow.value = 1 + rush * 8;
-    U.uCollapse.value = rush;
-    U.uGain.value = (1 + rush * 1.4) * smooth(0, 1.2, pt);
-    shards.update(time, tessCam.position, smooth(T_OPEN + 1, T_FOUND + 1.5, pt) * (1 - smooth(T_FOLD, T_FOLD + 1.6, pt)));
-    if (envCorr) tessScene.environment = (open > 0.5 ? envStudio : envCorr).texture;
-    dustMat.uniforms.uA.value = smooth(0.5, 3, pt) * (1 - rush) * (0.4 + 0.6 * found);
-    dustMat.uniforms.uH.value = H;
-    dust.position.set(0, 0, tessCam.position.z);
+    // Dynamic background tone shift (authentic Lusion palette)
+    if (normPt < 0.32) {
+        tessScene.background = new THREE.Color(0x000000);
+    } else if (normPt < 0.85) {
+        const wt = smooth(0.32, 0.45, normPt) * (1 - smooth(0.80, 0.86, normPt));
+        tessScene.background = new THREE.Color().lerpColors(new THREE.Color(0x000000), new THREE.Color(0xffffff), wt);
+    } else {
+        tessScene.background = new THREE.Color(0x000000);
+    }
 
-    // the watch: it rises into frame, and the second hand starts to spell
-    const wIn = smooth(T_WATCH, T_WATCH + 3, pt) * (1 - smooth(T_FOLD + 0.5, T_FOLD + 2.5, pt));
-    v1.set(0.0, -1.6 * (1 - wIn) + 0.14, -2.5).applyMatrix4(tessCam.matrixWorld);
-    watch.root.position.copy(v1);
-    watch.root.quaternion.copy(tessCam.quaternion);
-    watch.root.rotateX(-0.28 * (1 - wIn) + 0.12);
-    watch.root.rotateY(0.35 * (1 - wIn) - 0.08);
-    watch.root.rotateZ(Math.sin(time * 0.3) * 0.02);
-    watch.root.scale.setScalar(0.4);
-    watch.root.visible = wIn > 0.001;
-    if (pt > T_WATCH + 2.2) { if (watchT0 < 0) watchT0 = pt; } else watchT0 = -1;
-    const m = watch.update(watchT0 < 0 ? 0 : (SHOT ? 7.4 : pt - watchT0));
-    if (m.onset) sound.morseTick();
-    txt(el.morse, m.morse);
-    txt(el.stay, m.word);
-    el.murph.style.opacity = (win(pt, T_WATCH + 2, T_WATCH + 3, T_FOLD + 1, T_FOLD + 2.5)).toFixed(3);
+    // Hide old objects
+    tess.mesh.visible = false;
+    shards.root.visible = false;
+    cooper.root.visible = false;
+    watch.root.visible = false;
+    el.murph.style.opacity = '0';
+
     if (pt > T_END) putBack();
 }
 
@@ -780,7 +768,7 @@ function update(dt) {
         U.uStepK.value = T.stepK;
         U.uDiskGain.value = 1.6 * (SHOT ? 1 : smooth(0.0, 4.5, time - introAt) * 0.85 + 0.15);
         U.uStarGain.value = SHOT ? 1 : 0.35 + 0.65 * intro;
-        U.uDoppler.value = 0.62;
+        U.uDoppler.value = 1;
         // the cursor's own gravity: an Einstein ring that follows it across the sky
         const lensOn = S.phase === 'orbit' && (pointerIn || SHOT === 'lens') && !mobile ? 1 : 0;
         U.uLensK.value = damp(U.uLensK.value, lensOn * (0.0011 + (ctl.hold ? 0.0007 : 0)), 4, dt);
@@ -1120,7 +1108,8 @@ if (navMsg) {
         .observe(navMsg, { childList: true, characterData: true, subtree: true });
 }
 
+window.__G_SET_PT__ = (pt) => { S.pt = pt; S.phase = 'tess'; world = 2; };
 window.__garg = {
     get tier() { return TIERS[tier].name; }, get warmed() { return warmed; }, gpu: gpuName, get dyn() { return dyn; }, renderer, sound, S, ctl, rgr,
-    astro: cooper.stats, setMode, startDive, endurance, ranger, shipCam, focus, endP, tessScene, tKey, cooper,
+    astro: cooper.stats, setMode, startDive, endurance, ranger, shipCam, focus, endP, tessScene, tKey, cooper, lusionTess
 };

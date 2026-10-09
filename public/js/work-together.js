@@ -327,8 +327,8 @@
     // section and holds, then leaves letter by letter; the stickers drop the moment it has gone and settle under the
     // glasses (glasses-centrepiece.js), which take the end screen
     const T_RISE0 = 0.25, T_RISE1 = 0.46, RISE_W = 0.42;
-    const T_FALL = 0.52, T_LIFT = 0.49;
-    const T_BAR0 = 0.88, T_BAR1 = 0.96;
+    const T_FALL = 0.70, T_LIFT = 0.65;
+    const T_BAR0 = 0.78, T_BAR1 = 0.88;
     const Mt = window.Matter;
     const STEP = 1000 / 60;
     const C_WALL = 1, C_SOLID = 2, C_GHOST = 4;
@@ -953,7 +953,11 @@
             es.forEach((e) => seen.set(e.target, e.isIntersecting));
             visible = [...seen.values()].some(Boolean);
             if (visible) kick();
-            else if (hovered) { hovered = null; setLabel(null); }
+            else {
+                if (hovered) { hovered = null; setLabel(null); }
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         };
         if ('IntersectionObserver' in window) {
             new IntersectionObserver((es) => {

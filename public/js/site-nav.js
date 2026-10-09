@@ -83,6 +83,21 @@
             '.##############.',
             '...##########...',
         ]),
+        heart: bits([
+            '................',
+            '..####....####..',
+            '.######..######.',
+            '################',
+            '################',
+            '################',
+            '.##############.',
+            '..############..',
+            '...##########...',
+            '....########....',
+            '.....######.....',
+            '......####......',
+            '.......##.......',
+        ]),
         // slide 2: the shrunk screen with the bio typed into it
         screen: bits([
             '................',
@@ -98,6 +113,54 @@
             '......####......',
             '......####......',
             '...##########...',
+        ]),
+        // alternative projects: folder / archive
+        folder: bits([
+            '......#####.....',
+            '.....#######....',
+            '################',
+            '#..............#',
+            '#.############.#',
+            '#.#..........#.#',
+            '#.#..........#.#',
+            '#.#..........#.#',
+            '#.############.#',
+            '#..............#',
+            '################',
+            '################',
+            '................',
+        ]),
+        // alternative together: spectacles
+        specs: bits([
+            '................',
+            '..############..',
+            '.##############.',
+            '##....####....##',
+            '##.##.####.##.##',
+            '##....####....##',
+            '.##############.',
+            '..############..',
+            '................',
+            '................',
+            '................',
+            '................',
+            '................',
+        ]),
+        // alternative spark
+        spark: bits([
+            '.......##.......',
+            '......####......',
+            '.....######.....',
+            '....########....',
+            '...##########...',
+            '......####......',
+            '.....######.....',
+            '....########....',
+            '......####......',
+            '.......##.......',
+            '........#.......',
+            '................',
+            '................',
         ]),
         // the projects: source, open
         code: bits([
@@ -270,20 +333,30 @@
     }
 
     // ------------------------------------------------------------ what the bar says and shows, per section
-    let section = here === 'home' ? 'hero' : here, hold = null;
-    const GLYPH_OF = { hero: 'face', screen: 'screen', projects: 'code', stack: 'layers', watch: 'eye', together: 'bulb', end: 'mail', contact: 'cal', lost: 'ask' };
+    // Top-left mark remains consistently the editorial AP mark across all sections
+    let section = here === 'home' ? 'hero' : here;
     function apply() {
         line(LINES[section] || LINES.hero);
-        if (morphTo) morphTo(hold || GLYPH_OF[section] || 'ap');
+        if (morphTo) morphTo('ap');
     }
-    window.addEventListener('ap:glyph', (e) => { hold = e.detail || null; apply(); });
     if (mark) {
         mark.addEventListener('pointerenter', () => { if (morphTo) morphTo('ap'); });
         mark.addEventListener('pointerleave', apply);
-    }
-    for (const a of nav.querySelectorAll('a[href="/contact"]')) {
-        a.addEventListener('pointerenter', () => { if (here !== 'contact' && morphTo) morphTo('mail'); });
-        a.addEventListener('pointerleave', apply);
+        mark.addEventListener('click', (e) => {
+            const isHome = location.pathname === '/' || location.pathname === '/index.html' || location.pathname === '';
+            if (isHome) {
+                e.preventDefault();
+                set(false);
+                const lenis = lenisOf();
+                if (lenis) lenis.scrollTo(0, { duration: 1.4, force: true });
+                else window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                if (window.__pageTransition && typeof window.__pageTransition.navigate === 'function') {
+                    e.preventDefault();
+                    window.__pageTransition.navigate('/');
+                }
+            }
+        });
     }
 
     // ------------------------------------------------------------ the form button: on /contact it opens the brief
